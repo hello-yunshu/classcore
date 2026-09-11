@@ -44,11 +44,14 @@ npm run bootstrap
 - 未认证 reference Server 源码默认 loopback-only；需要 LAN 开发必须显式设置 `HOST=0.0.0.0`；
 - reference transport 的重复 ID 会做 canonical payload 一致性校验，冲突重用明确拒绝；
 - 中性 Web Shell（不是最终 Design）。
+- D2 Student Practice Alpha：Student 轻量 TransformBoard 已支持选择、拖动、画布平移、旋转、旋转中心、重置、本地保存与刷新恢复；
+- D2 Authoring Studio Alpha：浏览器内 Scene Studio 已支持页面增删/复制/排序、文字/图片 URL/SVG/基础图形、元素移动/尺寸/图层、保存重开和预览播放；
+- D2 Alpha 有模型级回归与真实浏览器验收，Student 不加载 Presentation 编辑器，Foundation 与现有 Surface/Service Plane 边界保持不变；
 
 ## 当前明确未完成
 
-- TransformBoard 正式 Student UI；
-- 真正 Presentation Engine（优先快速 PoC PPTist；不合适再评估 web-ppt）接入；
+- TransformBoard 与真实课堂 Server 的 Join/Activity/Submission 链接入；
+- 真正第三方 Presentation Engine（优先快速 PoC PPTist；不合适再评估 web-ppt）或 D7 级 Scene Runtime 接入；
 - 完整 Join / Presence / Outbox / Submission / Artifact Exchange 产品链；
 - Teacher / Observer / Display 正式 UI；
 - Lesson-specific Analytics Runtime 与《图案的还原》规则智能；
@@ -58,13 +61,12 @@ npm run bootstrap
 
 ## 开发优先级
 
-1. Presentation Engine 4小时 PoC + Authoring Studio Alpha；
-2. Student TransformBoard Practice Alpha；
-3. Server真实 Session/Join/Presence + SQLite persistence；
-4. Teacher Runtime / Display / Observer 同步；
-5. Analytics / Rule Intelligence / Advice；
-6. D6并发、断网重连、Server restart、Observer降级演练；
-7. D7冻结RC，不再加功能。
+1. Server真实 Session/Join/Presence + SQLite persistence；
+2. Teacher Runtime / Display / Observer 同步；
+3. D7 级 Presentation Scene/Step Runtime 与 Authoring binding；
+4. Analytics / Rule Intelligence / Advice；
+5. D6并发、断网重连、Server restart、Observer降级演练；
+6. D7冻结RC，不再加功能。
 
 ## 三个硬节点
 
@@ -107,4 +109,10 @@ npm run bootstrap
 
 当前环境若缺少精确 Node 26.8.2/npm 11.19.1/Python 3.14.7 或 Docker，不得把对应 Gate 伪报为通过。Codex 在可联网正式环境先执行 `npm run bootstrap`；在教师 Apple Silicon Mac 冻结 RC 前执行 `npm run release:d7`，随后按 `docs/deployment/CLASSROOM-LAN-REHEARSAL.md` 完成真实 XP21A/LAN 演练。
 
-本轮之后的主要工作已经从“继续设计架构”切换为“完成能稳定上课的真实产品”。
+本轮 D2 Alpha 已完成；主要工作已经从“继续设计架构”切换为“完成能稳定上课的真实产品”。
+
+## D2 Alpha 最新验证
+
+- `npm run check`：完整通过；108/108 unit tests，Contract/Formal/Lesson/Dist/HTTP/WS/Load/Smoke 全部通过；
+- 真实浏览器：Student 旋转中心/旋转/保存/刷新恢复，Authoring 页面与元素 CRUD/保存/预览/刷新恢复通过；两端无 error/warning console log；
+- 仍未声称 D7 完成：认证课堂 Server、Join/Presence、Teacher/Observer/Display 同步、D7 Presentation Runtime、真实 Docker/LAN/XP21A 仍待完成。
