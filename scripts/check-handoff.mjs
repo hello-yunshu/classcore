@@ -86,7 +86,10 @@ if (!workflow.includes('npm run docker:gate')) errors.push('ARM64 CI must actual
 
 const serverSource = fs.readFileSync(path.join(root, 'apps/server/runtime/server.mjs'), 'utf8');
 if (!serverSource.includes("process.env.HOST ?? '127.0.0.1'")) errors.push('reference server must default classroom endpoint to loopback until authenticated LAN server is integrated');
-if (!serverSource.includes("runtimeMode = process.env.CLASSROOM_RUNTIME_MODE ?? 'reference-transport'") || !serverSource.includes("productReady = process.env.CLASSROOM_PRODUCT_READY === 'true'") || !serverSource.includes("authentication = process.env.CLASSROOM_AUTHENTICATION === 'true'")) errors.push('reference runtime must read and validate runtime identity configuration');
+const runtimeConfigIsRead = serverSource.includes("runtimeMode = process.env.CLASSROOM_RUNTIME_MODE ?? 'reference-transport'")
+  && serverSource.includes("productReady = process.env.CLASSROOM_PRODUCT_READY === 'true'")
+  && serverSource.includes("authentication = process.env.CLASSROOM_AUTHENTICATION === 'true'");
+if (!runtimeConfigIsRead) errors.push('reference runtime must read and validate runtime identity configuration');
 if (!serverSource.includes('unsupported-runtime-mode: authenticated-classroom-server is not implemented')) errors.push('reference runtime must fail closed when D7 runtime identity is requested before authentication exists');
 
 if (errors.length) {
