@@ -37,6 +37,9 @@ const dataDir = process.env.CLASSROOM_DATA_DIR ?? path.join(root, '.runtime-data
 const publicDir = path.join(root, 'dist', 'public');
 const maxWebSocketMessageBytes = readPositiveInt('MAX_WS_MESSAGE_BYTES', 256 * 1024, { max: 8 * 1024 * 1024 });
 const observerMaxBufferedBytes = readPositiveInt('OBSERVER_MAX_BUFFER_BYTES', 512 * 1024, { max: 32 * 1024 * 1024 });
+const controllerLeaseDurationMs = 45 * 1000;
+const controllerLeaseGraceMs = 20 * 1000;
+const serverInstanceId = `server-${crypto.randomUUID()}`;
 const runtimeMode = process.env.CLASSROOM_RUNTIME_MODE ?? 'reference-transport';
 const authentication = process.env.CLASSROOM_AUTHENTICATION === 'true';
 const productReady = process.env.CLASSROOM_PRODUCT_READY === 'true';
@@ -87,12 +90,49 @@ function applyPresentationTransportControl(sessionId, message) {
     store.savePresentationPlayback(next);
     return next;
 }
+function broadcastPresentationSync(sessionId, state, extra = {}) {
+    for (const item of clients) {
+        const sameSession = item.meta.sessionId === sessionId;
+        const publicViewer = item.meta.role === 'display' || (item.meta.role === 'observer' && item.meta.subscribed);
+        if (!sameSession || !publicViewer) continue;
+        if (item.ws.bufferedBytes() > observerMaxBufferedBytes) {
+            stats.stageDrops++;
+            continue;
+        }
+        item.ws.send({ type: 'presentation.sync', state, ...extra });
+        stats.presentationBroadcasts++;
+    }
+}
 function controllerLeaseReason(meta) {
     const lease = store.loadControllerLease(meta.sessionId);
     if (!lease) return 'controller-lease-required';
     if (lease.expiresAt === null || lease.expiresAt <= Date.now()) return 'controller-lease-expired';
     if (lease.holderConnectionId !== meta.clientId || lease.holderParticipantId !== meta.participantId) return 'controller-lease-held-by-other';
+    if (lease.disconnectedAt) return 'controller-lease-reconnecting';
     return null;
+}
+function acquireTeacherLease(meta) {
+    const now = Date.now();
+    const current = store.loadControllerLease(meta.sessionId);
+    if (!current) {
+        store.saveControllerLease({ leaseId: `lease-${crypto.randomUUID()}`, sessionId: meta.sessionId, revision: 1, holderConnectionId: meta.clientId, holderParticipantId: meta.participantId, serverInstanceId, expiresAt: now + controllerLeaseDurationMs, disconnectedAt: null, graceUntil: null });
+        return true;
+    }
+    const sameParticipant = current.holderParticipantId === meta.participantId;
+    const staleServer = current.serverInstanceId !== serverInstanceId;
+    const withinGrace = current.graceUntil != null && current.graceUntil >= now;
+    const expired = current.expiresAt == null || current.expiresAt <= now;
+    if (!sameParticipant || (!staleServer && !withinGrace && !expired && current.holderConnectionId !== meta.clientId))
+        return false;
+    store.saveControllerLease({ ...current, holderConnectionId: meta.clientId, serverInstanceId, expiresAt: now + controllerLeaseDurationMs, disconnectedAt: null, graceUntil: null });
+    return true;
+}
+function renewTeacherLease(meta) {
+    const lease = store.loadControllerLease(meta.sessionId);
+    if (controllerLeaseReason(meta)) return null;
+    const renewed = { ...lease, expiresAt: Date.now() + controllerLeaseDurationMs, disconnectedAt: null, graceUntil: null };
+    store.saveControllerLease(renewed);
+    return renewed;
 }
 function sendJson(res, status, value) {
     const body = JSON.stringify(value);
@@ -177,7 +217,10 @@ async function handlePresentationApi(req, res, url) {
             }
             if (req.method === 'POST' && parts[3] === 'presentation-prepare') {
                 const body = JSON.parse((await readRequestBody(req, 64 * 1024)).toString('utf8') || '{}');
-                return sendJson(res, 200, { prepared: presentationLibrary.prepareRuntimeCache(sessionId, ownerUserId, body) });
+                const prepared = body.presentationId
+                    ? await presentationLibrary.prepareClassroom(sessionId, ownerUserId, body)
+                    : presentationLibrary.prepareRuntimeCache(sessionId, ownerUserId, body);
+                return sendJson(res, 200, { prepared });
             }
             if (req.method === 'POST' && parts[3] === 'presentation-switch') {
                 const body = JSON.parse((await readRequestBody(req, 64 * 1024)).toString('utf8') || '{}');
@@ -190,6 +233,7 @@ async function handlePresentationApi(req, res, url) {
                     if (!first) throw new PresentationLibraryError('presentation-runtime-index-empty');
                     const state = { sessionId, presentationRevisionId: pin.revisionId, assetId: pin.assetId, deckId: revision.runtimeIndex.deckId, sceneId: first.sceneId, step: 0, playState: 'idle', revision: 0 };
                     store.savePresentationPlayback(state);
+                    broadcastPresentationSync(sessionId, state, { reason: 'revision-switch' });
                     return sendJson(res, 200, { pin, state });
                 } catch (error) {
                     presentationLibrary.restoreSessionPin(sessionId, oldPin);
@@ -202,6 +246,12 @@ async function handlePresentationApi(req, res, url) {
         }
         if (req.method === 'GET' && parts.length === 2 && parts[1] === 'presentations')
             return sendJson(res, 200, { presentations: presentationLibrary.listPresentations(ownerUserId) });
+        if (req.method === 'GET' && parts.length === 2 && parts[1] === 'classroom-blocks')
+            return sendJson(res, 200, { blocks: presentationLibrary.listClassroomBlocks(ownerUserId) });
+        if (req.method === 'POST' && parts.length === 2 && parts[1] === 'classroom-blocks') {
+            const body = JSON.parse((await readRequestBody(req, 64 * 1024)).toString('utf8') || '{}');
+            return sendJson(res, 201, { block: presentationLibrary.bindClassroomBlock(ownerUserId, body) });
+        }
         if (req.method === 'POST' && parts.length === 2 && parts[1] === 'presentations') {
             const body = JSON.parse((await readRequestBody(req, 2 * 1024 * 1024)).toString('utf8') || '{}');
             const template = path.join(publicDir, 'assets', 'presentation-webppt-blank.pptx');
@@ -240,11 +290,15 @@ async function handlePresentationApi(req, res, url) {
         if (req.method === 'GET' && parts[3] === 'revisions') return sendJson(res, 200, { revisions: presentationLibrary.listRevisions(presentationId, ownerUserId, { kind: url.searchParams.get('kind') }) });
         if (req.method === 'POST' && parts[3] === 'rehearsals') {
             const body = JSON.parse((await readRequestBody(req, 2 * 1024 * 1024)).toString('utf8') || '{}');
-            return sendJson(res, 201, { revision: presentationLibrary.createRevision(presentationId, ownerUserId, { ...body, kind: 'rehearsal' }) });
+            return sendJson(res, 201, { revision: await presentationLibrary.createTrustedRevision(presentationId, ownerUserId, { ...body, kind: 'rehearsal' }) });
+        }
+        if (req.method === 'POST' && parts[3] === 'rehearsal-session') {
+            const body = JSON.parse((await readRequestBody(req, 64 * 1024)).toString('utf8') || '{}');
+            return sendJson(res, 201, { rehearsal: await presentationLibrary.startRehearsalSession(presentationId, ownerUserId, body) });
         }
         if (req.method === 'POST' && parts[3] === 'published') {
             const body = JSON.parse((await readRequestBody(req, 2 * 1024 * 1024)).toString('utf8') || '{}');
-            return sendJson(res, 201, { revision: presentationLibrary.createRevision(presentationId, ownerUserId, { ...body, kind: 'published' }) });
+            return sendJson(res, 201, { revision: await presentationLibrary.createTrustedRevision(presentationId, ownerUserId, { ...body, kind: 'published' }) });
         }
         if (req.method === 'POST' && parts[3] === 'revisions' && parts[5] === 'restore') {
             const expectedRevision = req.headers['if-match'] ? Number(req.headers['if-match']) : undefined;
@@ -427,13 +481,7 @@ classroomServer.on('upgrade', (req, socket, head) => {
                 stats.teachers++;
             else if (role === 'display')
                 stats.display++;
-            if (role === 'teacher' && !store.loadControllerLease(sessionId)) {
-                // The reference transport uses the first authenticated teacher
-                // connection as the lease acquisition boundary. Use the
-                // synchronous store primitive so the control immediately
-                // following hello observes the durable lease.
-                store.put(sessionId, 'controller-lease', 'singleton', { leaseId: `lease-${crypto.randomUUID()}`, sessionId, revision: 1, holderConnectionId: clientId, holderParticipantId: participantId, expiresAt: Date.now() + 60 * 60 * 1000 });
-            }
+            if (role === 'teacher') acquireTeacherLease(meta);
             helloAccepted = true;
             ws.send({ type: 'hello.ack', ok: true, clientId });
             if (role === 'display' || role === 'observer') {
@@ -510,6 +558,15 @@ classroomServer.on('upgrade', (req, socket, head) => {
             }
             return;
         }
+        if (message.type === 'teacher.heartbeat') {
+            if (meta.role !== 'teacher') {
+                ws.send({ type: 'teacher.heartbeat.ack', ok: false, reason: 'teacher-role-required' });
+                return;
+            }
+            const renewed = renewTeacherLease(meta);
+            ws.send({ type: 'teacher.heartbeat.ack', ok: Boolean(renewed), expiresAt: renewed?.expiresAt ?? null, reason: renewed ? undefined : controllerLeaseReason(meta) });
+            return;
+        }
         if (message.type === 'presentation.control') {
             if (meta.role !== 'teacher') {
                 ws.send({ type: 'presentation.control.ack', ok: false, reason: 'teacher-role-required' });
@@ -534,17 +591,7 @@ classroomServer.on('upgrade', (req, socket, head) => {
                 const state = accepted.outcome.value.state;
                 ws.send({ type: 'presentation.control.ack', ok: true, controlId, duplicate: !accepted.inserted, serverSeq: accepted.serverSeq, state });
                 if (!accepted.inserted) return;
-                for (const item of clients) {
-                    const sameSession = item.meta.sessionId === meta.sessionId;
-                    const publicViewer = item.meta.role === 'display' || (item.meta.role === 'observer' && item.meta.subscribed);
-                    if (!sameSession || !publicViewer) continue;
-                    if (item.ws.bufferedBytes() > observerMaxBufferedBytes) {
-                        stats.stageDrops++;
-                        continue;
-                    }
-                    item.ws.send({ type: 'presentation.sync', state, controlId });
-                    stats.presentationBroadcasts++;
-                }
+                broadcastPresentationSync(meta.sessionId, state, { controlId });
             } catch (error) {
                 const reason = error instanceof Error ? error.message : String(error);
                 ws.send({ type: 'presentation.control.ack', ok: false, controlId, reason });
@@ -578,6 +625,13 @@ classroomServer.on('upgrade', (req, socket, head) => {
                 stats.teachers = Math.max(0, stats.teachers - 1);
             else if (meta.role === 'display')
                 stats.display = Math.max(0, stats.display - 1);
+            if (meta.role === 'teacher') {
+                const lease = store.loadControllerLease(meta.sessionId);
+                if (lease?.holderConnectionId === meta.clientId && lease.holderParticipantId === meta.participantId) {
+                    const disconnectedAt = Date.now();
+                    store.saveControllerLease({ ...lease, disconnectedAt, graceUntil: disconnectedAt + controllerLeaseGraceMs, expiresAt: Math.min(lease.expiresAt ?? disconnectedAt + controllerLeaseDurationMs, disconnectedAt + controllerLeaseGraceMs) });
+                }
+            }
         }
     }, { maxMessageBytes: maxWebSocketMessageBytes });
     if (!connection)

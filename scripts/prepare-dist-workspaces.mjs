@@ -29,10 +29,15 @@ for (const directory of fs.readdirSync(path.join(root, 'packages'), { withFileTy
         },
         types: './src/index.d.ts',
     };
+    if (sourcePackage.exports && sourcePackage.exports['./playback']) {
+        runtimePackage.exports['./playback'] = {
+            types: './src/playback.d.ts',
+            default: './src/playback.js',
+        };
+    }
     fs.writeFileSync(path.join(compiledPackageDir, 'package.json'), JSON.stringify(runtimePackage, null, 2) + '\n');
     const runtimePackageDir = path.join(runtimeScopeDir, sourcePackage.name.slice('@classroom/'.length));
     fs.rmSync(runtimePackageDir, { recursive: true, force: true });
     fs.cpSync(compiledPackageDir, runtimePackageDir, { recursive: true });
 }
 console.log('Dist workspace runtime copies ready');
-

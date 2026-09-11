@@ -4,6 +4,8 @@
 
 R3.10 是 **Release-Assurance Closure & Codex Mother Package**：Foundation v0.1.2 保持稳定，已经有可执行 HTTP/WebSocket + SQLite/WAL vertical slice、7 个中性 Web Shell、恢复/Session 隔离/伪名/Presentation Runtime 契约和参考并发测试；它仍不是最终公开课产品。
 
+2026-09-11 Presentation closure progress：reference vertical slice 已补齐 quota preflight、staged GC strong-ref、cache eviction plan/reconcile、bytes-derived web-ppt freeze、Picker/`presentationId` block、Published Prepare、Rehearsal Session、Controller Lease reconnect、Display playback-only/remount 和 Studio conflict/thumbnail/批量 Undo；认证 owner、Playwright、Docker/LAN/XP21A 仍未验证。
+
 ## 接手后的第一步
 
 ```bash
@@ -53,6 +55,7 @@ npm run bootstrap
 - Teacher Presentation Library reference slice 已接入 Teacher Runtime 的“我的课件”入口，支持列表/搜索/导入/软删除/进入 Studio；Studio 已把 generation-drained autosave、Server Draft `If-Match`、offline pending 与当前编辑态缩略图接到 reference API；
 - Presentation control 的 durable outcome dedup 已收口：相同 control payload 会重放第一次成功或失败结果，失败重试不会被转成 duplicate success；
 - Presentation 主线本轮继续收口：staged/unattached asset claim 计入 owner quota 并支持 TTL，soft-deleted Project 支持 retention purge，Runtime Cache 支持启动 reconcile 与已有文件 hash/size 校验；freeze 由 Server 校验 web-ppt document/RuntimeIndex/classroom binding，revision switch 有 pin/playback compensation；
+- Presentation closure repair：asset ingest/save 先做 quota preflight；有效 staged claim 作为 GC 临时强引用；Runtime Cache eviction 先计算不可变 plan，SQLite transaction 外执行文件删除并在失败后 reconcile；真实 web-ppt freeze 从 Draft bytes 生成 RuntimeIndex；Display 使用不含 editor/edit-core 的 playback bundle；revision switch 广播并按 revision/asset identity remount；Teacher Lease 支持 45 秒 renew、20 秒 reconnect grace 和 stale connection rejection；Teacher Library 提供 Picker、`presentationId` block 与 Published/Rehearsal Prepare。
 - Teacher Library 已补齐 Server-first 新建、重命名、副本、导出、版本历史和删除入口；reference Teacher control 通过 Controller Lease，Display 已接入 exact Session Pin cached asset、authoritative resolver 和 reconnect player bundle；
 - Studio 代码回归已修复页面上下移 anchor、当前编辑态 Preview、动画 append/显式 clear、批量删除/等距分布单 transaction；Teacher `presentation.control` 会校验 pinned RuntimeIndex、持久化 SQLite PlaybackState 并向 Display/Observer 广播；
 - `presentation-runtime` D7 verifier 已从 placeholder 改为真实 fail-closed 核心链 verifier，并已补齐 presentation evidence；D7 overall 仍不能宣称完成；
@@ -62,9 +65,9 @@ npm run bootstrap
 ## 当前明确未完成
 
 - TransformBoard 与真实课堂 Server 的 Join/Activity/Submission 链接入；
-- 认证账号服务器接入、真实身份 owner authorization、Studio Library 的完整版本历史 UI 与课堂 Picker/设计绑定；reference API 的模型级路径已存在，但不是认证产品能力；
+- 认证账号服务器接入、真实身份 owner authorization、Studio Library 的完整版本历史 UI；reference API/Picker/Prepare/设计绑定的模型级路径已存在，但不是认证产品能力；
 - Presentation PlaybackState 与 Teacher lease 的正式课堂授权、Display player/reconnect 的真实浏览器闭环；reference transport 已有 pinned revision + SQLite sync 接缝，仍未宣称 D7；
-- 正式 Picker / `presentationId` classroom block binding / Prepare Classroom 产品 UI 仍未完成；reference runtime snapshot/asset API 与 Prepare/Pin 接缝已存在，不能替代认证课堂能力；
+- Playwright Browser E2E、offline-after-prepare、真实 Docker/LAN/XP21A 证据仍未完成；reference runtime snapshot/asset API 与 Prepare/Pin 接缝已存在，不能替代认证课堂能力；
 - `selected-artifact` Widget Registry/Resolver 与 public/teacher projection；
 - 浏览器 mount 的长期 soak、Server restart/Display reconnect、真实 Docker/LAN/XP21A evidence；
 - 完整 Join / Presence / Outbox / Submission / Artifact Exchange 产品链；

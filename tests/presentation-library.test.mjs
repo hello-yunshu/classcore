@@ -256,3 +256,54 @@ test('active sessions require an explicit prepared revision switch', () => {
         fs.rmSync(dataDir, { recursive: true, force: true });
     }
 });
+
+test('runtime cache quota failure preserves every existing valid cache file', () => {
+    const { dataDir, store } = makeStore({ maxRuntimePresentationCacheBytes: 3 });
+    try {
+        const first = store.createPresentation({ ownerUserId: 'teacher:1', title: '第一份', bytes: Buffer.from('one'), document: { format: 'test' } });
+        const firstRevision = store.createRevision(first.presentationId, 'teacher:1', { kind: 'published', runtimeIndex });
+        const prepared = store.prepareRuntimeCache('session:one', 'teacher:1', { presentationId: first.presentationId, revisionId: firstRevision.revisionId });
+        const second = store.createPresentation({ ownerUserId: 'teacher:1', title: '第二份', bytes: Buffer.from('two'), document: { format: 'test' } });
+        const secondRevision = store.createRevision(second.presentationId, 'teacher:1', { kind: 'published', runtimeIndex });
+        assert.throws(() => store.prepareRuntimeCache('session:two', 'teacher:1', { presentationId: second.presentationId, revisionId: secondRevision.revisionId }), /runtime-cache-quota-exceeded/);
+        assert.equal(fs.readFileSync(prepared.cachePath, 'utf8'), 'one');
+        assert.equal(fs.existsSync(path.join(dataDir, 'presentation-runtime-cache', secondRevision.assetId)), false);
+        assert.equal(store.db.prepare('SELECT 1 FROM presentation_cache_entries WHERE asset_id=?').get(secondRevision.assetId), undefined);
+    }
+    finally {
+        store.close();
+        fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+});
+
+test('quota rejection does not persist a new blob', () => {
+    const { dataDir, store } = makeStore({ maxAccountPresentationBytes: 3 });
+    try {
+        store.createPresentation({ ownerUserId: 'teacher:1', title: '已满', bytes: Buffer.from('one'), document: { format: 'test' } });
+        assert.throws(() => store.ingestAsset('teacher:1', { bytes: Buffer.from('new') }), /account-presentation-quota-exceeded/);
+        assert.equal(Number(store.db.prepare('SELECT COUNT(*) AS n FROM presentation_assets').get().n), 1);
+        const files = fs.readdirSync(path.join(dataDir, 'presentation-assets')).flatMap(prefix => fs.readdirSync(path.join(dataDir, 'presentation-assets', prefix)));
+        assert.equal(files.length, 1);
+    }
+    finally {
+        store.close();
+        fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+});
+
+test('live staged claims survive GC until staged expiry', () => {
+    const { dataDir, store } = makeStore({ stagedAssetRetentionHours: 1, gcGracePeriodMs: 0 });
+    try {
+        const asset = store.ingestAsset('teacher:1', { bytes: Buffer.from('stage') });
+        const beforeExpiry = new Date(Date.now() + 1000);
+        assert.deepEqual(store.collectGarbage(beforeExpiry), []);
+        assert.ok(store.getAsset(asset.assetId));
+        const expiry = new Date(Date.now() + 60 * 60 * 1000 + 1000);
+        store.expireStagedAssetClaims(expiry);
+        assert.deepEqual(store.collectGarbage(expiry), [{ assetId: asset.assetId, action: 'marked' }]);
+    }
+    finally {
+        store.close();
+        fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+});

@@ -15,6 +15,10 @@ else
 fi
 
 echo "构建当前机器对应镜像：${PLATFORM} -> ${IMAGE} (Node ${NODE_VERSION})"
+if [[ ! -x node_modules/.bin/tsc ]]; then
+  npm ci --include=dev --no-audit --no-fund
+fi
+npm run build
 docker buildx build \
   --platform "$PLATFORM" \
   --build-arg "NODE_VERSION=${NODE_VERSION}" \

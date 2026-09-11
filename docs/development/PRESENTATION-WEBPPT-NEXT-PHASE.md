@@ -25,7 +25,7 @@
 
 Editor Foundation、Layout Shell 和第一批 Content & Style Tools 已完成。当前 Studio 已通过 controller façade 使用 web-ppt 的页面、对象、文字、图形、表格、图片、背景、变换、层级、对齐、动画、预览和 OOXML 保存能力；页带缩略图由独立 web-ppt Viewer 真实渲染。IndexedDB 保留离线 draft cache，reference 服务可用时通过 raw Asset API + `If-Match` 同步 Server Draft；发布正式走 Server fingerprint。
 
-Reference Server 已补齐 metadata-only AssetStore、raw upload/staged claim/quota、soft-delete purge、Draft expectedRevision conflict、Recovery/Rehearsal/Published/Restore、Session lifecycle、按 Session Runtime Cache pin/release/reconcile、maintenance runner，以及 pinned revision 的 Presentation control/sync/restart vertical slice。Teacher Library、reference Studio Server Draft autosave、reference Controller Lease、Display exact-player/reconnect 接缝已接入；仍未完成的产品接缝是认证账号 owner authorization、完整 Picker、正式 Teacher lease、真实 LAN/Docker/XP21A 演练；reference 实现不能替代这些 Gate。
+Reference Server 已补齐 metadata-only AssetStore、raw upload/quota preflight/staged strong claim、soft-delete purge、Draft expectedRevision conflict、bytes-derived trusted freeze、Recovery/Rehearsal Session/Published Prepare/Restore、Session lifecycle、按 Session Runtime Cache pin/release/reconcile、maintenance runner，以及 pinned revision 的 Presentation control/sync/restart vertical slice。Teacher Library、Picker、Server-first empty state、reference Controller Lease reconnect、Display playback-only exact-player/remount/reconnect、Studio conflict actions 和 batch Undo 接缝已接入；仍未完成的产品接缝是认证账号 owner authorization、Playwright、真实 LAN/Docker/XP21A 演练；reference 实现不能替代这些 Gate。
 
 完整接入的含义是“把 web-ppt 已有的编辑能力接入产品入口”，不是在 ClassCore 里重新实现编辑器内核。
 
@@ -126,7 +126,7 @@ Reference Server 已补齐 metadata-only AssetStore、raw upload/staged claim/qu
 1. 将 Library/Project/Picker/版本历史从 local-only IndexedDB 接到认证账号 API，并保留 offline pending 状态；
 2. 将 Draft autosave、Recovery、Rehearsal 和 Published UI 接入教师可理解的“已保存/等待同步/版本历史”语义；
 3. 把 reference 的 pinned revision playback 接到正式 Teacher lease、Display player 和 public projection；
-4. 补 selected-artifact overlay、Playwright browser refresh/reconnect 和 bundle/offline evidence；
+4. 补 selected-artifact overlay、Playwright browser refresh/reconnect/offline 和 console evidence；Display bundle boundary 已有构建 Gate。
 5. 最后做 Docker/LAN/XP21A 证据，未运行的 Gate 继续标记未验证。
 
 每个涉及 Presentation/Runtime/Storage/Realtime 的小阶段运行 `npm run check`；布局阶段额外进行三尺寸真实浏览器截图和键盘/IME验收。

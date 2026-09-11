@@ -125,6 +125,9 @@ export class PresentationStudioController {
 
     setFlip(id: ElementId, h?: boolean, v?: boolean): void { this.execute({ type: 'SetFlip', id, h, v }); }
     setLayer(id: ElementId, to: ElementLayerTarget): void { this.execute({ type: 'SetZ', id, to }); }
+    setLayerMany(ids: readonly ElementId[], to: ElementLayerTarget): void {
+        if (ids.length) this.execute(...ids.map(id => ({ type: 'SetZ', id, to }) as const));
+    }
     align(ids: readonly ElementId[], edge: AlignEdge): void { if (ids.length > 1) this.execute({ type: 'AlignElements', ids, edge }); }
     setFill(id: ElementId, fill: VectorFill | null): void { this.execute({ type: 'SetFill', id, fill }); }
     setStroke(id: ElementId, stroke: { type: 'none' } | { color: string; width: number; dash: null; cap: 'butt'; join: 'miter'; compound: 'sng' } | null): void { this.execute({ type: 'SetStroke', id, stroke }); }

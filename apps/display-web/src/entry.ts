@@ -1,12 +1,12 @@
 import { getSurfaceDescriptor, CLIENT_RUNTIME_BUDGETS } from '@classroom/surfaces';
-import { WebPptPresentationEngineAdapter, createWebPptAssetFromBytes, type WebPptPresentationAsset } from '@classroom/presentation-webppt-adapter';
+import { WebPptPlaybackEngineAdapter, createWebPptPlaybackAssetFromBytes, type WebPptPlaybackAsset } from '@classroom/presentation-webppt-adapter/playback';
 
 export const surface = getSurfaceDescriptor('display');
 export const runtimeBudget = CLIENT_RUNTIME_BUDGETS.display;
 
 type RuntimeSnapshot = {
     pin: { sessionId: string; presentationId: string; revisionId: string; assetId: string };
-    revision: { fingerprint: string; document: WebPptPresentationAsset['document']; runtimeIndex: { scenes: Array<{ sceneId: string }> } };
+    revision: { fingerprint: string; document: WebPptPlaybackAsset['document']; runtimeIndex: { scenes: Array<{ sceneId: string }> } };
     state: { sessionId: string; presentationRevisionId: string; assetId: string; deckId: string; sceneId: string; step: number; playState: 'idle' | 'playing' | 'paused'; revision: number };
 };
 
@@ -28,10 +28,11 @@ async function mountDisplayRuntimeAsync(root: HTMLElement): Promise<void> {
         stage.innerHTML = '<div class="display-empty"><strong>等待课堂</strong><span>请使用 /display?sessionId=… 打开已准备的课堂。</span></div>';
         return;
     }
-    const engine = new WebPptPresentationEngineAdapter(async () => { throw new Error('display-does-not-create-decks'); });
+    const engine = new WebPptPlaybackEngineAdapter();
     let player: Awaited<ReturnType<typeof engine.mountPlayer>> | null = null;
     let socket: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let mountedIdentity = '';
     let closed = false;
 
     async function loadRuntime(): Promise<RuntimeSnapshot> {
@@ -47,12 +48,12 @@ async function mountDisplayRuntimeAsync(root: HTMLElement): Promise<void> {
         const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/presentation-runtime/asset`, { cache: 'no-store' });
         if (!response.ok) throw new Error(`课堂资源读取失败（${response.status}）`);
         const bytes = new Uint8Array(await response.arrayBuffer());
-        const created = await createWebPptAssetFromBytes('课堂课件', bytes, snapshot.revision.document.idPrefix);
-        const asset: WebPptPresentationAsset = { ...created, deckId: snapshot.state.deckId, document: snapshot.revision.document };
+        const asset = await createWebPptPlaybackAssetFromBytes('课堂课件', bytes, snapshot.revision.document.idPrefix, snapshot.state.deckId);
         player?.dispose();
         stage.replaceChildren();
         player = await engine.mountPlayer(stage, asset, { context: { sessionId, surface: 'display' } });
         await player.applyAuthoritativeState(snapshot.state);
+        mountedIdentity = `${snapshot.pin.revisionId}:${snapshot.pin.assetId}`;
         status.textContent = '已连接 · 精确课堂版本';
     }
 
@@ -69,7 +70,12 @@ async function mountDisplayRuntimeAsync(root: HTMLElement): Promise<void> {
             const message = JSON.parse(String(event.data)) as { type?: string; state?: RuntimeSnapshot['state'] | null; reason?: string };
             if (message.type !== 'presentation.sync') return;
             if (!message.state) { status.textContent = message.reason === 'session-ended' ? '课堂已结束' : '等待课件'; return; }
-            if (player) void Promise.resolve(player.applyAuthoritativeState(message.state)).then(() => { status.textContent = '已同步 · 权威播放位置'; }).catch(() => { void refresh(); });
+            const nextIdentity = `${message.state.presentationRevisionId ?? ''}:${message.state.assetId ?? ''}`;
+            if (!player || (mountedIdentity && mountedIdentity !== nextIdentity)) {
+                void refresh();
+                return;
+            }
+            void Promise.resolve(player.applyAuthoritativeState(message.state)).then(() => { status.textContent = '已同步 · 权威播放位置'; }).catch(() => { void refresh(); });
         });
         socket.addEventListener('close', () => {
             if (closed) return;

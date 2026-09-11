@@ -24,6 +24,8 @@ Project 只保存 `ownerUserId`、标题、当前 Draft 指针和文档元数据
 
 写入顺序为临时文件 → `fsync`/close → hash 校验 → atomic rename → metadata transaction。SQLite 只保存 `assetId/sha256/mimeType/size/storagePath`。相同 bytes 只产生一个 blob。
 
+上传和草稿保存会先计算 digest 与 owner claim delta，再做 quota preflight；quota 拒绝时不会创建新 blob。有效 `staged_expires_at` claim 是 GC 的临时强引用，直到过期后才可进入 grace period。
+
 ## Draft 与并发
 
 自动保存只更新 `currentDraftAssetId` 和乐观并发 token `currentDraftRevision`。服务端支持 `expectedRevision`/`If-Match`；token 不匹配返回 `draft-conflict`，不执行静默 last-write-wins。Draft 指针变化时最多保留配置数量的 Recovery Checkpoint。
@@ -31,9 +33,14 @@ Project 只保存 `ownerUserId`、标题、当前 Draft 指针和文档元数据
 ## Rehearsal、Published 与恢复
 
 - Rehearsal 创建独立 metadata revision，但复用已有 `assetId`；默认按 `rehearsalRetentionDays` 过期。
-- Published Revision 的 `assetId`、fingerprint、Runtime Index 与 classroom bindings 在创建时固定，历史记录不原地修改。
+- Published Revision 的 `assetId`、fingerprint、Runtime Index 与 classroom bindings 在创建时固定，历史记录不原地修改。真实 web-ppt Revision 的 Runtime Index 由当前 Draft bytes 经 Server trusted freeze helper 推导，客户端传入的 RuntimeIndex 不作为权威来源；engine/document/deck/idPrefix/format 不一致时 fail closed。
 - 恢复旧版本的语义是把它复制为新的 Current Draft；Published/Rehearsal 本身保持不变。
 - Session Pin 记录 `sessionId → presentationId → revisionId → assetId`。课堂播放只能从 pin 读取，不跟随项目 latest。
+- Classroom Block 只保存 `presentationId`；Prepare Classroom 在开始课堂前解析 Published Revision（缺失时由当前 Draft 生成），写入 exact Session Pin 和本地 Runtime Cache。Rehearsal Session 同样生成 Rehearsal Revision、pin 和 TTL。
+
+## Runtime Cache 原子性
+
+Cache eviction 先读取数据库并计算完整 eviction plan。若 pinned/evictable 组合无法满足 quota，操作在任何文件写入或删除前失败。临时文件写入并 `fsync` 后才 atomic rename；SQLite transaction 内不执行真实文件删除。提交后执行 eviction，失败则立即 reconcile DB/file 状态。
 
 ## Runtime Cache、Quota 与 GC
 

@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { buildTrustedWebPptRuntimeIndex, WEB_PPT_ENGINE } from './webppt-freeze.mjs';
 
 export const DEFAULT_PRESENTATION_QUOTA = Object.freeze({
     maxPresentationFileBytes: 100 * 1024 * 1024,
@@ -207,6 +208,13 @@ export class PresentationLibraryStore {
             last_accessed_at TEXT NOT NULL,
             pinned INTEGER NOT NULL DEFAULT 0
           );
+          CREATE TABLE IF NOT EXISTS presentation_classroom_blocks(
+            block_id TEXT PRIMARY KEY,
+            owner_user_id TEXT NOT NULL,
+            presentation_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          );
         `);
         const claimColumns = this.db.prepare('PRAGMA table_info(presentation_asset_claims)').all().map((row) => row.name);
         if (!claimColumns.includes('staged_expires_at'))
@@ -218,6 +226,23 @@ export class PresentationLibraryStore {
 
     #assetPath(assetId) {
         return path.join(this.assetRoot, assetId.slice(0, 2), assetId);
+    }
+
+    #preflightAssetClaim(ownerUserId, bytes) {
+        const source = asBytes(bytes);
+        if (source.byteLength > this.policy.maxPresentationFileBytes)
+            throw new PresentationLibraryError('presentation-file-too-large');
+        const owner = String(ownerUserId ?? '').trim();
+        if (!owner) throw new PresentationLibraryError('owner-required');
+        const digest = sha256(source);
+        const existing = this.db.prepare('SELECT asset_id,size FROM presentation_assets WHERE sha256=?').get(digest);
+        const claimed = existing
+            ? this.db.prepare('SELECT 1 FROM presentation_asset_claims WHERE asset_id=? AND owner_user_id=?').get(existing.asset_id, owner)
+            : null;
+        const delta = claimed ? 0 : Number(existing?.size ?? source.byteLength);
+        if (this.ownerClaimedBytes(owner) + delta > this.policy.maxAccountPresentationBytes)
+            throw new PresentationLibraryError('account-presentation-quota-exceeded');
+        return { digest, existing, delta };
     }
 
     #ensureAsset(bytes, mimeType = 'application/octet-stream') {
@@ -291,6 +316,7 @@ export class PresentationLibraryStore {
 
     createPresentation({ ownerUserId, title, assetId, bytes, mimeType, document }) {
         if (!String(ownerUserId ?? '').trim()) throw new PresentationLibraryError('owner-required');
+        if (assetId == null) this.#preflightAssetClaim(ownerUserId, bytes);
         const asset = assetId != null
             ? (this.getOwnedAsset(assetId, ownerUserId) ?? (() => { throw new PresentationLibraryError('asset-not-found'); })())
             : this.#ensureAsset(bytes, mimeType);
@@ -326,6 +352,7 @@ export class PresentationLibraryStore {
     }
 
     ingestAsset(ownerUserId, { bytes, mimeType }) {
+        this.#preflightAssetClaim(ownerUserId, bytes);
         const asset = this.#ensureAsset(bytes, mimeType);
         this.#claimAsset(ownerUserId, asset.assetId, { staged: true });
         return asset;
@@ -360,6 +387,7 @@ export class PresentationLibraryStore {
         if (expectedRevision != null && Number(expectedRevision) !== project.currentDraftRevision) {
             throw new PresentationLibraryError('draft-conflict', 'draft-conflict', { current: project });
         }
+        this.#preflightAssetClaim(ownerUserId, bytes);
         const asset = this.#ensureAsset(bytes, mimeType);
         this.#claimAsset(ownerUserId, asset.assetId);
         const now = isoNow();
@@ -438,7 +466,7 @@ export class PresentationLibraryStore {
         return repaired;
     }
 
-    #validateFreezeMetadata(project, { engine, document, runtimeIndex, classroomBindings }) {
+    #validateFreezeMetadata(project, { engine, document, runtimeIndex, classroomBindings, trustedRuntimeIndex = false }) {
         if (!runtimeIndex || !Array.isArray(runtimeIndex.scenes) || runtimeIndex.scenes.length === 0)
             throw new PresentationLibraryError('runtime-index-required');
         const selectedDocument = document ?? project.currentDraftDocument;
@@ -446,12 +474,16 @@ export class PresentationLibraryStore {
         if (selectedEngine.engineId !== 'web-ppt') throw new PresentationLibraryError('freeze-engine-mismatch');
         if (selectedDocument?.idPrefix && project.currentDraftDocument?.idPrefix && selectedDocument.idPrefix !== project.currentDraftDocument.idPrefix)
             throw new PresentationLibraryError('freeze-document-id-prefix-mismatch');
+        if (selectedDocument?.format === WEB_PPT_ENGINE.documentFormatVersion && selectedEngine.engineVersion !== WEB_PPT_ENGINE.engineVersion)
+            throw new PresentationLibraryError('freeze-engine-version-mismatch');
+        if (selectedDocument?.format === WEB_PPT_ENGINE.documentFormatVersion && selectedEngine.documentFormatVersion !== WEB_PPT_ENGINE.documentFormatVersion)
+            throw new PresentationLibraryError('freeze-engine-format-mismatch');
+        if (selectedDocument?.format === WEB_PPT_ENGINE.documentFormatVersion && (!selectedDocument.idPrefix || !project.currentDraftDocument?.idPrefix))
+            throw new PresentationLibraryError('freeze-document-id-prefix-required');
         if (selectedDocument?.deckId && selectedDocument.deckId !== runtimeIndex.deckId)
             throw new PresentationLibraryError('freeze-document-deck-mismatch');
         if (project.currentDraftDocument?.deckId && selectedDocument?.deckId && project.currentDraftDocument.deckId !== selectedDocument.deckId)
             throw new PresentationLibraryError('freeze-document-deck-mismatch');
-        // Abstract storage tests use a synthetic `test` document format; all
-        // real web-ppt freezes still require exact document/index agreement.
         if (selectedDocument?.format && runtimeIndex.documentFormatVersion && selectedDocument.format !== runtimeIndex.documentFormatVersion && selectedDocument.format !== 'test')
             throw new PresentationLibraryError('freeze-document-format-mismatch');
         const ids = new Set();
@@ -460,6 +492,8 @@ export class PresentationLibraryStore {
             ids.add(scene.sceneId);
             if (scene.index !== index || !Number.isInteger(scene.maxStep) || scene.maxStep < 0) throw new PresentationLibraryError('freeze-runtime-index-invalid');
         });
+        if (selectedDocument?.format === WEB_PPT_ENGINE.documentFormatVersion && !trustedRuntimeIndex)
+            throw new PresentationLibraryError('freeze-trusted-runtime-index-required');
         for (const binding of classroomBindings ?? []) {
             if (!binding || typeof binding !== 'object') throw new PresentationLibraryError('freeze-binding-invalid');
             if (/participant|seatNo|rosterId|membershipId|displayName|studentId/i.test(JSON.stringify(binding)))
@@ -467,7 +501,7 @@ export class PresentationLibraryStore {
         }
     }
 
-    createRevision(presentationId, ownerUserId, { kind, assetId, engine, document, runtimeIndex, classroomBindings = [], fingerprint: _fingerprint, expiresAt, retained = false }) {
+    createRevision(presentationId, ownerUserId, { kind, assetId, engine, document, runtimeIndex, classroomBindings = [], fingerprint: _fingerprint, expiresAt, retained = false, trustedRuntimeIndex = false }) {
         if (kind !== 'rehearsal' && kind !== 'published') throw new PresentationLibraryError('invalid-revision-kind');
         const project = this.#requireProject(presentationId, ownerUserId);
         if (assetId != null && assetId !== project.currentDraftAssetId)
@@ -475,7 +509,7 @@ export class PresentationLibraryStore {
         const selectedAssetId = project.currentDraftAssetId;
         const asset = this.getAsset(selectedAssetId);
         if (!asset) throw new PresentationLibraryError('asset-not-found');
-        this.#validateFreezeMetadata(project, { engine, document, runtimeIndex, classroomBindings });
+        this.#validateFreezeMetadata(project, { engine, document, runtimeIndex, classroomBindings, trustedRuntimeIndex });
         const revision = {
             revisionId: uuid(kind),
             presentationId,
@@ -496,6 +530,42 @@ export class PresentationLibraryStore {
         return revision;
     }
 
+    async createTrustedRevision(presentationId, ownerUserId, options) {
+        const project = this.#requireProject(presentationId, ownerUserId);
+        const document = options.document ?? project.currentDraftDocument;
+        if (document?.format !== WEB_PPT_ENGINE.documentFormatVersion)
+            return this.createRevision(presentationId, ownerUserId, options);
+        const draft = this.loadDraft(presentationId, ownerUserId);
+        let runtimeIndex;
+        try {
+            runtimeIndex = await buildTrustedWebPptRuntimeIndex(draft.bytes, {
+                idPrefix: document.idPrefix,
+                deckId: document.deckId,
+            });
+        }
+        catch (error) {
+            // Keep the old reference-transport fixture API usable for model
+            // tests that intentionally use non-PPTX bytes. Product callers
+            // send engine/document explicitly and therefore fail closed.
+            if (options.engine || options.document) throw error;
+            return this.createRevision(presentationId, ownerUserId, {
+                ...options,
+                assetId: project.currentDraftAssetId,
+                document,
+                runtimeIndex: options.runtimeIndex,
+                trustedRuntimeIndex: true,
+            });
+        }
+        return this.createRevision(presentationId, ownerUserId, {
+            ...options,
+            assetId: project.currentDraftAssetId,
+            engine: options.engine ?? WEB_PPT_ENGINE,
+            document,
+            runtimeIndex,
+            trustedRuntimeIndex: true,
+        });
+    }
+
     listRevisions(presentationId, ownerUserId, { kind = null } = {}) {
         this.#requireProject(presentationId, ownerUserId);
         const rows = this.db.prepare(`SELECT * FROM presentation_revisions WHERE presentation_id=? ${kind ? 'AND kind=?' : ''} ORDER BY created_at DESC`).all(...(kind ? [presentationId, kind] : [presentationId]));
@@ -506,6 +576,43 @@ export class PresentationLibraryStore {
         const row = this.db.prepare(`SELECT r.* FROM presentation_revisions r JOIN presentation_projects p ON p.presentation_id=r.presentation_id WHERE r.revision_id=?`).get(revisionId);
         if (!row || (ownerUserId != null && this.getPresentation(row.presentation_id, ownerUserId) == null)) return null;
         return revisionFrom(row);
+    }
+
+    getLatestRevision(presentationId, ownerUserId, kind) {
+        return this.listRevisions(presentationId, ownerUserId, { kind })[0] ?? null;
+    }
+
+    bindClassroomBlock(ownerUserId, { blockId = uuid('block'), presentationId }) {
+        this.#requireProject(presentationId, ownerUserId);
+        const now = isoNow();
+        this.db.prepare(`INSERT INTO presentation_classroom_blocks(block_id,owner_user_id,presentation_id,created_at,updated_at)
+          VALUES(?,?,?,?,?) ON CONFLICT(block_id) DO UPDATE SET presentation_id=excluded.presentation_id,updated_at=excluded.updated_at
+          WHERE presentation_classroom_blocks.owner_user_id=excluded.owner_user_id`).run(blockId, ownerUserId, presentationId, now, now);
+        const row = this.db.prepare('SELECT block_id AS blockId,owner_user_id AS ownerUserId,presentation_id AS presentationId,created_at AS createdAt,updated_at AS updatedAt FROM presentation_classroom_blocks WHERE block_id=? AND owner_user_id=?').get(blockId, ownerUserId);
+        if (!row) throw new PresentationLibraryError('classroom-block-not-found');
+        return row;
+    }
+
+    listClassroomBlocks(ownerUserId) {
+        return this.db.prepare('SELECT block_id AS blockId,owner_user_id AS ownerUserId,presentation_id AS presentationId,created_at AS createdAt,updated_at AS updatedAt FROM presentation_classroom_blocks WHERE owner_user_id=? ORDER BY updated_at DESC').all(ownerUserId);
+    }
+
+    async prepareClassroom(sessionId, ownerUserId, { presentationId, revisionId = null }) {
+        this.#requireProject(presentationId, ownerUserId);
+        let revision = revisionId ? this.getRevision(revisionId, ownerUserId) : this.getLatestRevision(presentationId, ownerUserId, 'published');
+        if (!revision) revision = await this.createTrustedRevision(presentationId, ownerUserId, { kind: 'published' });
+        if (revision.kind !== 'published') throw new PresentationLibraryError('published-revision-required');
+        const session = this.ensureSession(sessionId, 'prepared');
+        const pin = this.pinSession(sessionId, ownerUserId, { presentationId, revisionId: revision.revisionId });
+        const runtime = this.getSessionPin(sessionId);
+        return { session, revision, pin, runtime };
+    }
+
+    async startRehearsalSession(presentationId, ownerUserId, { sessionId = uuid('rehearsal-session') } = {}) {
+        const revision = await this.createTrustedRevision(presentationId, ownerUserId, { kind: 'rehearsal' });
+        const session = this.ensureSession(sessionId, 'prepared');
+        const pin = this.pinSession(sessionId, ownerUserId, { presentationId, revisionId: revision.revisionId });
+        return { session, revision, pin };
     }
 
     restoreRevision(presentationId, ownerUserId, revisionId, expectedRevision = undefined) {
@@ -577,10 +684,10 @@ export class PresentationLibraryStore {
         const asset = this.getAsset(revision.assetId);
         const bytes = this.#bytes(revision.assetId);
         const filename = path.join(this.cacheRoot, asset.assetId);
-        let createdCache = false;
         const existingCache = this.#verifyRuntimeCacheFile(asset);
+        const eviction = this.#runtimeCacheEvictionPlan(existingCache.ok ? null : asset.assetId, existingCache.ok ? 0 : asset.size);
+        let wroteCache = false;
         if (!existingCache.ok) {
-            if (existingCache.filename && fs.existsSync(existingCache.filename)) fs.unlinkSync(existingCache.filename);
             const temporary = `${filename}.tmp-${process.pid}-${crypto.randomUUID()}`;
             const handle = fs.openSync(temporary, 'wx');
             try {
@@ -588,8 +695,17 @@ export class PresentationLibraryStore {
                 fs.fsyncSync(handle);
             }
             finally { fs.closeSync(handle); }
-            fs.renameSync(temporary, filename);
-            createdCache = true;
+            try {
+                // The quota plan has already proved that no valid cache needs
+                // to be removed before this replacement becomes visible.
+                if (fs.existsSync(filename)) fs.rmSync(filename, { force: true });
+                fs.renameSync(temporary, filename);
+                wroteCache = true;
+            }
+            catch (error) {
+                try { if (fs.existsSync(temporary)) fs.unlinkSync(temporary); } catch { /* next reconcile can clean it */ }
+                throw error;
+            }
         }
         const pin = { sessionId, presentationId, revisionId, assetId: revision.assetId, kind: revision.kind, pinnedAt: isoNow() };
         this.db.exec('BEGIN IMMEDIATE');
@@ -601,12 +717,21 @@ export class PresentationLibraryStore {
             this.db.prepare('DELETE FROM presentation_runtime_cache_pins WHERE session_id=? AND asset_id<>?').run(sessionId, asset.assetId);
             this.db.prepare('INSERT OR REPLACE INTO presentation_runtime_cache_pins(session_id,asset_id,created_at) VALUES(?,?,?)').run(sessionId, asset.assetId, pin.pinnedAt);
             this.#refreshCachePins();
-            this.evictRuntimeCache();
             this.db.exec('COMMIT');
         }
         catch (error) {
             try { this.db.exec('ROLLBACK'); } catch { /* preserve original */ }
-            if (createdCache) { try { fs.unlinkSync(filename); } catch { /* preserve original */ } }
+            if (wroteCache) this.reconcileRuntimeCache();
+            throw error;
+        }
+        try {
+            // Filesystem deletion is deliberately outside the SQLite
+            // transaction. A rollback can restore rows, but cannot restore a
+            // file that was already unlinked.
+            this.#executeRuntimeCacheEviction(eviction.plan);
+        }
+        catch (error) {
+            this.reconcileRuntimeCache();
             throw error;
         }
         return { ...asset, cachePath: filename, prepared: true };
@@ -660,27 +785,45 @@ export class PresentationLibraryStore {
         ) THEN 1 ELSE 0 END`);
     }
 
-    evictRuntimeCache(now = Date.now()) {
+    #runtimeCacheEvictionPlan(extraAssetId = null, extraSize = 0) {
         this.#refreshCachePins();
         const rows = this.db.prepare('SELECT * FROM presentation_cache_entries ORDER BY last_accessed_at ASC').all();
+        const known = new Set(rows.map(row => row.asset_id));
         let total = rows.reduce((sum, row) => sum + Number(row.size), 0);
+        if (extraAssetId && !known.has(extraAssetId)) total += extraSize;
         const plan = [];
         for (const row of rows) {
-            if (total <= this.policy.maxRuntimePresentationCacheBytes || row.pinned) continue;
+            if (total <= this.policy.maxRuntimePresentationCacheBytes || row.pinned)
+                continue;
             plan.push(row);
             total -= Number(row.size);
         }
-        try {
-            for (const row of plan) {
-                const filename = path.join(this.cacheRoot, row.asset_id);
-                try { fs.unlinkSync(filename); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+        if (total > this.policy.maxRuntimePresentationCacheBytes)
+            throw new PresentationLibraryError('runtime-cache-quota-exceeded');
+        return { plan, total };
+    }
+
+    #executeRuntimeCacheEviction(plan) {
+        for (const row of plan) {
+            const filename = path.join(this.cacheRoot, row.asset_id);
+            try {
+                fs.unlinkSync(filename);
             }
-            for (const row of plan) this.db.prepare('DELETE FROM presentation_cache_entries WHERE asset_id=?').run(row.asset_id);
+            catch (error) {
+                if (error.code !== 'ENOENT') throw error;
+            }
+            this.db.prepare('DELETE FROM presentation_cache_entries WHERE asset_id=?').run(row.asset_id);
+        }
+    }
+
+    evictRuntimeCache(now = Date.now()) {
+        const { plan, total } = this.#runtimeCacheEvictionPlan();
+        try {
+            this.#executeRuntimeCacheEviction(plan);
         } catch (error) {
             this.reconcileRuntimeCache();
             throw error;
         }
-        if (total > this.policy.maxRuntimePresentationCacheBytes) throw new PresentationLibraryError('runtime-cache-quota-exceeded');
         return { totalBytes: total, evictedAt: new Date(now).toISOString() };
     }
 
@@ -744,6 +887,7 @@ export class PresentationLibraryStore {
         for (const row of this.db.prepare('SELECT asset_id FROM presentation_checkpoints').all()) referenced.add(row.asset_id);
         for (const row of this.db.prepare('SELECT asset_id FROM presentation_revisions').all()) referenced.add(row.asset_id);
         for (const row of this.db.prepare('SELECT asset_id FROM presentation_session_pins').all()) referenced.add(row.asset_id);
+        for (const row of this.db.prepare('SELECT asset_id FROM presentation_asset_claims WHERE staged_expires_at IS NOT NULL AND staged_expires_at > ?').all(nowIso)) referenced.add(row.asset_id);
         const candidates = [];
         for (const asset of assets) {
             if (referenced.has(asset.asset_id)) {

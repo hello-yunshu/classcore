@@ -6,6 +6,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./playback": {
+      "types": "./src/playback.ts",
+      "default": "./src/playback.ts"
     }
   },
   "types": "./src/index.ts",

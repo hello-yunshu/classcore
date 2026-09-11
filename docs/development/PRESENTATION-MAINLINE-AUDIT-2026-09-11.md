@@ -2,7 +2,7 @@
 
 ## 结论
 
-web-ppt 通过了当前可执行的核心 Integration Gate，现已确定为 ClassCore 唯一继续推进的网页 Presentation 引擎；现有 Scene Studio 仅保留为 fallback、contract harness 和紧急降级，不再扩大为第二套 Office 编辑器。本轮继续收口了 reference Teacher Library、staged quota/purge、cache reconcile、server-side freeze trust boundary、Controller Lease、Teacher control 和 Display exact-player/reconnect；认证账号、正式 Picker、Docker/LAN/设备证据仍未闭环。
+web-ppt 通过了当前可执行的核心 Integration Gate，现已确定为 ClassCore 唯一继续推进的网页 Presentation 引擎；现有 Scene Studio 仅保留为 fallback、contract harness 和紧急降级，不再扩大为第二套 Office 编辑器。本轮继续收口了 reference Teacher Library/Picker/Prepare/Rehearsal Session、quota preflight/staged strong-ref、cache eviction safety、bytes-derived freeze trust boundary、Controller Lease reconnect、Teacher conflict/thumbnail/Undo 和 Display playback-only exact remount；认证账号、Playwright、Docker/LAN/设备证据仍未闭环。
 
 ## 架构审计结果
 
@@ -26,7 +26,7 @@ web-ppt 通过了当前可执行的核心 Integration Gate，现已确定为 Cla
 | Teacher Library / Server-first blank project | `browser-bundle-built` |
 | reference Controller Lease / Teacher control / authoritative resolver | `model-tested` + `loopback integration-tested` reference transport |
 | Display exact cached player and reconnect path | `browser-bundle-built` + `loopback integration-tested` reference transport |
-| authenticated owner / formal Picker / Playwright / Docker / LAN / XP21A | `NOT_EVALUATED` |
+| authenticated owner / Playwright / Docker / LAN / XP21A | `NOT_EVALUATED` |
 
 ## web-ppt 核心 Gate 证据
 
@@ -44,7 +44,7 @@ web-ppt 通过了当前可执行的核心 Integration Gate，现已确定为 Cla
 1. 将 reference 的 Published Presentation draft→validate→publish→freeze→fingerprint 迁移到认证账号服务，并接入 Studio Library/Picker。
 2. 将 PresentationPlaybackState 控制接入正式 teacher lease、SQLite recovery 和 Display player；reference transport 已完成 durable success/failure outcome replay。
 3. 把 classroom widget registry/resolver 接入实际的 `selected-artifact` overlay，并确保 public projection fail closed。
-4. 增加真实 browser refresh、server restart、Display reconnect、arm64/amd64 Docker 与 LAN evidence。
+4. 增加 Playwright 真实 browser refresh、server restart、Display reconnect、offline-after-prepare、arm64/amd64 Docker 与 LAN evidence。
 
 ### 建议修改
 

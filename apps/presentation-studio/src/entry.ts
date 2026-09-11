@@ -228,6 +228,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  let inspectorTab: 'object' | 'page' | 'animation' = 'object';
  let thumbnailGeneration = 0;
  let thumbnailAsset: WebPptPresentationAsset | null = null;
+ let conflictOpen = false;
     const thumbnailSessions = new Map<string, Awaited<ReturnType<typeof engine.mountPlayer>>>();
     root.replaceChildren();
  const app = document.createElement('div');
@@ -279,6 +280,23 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  } function selectedIds() { return controller.selectedIds();
  } function setStatus(message: string, error = false): void { saveState.textContent = message;
  saveState.className = `save-state${error ? ' status-error' : ''}`;
+ } function showConflictDialog(): void {
+  if (conflictOpen || !serverProject) return;
+  conflictOpen = true;
+  const dialog = document.createElement('dialog'); dialog.className = 'conflict-dialog';
+  const heading = document.createElement('h2'); heading.textContent = '此课件已在其他窗口修改';
+  const note = document.createElement('p'); note.textContent = '重新加载服务器版本会放弃当前未同步改动；另存为副本会保留当前课件。';
+  const actions = document.createElement('div'); actions.className = 'dialog-actions';
+  const reload = button('重新加载服务器版本', async () => {
+   const remote = await loadRemotePresentation(serverProject!.presentationId);
+   await openAsset(remote); serverSyncPending = false; setStatus('已加载服务器版本'); dialog.close();
+  }, 'card-secondary');
+  const duplicate = button('另存为副本', async () => {
+   const result = await serverJson(`/api/presentations/${encodeURIComponent(serverProject!.presentationId)}/duplicate`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}) });
+   dialog.close(); window.location.href = `/authoring?presentationId=${encodeURIComponent(result.presentation.presentationId)}`;
+  }, 'primary-button');
+  actions.append(reload, duplicate); dialog.append(heading, note, actions); document.body.append(dialog);
+  dialog.addEventListener('close', () => { conflictOpen = false; dialog.remove(); }); dialog.showModal();
  } function wrapAction(action: () => void | Promise<void>): () => void { return () => { try { const result = action();
  if (result instanceof Promise) void result.catch(error => setStatus(error instanceof Error ? error.message : String(error), true));
  } catch (error) { setStatus(error instanceof Error ? error.message : String(error), true);
@@ -344,7 +362,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  } catch {
   for (const host of hosts) host.textContent = '缩略图不可用';
  } }
-    function renderScenePanel(): void { const editor = currentSession()?.editor;
+    function renderScenePanel(updateThumbnails = true): void { const editor = currentSession()?.editor;
  const slides = editor?.doc.slideOrder ?? [];
  const active = currentSlide();
  scenePanel.replaceChildren();
@@ -393,7 +411,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  renderAll();
  }), 'danger-button'));
  scenePanel.append(actions, reorder);
- void syncThumbnails();
+ if (updateThumbnails) void syncThumbnails();
  }
     function renderToolbar(): void { toolbar.replaceChildren();
  const group = (label: string, controls: HTMLElement[]): void => { const section = document.createElement('div');
@@ -429,9 +447,9 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  renderAll();
  }), 'tool-button'), button('水平居中', wrapAction(() => { controller.align(selectedIds(), 'center');
  renderAll();
- }), 'tool-button'), button('置顶', wrapAction(() => { for (const id of selectedIds()) controller.setLayer(id, 'front');
+ }), 'tool-button'), button('置顶', wrapAction(() => { controller.setLayerMany(selectedIds(), 'front');
  renderAll();
- }), 'tool-button'), button('等距分布', wrapAction(() => { controller.distributeHorizontal(selectedIds()); renderAll(); }), 'tool-button'), button('置底', wrapAction(() => { for (const id of selectedIds()) controller.setLayer(id, 'back');
+ }), 'tool-button'), button('等距分布', wrapAction(() => { controller.distributeHorizontal(selectedIds()); renderAll(); }), 'tool-button'), button('置底', wrapAction(() => { controller.setLayerMany(selectedIds(), 'back');
  renderAll();
  }), 'tool-button')]);
  group('课堂动作', [button('下一动画', wrapAction(() => { if (preview) void preview.session.nextStep?.();
@@ -595,7 +613,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     function kindLabel(record: ElementRecord | null): string { const kind = record?.src.kind;
  return kind === 'shape' ? '图形' : kind === 'image' ? '图片' : kind === 'table' ? '表格' : kind === 'group' ? '组合' : '对象';
  }
-    function renderAll(thumbnails = true): void { renderScenePanel();
+    function renderAll(thumbnails = true): void { renderScenePanel(thumbnails);
  renderToolbar();
  renderInspector();
  const slideId = currentSlide();
@@ -630,7 +648,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     serverSyncPending = false;
    } catch (error) {
     serverSyncPending = true;
-    setStatus(error instanceof Error && error.message === 'draft-conflict' ? '需要重新加载服务器版本' : '等待同步');
+    if (error instanceof Error && error.message === 'draft-conflict') { setStatus('需要重新加载服务器版本'); showConflictDialog(); }
+    else setStatus('等待同步');
    }
    savedGeneration = generation;
    renderAll(false);
@@ -671,9 +690,9 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const runtimeIndex = await engine.buildRuntimeIndex(saved);
  await persistWebPptDraft(saved);
  await syncServerDraft(saved);
- const response = await serverJson(`/api/presentations/${encodeURIComponent(serverProject!.presentationId)}/rehearsals`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ engine: saved.engine, document: { ...saved.document, deckId: saved.deckId }, runtimeIndex }) });
- const revision = response.revision;
- setStatus(`试课版本已准备 · ${runtimeIndex.scenes.length} 页 · ${revision.expiresAt ? `有效至 ${new Date(revision.expiresAt).toLocaleString()}` : '临时版本'}`);
+ const response = await serverJson(`/api/presentations/${encodeURIComponent(serverProject!.presentationId)}/rehearsal-session`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}) });
+ const rehearsal = response.rehearsal;
+ setStatus(`试课已准备 · ${runtimeIndex.scenes.length} 页 · session ${rehearsal.session.sessionId} · ${rehearsal.revision.expiresAt ? `有效至 ${new Date(rehearsal.revision.expiresAt).toLocaleString()}` : '临时版本'}`);
  asset = saved; thumbnailAsset = saved; renderAll(false);
  } catch (error) { setStatus(error instanceof Error ? error.message : String(error), true); }
  finally { busy = false; }
