@@ -30,6 +30,7 @@ Lesson -> Activity -> Applet Type/Instance -> Command/Event/State/Artifact
 - Foundation v0.1.2 exact-set freeze 和 Private Identity Policy 校验；
 - Apple Silicon `linux/arm64` Docker 主目标，同时保留 `linux/amd64`；
 - 50 名学生 + 40 名 Observer 的 WebSocket/SQLite 参考负载模拟。
+- Framework-first 通用主干：credential-based Join/Presence authority、Applet Registry/Host、原子 Event/Snapshot、Artifact/Submission/Transfer、Live QoS、Widget Registry 与 Analytics timeout/fallback/teacher-confirm；详见 [`Framework-first mainline`](docs/development/FRAMEWORK-FIRST-MAINLINE.md)。
 
 ## 快速开始
 
@@ -116,6 +117,12 @@ Lesson Package -> 复用或新增 Applet -> Lesson-specific Analytics -> Present
 - [`docs/README.md`](docs/README.md)：中文文档总入口；
 - [`docs/development/MASTER-DEVELOPMENT-PLAN.md`](docs/development/MASTER-DEVELOPMENT-PLAN.md)：长期计划；
 - [`docs/development/PRESENTATION-MAINLINE-VERTICAL-SLICE.md`](docs/development/PRESENTATION-MAINLINE-VERTICAL-SLICE.md)：Presentation 主线垂直切片；
+- [`docs/development/FRAMEWORK-V1-FREEZE-CRITERIA.md`](docs/development/FRAMEWORK-V1-FREEZE-CRITERIA.md)：Framework v1 冻结条件与证据边界；
+- [`docs/development/CLASSROOM-SPINE.md`](docs/development/CLASSROOM-SPINE.md)：认证课堂主干模型；
+- [`docs/development/APPLET-HOST-RUNTIME.md`](docs/development/APPLET-HOST-RUNTIME.md)：通用 Applet Host 生命周期；
+- [`docs/development/ARTIFACT-SUBMISSION-RUNTIME.md`](docs/development/ARTIFACT-SUBMISSION-RUNTIME.md)：Artifact/Submission/Transfer 持久化边界；
+- [`docs/development/STAGE-WIDGET-RUNTIME.md`](docs/development/STAGE-WIDGET-RUNTIME.md)：Stage/Widget/Projection 运行时；
+- [`docs/development/INTELLIGENCE-RUNTIME.md`](docs/development/INTELLIGENCE-RUNTIME.md)：通用 Analytics/Intelligence 运行时；
 - [`docs/deployment/PLATFORM-ARCHITECTURE-MATRIX.md`](docs/deployment/PLATFORM-ARCHITECTURE-MATRIX.md)：平台与 Docker 架构矩阵；
 - [`docs/deployment/CLASSROOM-LAN-REHEARSAL.md`](docs/deployment/CLASSROOM-LAN-REHEARSAL.md)：真实路由器与 XP21A 局域网演练要求。
 

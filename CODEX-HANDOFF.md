@@ -46,6 +46,7 @@ npm run bootstrap
 - 未认证 reference Server 源码默认 loopback-only；需要 LAN 开发必须显式设置 `HOST=0.0.0.0`；
 - reference transport 的重复 ID 会做 canonical payload 一致性校验，冲突重用明确拒绝；
 - 中性 Web Shell（不是最终 Design）。
+- Framework-first 通用运行时 slice 已接入：credential-based Join/Grant/Membership/Presence authority、Applet Registry/Host 与 synthetic `generic-counter`、原子 Event/Snapshot、Artifact/Submission/Transfer、Live quality broker、Widget Registry、Analytics timeout/fallback 与 Teacher-confirm；模型/集成证据见 `docs/development/FRAMEWORK-FIRST-MAINLINE.md` 与 `tests/framework-runtime.test.mjs`。
 - D2 Student Practice Alpha：Student 轻量 TransformBoard 已支持选择、拖动、画布平移、旋转、旋转中心、重置、本地保存与刷新恢复；
 - D2 Authoring Studio Alpha：浏览器内 Scene Studio 已支持页面增删/复制/排序、文字/图片 URL/SVG/基础图形、元素移动/尺寸/图层、保存重开和预览播放；
 - Presentation 主线已接入真实 `@web-ppt/*@0.5.0-beta.1`：`@classroom/presentation-webppt-adapter` 负责 opaque OOXML bytes、稳定 `idPrefix`、编辑/保存/Runtime Index/Player 边界；Studio 生产 bundle 由 esbuild 构建，内置模板本地生成，草稿二进制走 IndexedDB；
@@ -68,16 +69,16 @@ npm run bootstrap
 - 认证账号服务器接入、真实身份 owner authorization、Studio Library 的完整版本历史 UI；reference API/Picker/Prepare/设计绑定的模型级路径已存在，但不是认证产品能力；
 - Presentation PlaybackState 与 Teacher lease 的正式课堂授权、Display player/reconnect 的真实浏览器闭环；reference transport 已有 pinned revision + SQLite sync 接缝，仍未宣称 D7；
 - Playwright Browser E2E、offline-after-prepare、真实 Docker/LAN/XP21A 证据仍未完成；reference runtime snapshot/asset API 与 Prepare/Pin 接缝已存在，不能替代认证课堂能力；
-- `selected-artifact` Widget Registry/Resolver 与 public/teacher projection；
+- `selected-artifact` 等 Widget selector 与真实课堂 Stage/Artifact public/teacher projection 的正式接线；通用 Widget Registry primitive 已完成，但尚未替代 reference transport。
 - 浏览器 mount 的长期 soak、Server restart/Display reconnect、真实 Docker/LAN/XP21A evidence；
 - 完整 Join / Presence / Outbox / Submission / Artifact Exchange 产品链；
 - Teacher / Observer / Display 的完整正式课堂 UI（Teacher 目前只有课件库入口，课堂控制仍是 reference transport）；
 - Lesson-specific Analytics Runtime 与《图案的还原》规则智能；
-- Apple Silicon Mac 上真实 Docker build/run/restart；
+- authenticated D7 Docker/LAN classroom runtime；本轮通用 reference Docker gate 已在 Apple Silicon `linux/arm64` 通过，amd64 镜像构建/架构检查也通过，但这不等于 D7 authenticated gate。
 - 真实路由器 + XP21A LAN rehearsal（自动 host LAN-interface probe 不能替代）；
 - XP21A 小规模真机 smoke（若设备可得）。
 
-本轮主线验证状态：`npm run build`、`npm run typecheck`、Presentation model tests 与 loopback server integration tests 通过；Playwright、Docker、LAN、认证 owner 和 XP21A 仍为 `NOT_EVALUATED`。
+本轮主线验证状态：`npm run check` 通过，136/136 tests、50 Student + 40 Observer simulation、真实 WebSocket + SQLite load、arm64 reference Docker gate 通过；Playwright、认证 owner、正式课堂 LAN 与 XP21A 仍为 `NOT_EVALUATED`。
 
 ## 开发优先级
 
@@ -130,8 +131,17 @@ npm run bootstrap
 
 本轮 D2 Alpha 已完成；主要工作已经从“继续设计架构”切换为“完成能稳定上课的真实产品”。
 
+## Framework-first Mainline 最新验证
+
+- `npm run check:fast`：通过；
+- `npm run check`：通过；136/136 unit/integration/reference HTTP/WS tests，Formal/Lesson/Dist/Load/Smoke 全部通过；
+- `npm run docker:gate`：通过；当前宿主 `linux/arm64`，镜像用户 `node`，重启恢复与端口隔离通过；
+- `docker build --platform linux/amd64`：通过架构与非 root 用户检查，未执行 amd64 runtime soak；
+- `npm run d7:product`：仍按设计失败，6 个正式课堂 blocker 未被伪报为 ready；
+- Core pollution scan：`packages/contracts`, `runtime`, `storage`, `realtime`, `projections`, `applet-sdk`, `intelligence`, `platform` 未发现课程专有关键词。
+
 ## D2 Alpha 最新验证
 
-- `npm run check`：完整通过；110/110 unit tests，Contract/Formal/Lesson/Dist/HTTP/WS/Load/Smoke 全部通过；
+- `npm run check`：完整通过；136/136 unit/integration tests，Contract/Formal/Lesson/Dist/HTTP/WS/Load/Smoke 全部通过；
 - 真实浏览器：Authoring web-ppt 页面 CRUD、形状与淡入步骤、保存/重开、预览/下一步、刷新恢复与本地发布指纹通过；浏览器无 error/warning console log；
 - Presentation 核心 verifier 已通过，但仍未声称 D7 完成：认证课堂 Server、Join/Presence、Teacher/Observer/Display 同步、Published Presentation/AssetStore、真实 Docker/LAN/XP21A 仍待完成。
