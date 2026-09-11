@@ -7,5 +7,7 @@ dist/
 *.sqlite-wal
 .DS_Store
 .env
+__pycache__/
+*.pyc
 
 *.zip
