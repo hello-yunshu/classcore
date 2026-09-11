@@ -1,4 +1,4 @@
-# Classroom Runtime Foundation v0.1.2 — R3.10 / CR11
+# 云云科（ClassCore）— Classroom Runtime Foundation v0.1.2 / R3.10 / CR11
 
 这是后续正式开发母版，重点是：**下载 ZIP 后交给 Codex，也能在不依赖此前聊天上下文的情况下继续开发。** Foundation Architecture v0.1.2 保持稳定；R3.10 不增加新的 Core 层，而是对 R3.8 的独立攻击性审计做Release-Assurance Closure：在保留既有 Lesson/Authorization/Docker Gate 的基础上，补齐身份隐私递归语义、跨 TS/JS/Python mutation corpus、名单重复 participantId、Student Claim 标准化与公共 pseudonym 存在性校验。
 

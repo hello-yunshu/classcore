@@ -1,5 +1,6 @@
 {
-  "name": "classroom-runtime-foundation-v0.1.2-roadmap-r3.9",
+  "name": "classcore",
+  "description": "云云科（ClassCore）局域网课堂运行平台",
   "version": "0.1.2",
   "private": true,
   "type": "module",
