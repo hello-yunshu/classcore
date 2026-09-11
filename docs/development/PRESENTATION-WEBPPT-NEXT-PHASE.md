@@ -21,6 +21,12 @@
   -> Display 播放与恢复
 ```
 
+## 2.1 当前实现状态（2026-09-11）
+
+Editor Foundation、Layout Shell 和第一批 Content & Style Tools 已完成。当前 Studio 已通过 controller façade 使用 web-ppt 的页面、对象、文字、图形、表格、图片、背景、变换、层级、对齐、动画、预览和 OOXML 保存能力；页带缩略图由独立 web-ppt Viewer 真实渲染。草稿与本地 Published AssetStore 使用 IndexedDB，发布时执行 validate、Runtime Index 和不可变 fingerprint。
+
+仍未完成的课堂接缝是 Server Published Presentation/Asset API、Teacher lease、SQLite PlaybackState recovery、Display-only player reconnect 和真实 LAN/Docker/XP21A 演练。这些能力不能由本地 Studio 发布记录替代。
+
 完整接入的含义是“把 web-ppt 已有的编辑能力接入产品入口”，不是在 ClassCore 里重新实现编辑器内核。
 
 ## 3. 能力范围

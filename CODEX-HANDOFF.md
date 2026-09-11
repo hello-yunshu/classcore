@@ -47,8 +47,9 @@ npm run bootstrap
 - D2 Student Practice Alpha：Student 轻量 TransformBoard 已支持选择、拖动、画布平移、旋转、旋转中心、重置、本地保存与刷新恢复；
 - D2 Authoring Studio Alpha：浏览器内 Scene Studio 已支持页面增删/复制/排序、文字/图片 URL/SVG/基础图形、元素移动/尺寸/图层、保存重开和预览播放；
 - Presentation 主线已接入真实 `@web-ppt/*@0.5.0-beta.1`：`@classroom/presentation-webppt-adapter` 负责 opaque OOXML bytes、稳定 `idPrefix`、编辑/保存/Runtime Index/Player 边界；Studio 生产 bundle 由 esbuild 构建，内置模板本地生成，草稿二进制走 IndexedDB；
+- Presentation Studio 下一阶段 Editor Foundation + Layout Shell + 内容工具已完成：controller façade 收拢 web-ppt 命令，三栏工作台、真实 Viewer 缩略图、对象/页面/动画检查台、页面/对象 CRUD、文字/图形/表格/图片/背景、变换/层级/对齐/复制粘贴、撤销重做、键盘快捷键和响应式降级已接入；本地 Published AssetStore 已完成 validate→Runtime Index→freeze→fingerprint 不可变发布记录；
 - `presentation-runtime` D7 verifier 已从 placeholder 改为真实 fail-closed 核心链 verifier，并已补齐 presentation evidence；D7 overall 仍不能宣称完成；
-- 下一阶段 Presentation 唯一主线为 web-ppt 完整接入；能力范围、三栏 Studio 布局、响应式降级和验收 Gate 见 `docs/development/PRESENTATION-WEBPPT-NEXT-PHASE.md`；
+- 当前 Presentation 唯一主线为 web-ppt；Studio 接入结果、课堂接缝边界和验收 Gate 见 `docs/development/PRESENTATION-WEBPPT-NEXT-PHASE.md`；
 - D2 Alpha 有模型级回归与真实浏览器验收，Student 不加载 Presentation 编辑器，Foundation 与现有 Surface/Service Plane 边界保持不变；
 
 ## 当前明确未完成
@@ -67,13 +68,12 @@ npm run bootstrap
 
 ## 开发优先级
 
-1. web-ppt 完整编辑工具栏、真实缩略图和三栏 Studio 布局；
-2. Published Presentation + AssetStore + fingerprint；
-3. Teacher Runtime / Display PresentationPlaybackState 同步与恢复；
-4. `selected-artifact` binding / projection；
-5. Analytics / Rule Intelligence / Advice；
-6. D6并发、断网重连、Server restart、Observer降级演练；
-7. D7冻结RC，不再加功能。
+1. Teacher Runtime / Display PresentationPlaybackState 同步与恢复；
+2. Server Published Presentation + AssetStore 与课堂资源 API；
+3. `selected-artifact` binding / projection；
+4. Analytics / Rule Intelligence / Advice；
+5. D6并发、断网重连、Server restart、Observer降级演练；
+6. D7冻结RC，不再加功能。
 
 ## 三个硬节点
 
