@@ -7,6 +7,7 @@ import type {
     ElementLayerTarget,
     ElementRecord,
     RunPropertyOverrides,
+    ParagraphPropertyOverrides,
     Selection,
     SlideId,
     TextPosition,
@@ -107,6 +108,11 @@ export class PresentationStudioController {
         if (!view?.insertImage) throw new Error('web-ppt-editor-view-not-ready');
         return view.insertImage(file, { rect: { x: 220, y: 150, w: 420, h: 300 } });
     }
+    async replaceImage(file: Blob, id = this.selectedIds()[0]): Promise<ElementId> {
+        const view = this.adapter.snapshot.view;
+        if (!view || !id) throw new Error('web-ppt-image-selection-required');
+        return view.replaceImage(file, { id });
+    }
 
     async setBackgroundImage(file: Blob): Promise<void> {
         const view = this.adapter.snapshot.view;
@@ -117,6 +123,14 @@ export class PresentationStudioController {
     removeSelected(): void {
         const commands = this.selectedIds().map(id => ({ type: 'RemoveElement', id } as const));
         if (commands.length) this.execute(...commands);
+    }
+
+    cut(): void { if (this.copy()) this.removeSelected(); }
+
+    selectAll(): void {
+        const slideId = this.requireSlide();
+        const ids = [...(this.requireEditor().doc.slides[slideId]?.children ?? [])];
+        if (ids.length) this.select({ kind: 'elements', ids, enteredGroup: null });
     }
 
     setTransform(id: ElementId, patch: { x?: number; y?: number; w?: number; h?: number; rot?: number }): void {
@@ -173,12 +187,44 @@ export class PresentationStudioController {
         });
         this.execute(...commands);
     }
+    distributeVertical(ids: readonly ElementId[]): void {
+        if (ids.length < 3) return;
+        const editor = this.requireEditor();
+        const records = ids.map(id => ({ id, element: editor.effectiveElement(id) })).sort((a, b) => a.element.y - b.element.y);
+        const first = records[0].element.y;
+        const last = records[records.length - 1].element.y + records[records.length - 1].element.h;
+        const totalHeight = records.reduce((sum, item) => sum + item.element.h, 0);
+        const gap = (last - first - totalHeight) / (records.length - 1);
+        let y = first;
+        const commands = records.map(item => { const command = { type: 'SetXfrm', id: item.id, y } as const; y += item.element.h + gap; return command; });
+        this.execute(...commands);
+    }
+    rotate(id: ElementId | undefined, degrees: number): void {
+        if (!id) return;
+        const element = this.requireEditor().effectiveElement(id);
+        this.setTransform(id, { rot: element.rot + degrees });
+    }
     setRunProps(id: ElementId, range: { from: TextPosition; to: TextPosition }, props: RunPropertyOverrides): void { this.execute({ type: 'SetRunProps', id, range, props }); }
+    toggleBold(): void { this.toggleRunProperty('b'); }
+    toggleItalic(): void { this.toggleRunProperty('i'); }
+    toggleUnderline(): void { this.toggleRunProperty('u'); }
+    adjustFontSize(delta: number): void {
+        const view = this.adapter.snapshot.view;
+        const state = view?.queryRunProps();
+        if (view && state?.size.value != null) view.setRunProps({ size: Math.max(1, state.size.value + delta) });
+    }
+    setParagraph(props: ParagraphPropertyOverrides): void { this.adapter.snapshot.view?.setParaProps(props); }
+    private toggleRunProperty(property: 'b' | 'i' | 'u'): void {
+        const view = this.adapter.snapshot.view;
+        const state = view?.queryRunProps();
+        if (view && state) view.setRunProps({ [property]: state[property].mixed || state[property].value !== true });
+    }
 
     group(ids: readonly ElementId[]): void { if (ids.length >= 2) this.execute({ type: 'Group', ids }); }
     ungroup(id: ElementId): void { this.execute({ type: 'Ungroup', id }); }
     setLocked(id: ElementId, locked: boolean): void { this.execute({ type: 'SetLocked', id, locked }); }
     setHidden(id: ElementId, hidden: boolean): void { this.execute({ type: 'SetElementHidden', id, hidden }); }
+    setName(id: ElementId, name: string): void { this.execute({ type: 'SetName', id, name }); }
 
     startFormatPainter(options?: Parameters<WebPptAdapter['startFormatPainter']>[0]): boolean { return this.adapter.startFormatPainter(options); }
     cancelFormatPainter(): void { this.adapter.cancelFormatPainter(); }
@@ -193,6 +239,10 @@ export class PresentationStudioController {
     queryTransition(): ReturnType<WebPptAdapter['queryTransition']> { return this.adapter.queryTransition(); }
     setTransition(value: Parameters<WebPptAdapter['setTransition']>[0]): boolean { return this.adapter.setTransition(value); }
     previewTransition(value?: Parameters<WebPptAdapter['previewTransition']>[0]): ReturnType<WebPptAdapter['previewTransition']> { return this.adapter.previewTransition(value); }
+    previewAnimations(value?: Parameters<WebPptAdapter['previewAnimations']>[0]): ReturnType<WebPptAdapter['previewAnimations']> { return this.adapter.previewAnimations(value); }
+    startImageCrop(id?: ElementId): boolean { return this.adapter.snapshot.view?.startImageCrop(id) ?? false; }
+    clearImageCrop(): void { this.selectedIds().forEach(id => this.execute({ type: 'SetCrop', id, crop: null })); }
+    setLayoutFromFirst(): void { const view = this.adapter.snapshot.view; const layoutId = this.requireEditor().doc.layoutOrder[0]; if (view && layoutId) view.setLayout(layoutId); }
     setSnapping(snapping: boolean): void { this.adapter.setView({ snapping }); }
     setZoom(zoom: number): void { this.adapter.setView({ zoom }); }
     attachSelectionPane(container: HTMLElement | null): void { this.adapter.attachSelectionPane(container); }

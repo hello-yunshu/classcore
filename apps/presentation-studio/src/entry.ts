@@ -8,6 +8,11 @@ import {
     createWebPptAssetFromBytes,
     type WebPptPresentationAsset,
 } from '@classroom/presentation-webppt-adapter';
+import type { StudioCommand, StudioMenuItem } from './command-surface.js';
+import type { IconId } from './icons/index.js';
+
+type CommandSurfaceModule = typeof import('./command-surface.js');
+let commandSurface: CommandSurfaceModule | null = null;
 
 export const surface = getSurfaceDescriptor('authoring-studio');
 export const runtimeBudget = CLIENT_RUNTIME_BUDGETS['authoring-studio'];
@@ -43,8 +48,8 @@ export function createBlankStudioDocument(title = '未命名公开课'): StudioD
             title: title || '第一页',
             steps: 1,
             elements: [
-                { id: 'element-title', kind: 'text', x: 72, y: 66, width: 760, height: 80, zIndex: 1, text: '图案的还原', color: '#24324b' },
-                { id: 'element-subtitle', kind: 'text', x: 76, y: 156, width: 620, height: 42, zIndex: 2, text: '观察碎片，寻找旋转与平移的关系', color: '#6c7483' },
+                { id: 'element-title', kind: 'text', x: 72, y: 66, width: 760, height: 80, zIndex: 1, text: '标题', color: '#24324b' },
+                { id: 'element-subtitle', kind: 'text', x: 76, y: 156, width: 620, height: 42, zIndex: 2, text: '副标题', color: '#6c7483' },
                 { id: 'element-shape', kind: 'shape', shape: 'circle', x: 618, y: 268, width: 160, height: 160, zIndex: 3, color: '#e6a23c' },
             ],
         }],
@@ -138,13 +143,25 @@ function loadServerProjectMetadata(): ServerProjectMetadata | null {
 }
 function saveServerProjectMetadata(value: ServerProjectMetadata): void { localStorage.setItem(SERVER_META_KEY, JSON.stringify(value)); }
 function clearServerProjectMetadata(): void { localStorage.removeItem(SERVER_META_KEY); }
-function loadPendingSyncMetadata(): PendingSyncMetadata | null {
- try { return JSON.parse(localStorage.getItem(PENDING_SYNC_META_KEY) ?? 'null') as PendingSyncMetadata | null; } catch { return null; }
+type PendingSyncIndex = Record<string, PendingSyncMetadata>;
+function loadPendingSyncIndex(): PendingSyncIndex {
+ try { return JSON.parse(localStorage.getItem(PENDING_SYNC_META_KEY) ?? '{}') as PendingSyncIndex; } catch { return {}; }
+}
+function loadPendingSyncMetadata(presentationId?: string): PendingSyncMetadata | null {
+ const index = loadPendingSyncIndex();
+ return presentationId ? index[presentationId] ?? null : Object.values(index)[0] ?? null;
 }
 function savePendingSyncMetadata(asset: WebPptPresentationAsset, project: ServerProjectMetadata): void {
- localStorage.setItem(PENDING_SYNC_META_KEY, JSON.stringify({ presentationId: project.presentationId, baseDraftRevision: project.currentDraftRevision, deckId: asset.deckId, title: asset.title, document: asset.document, savedAt: asset.updatedAt } satisfies PendingSyncMetadata));
+ const index = loadPendingSyncIndex();
+ index[project.presentationId] = { presentationId: project.presentationId, baseDraftRevision: project.currentDraftRevision, deckId: asset.deckId, title: asset.title, document: asset.document, savedAt: asset.updatedAt } satisfies PendingSyncMetadata;
+ localStorage.setItem(PENDING_SYNC_META_KEY, JSON.stringify(index));
 }
-function clearPendingSyncMetadata(): void { localStorage.removeItem(PENDING_SYNC_META_KEY); }
+function clearPendingSyncMetadata(presentationId?: string): void {
+ const index = loadPendingSyncIndex();
+ if (!presentationId) return;
+ delete index[presentationId];
+ localStorage.setItem(PENDING_SYNC_META_KEY, JSON.stringify(index));
+}
 function bytesToBase64(bytes: Uint8Array): string {
  let binary = '';
  for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
@@ -186,15 +203,18 @@ async function persistPublished(record: PublishedPresentationRecord): Promise<vo
  db.close();
  }
 
-function button(label: string, action: () => void | Promise<void>, className = '', title = label): HTMLButtonElement { const item = document.createElement('button');
- item.type = 'button';
- item.className = className;
- item.textContent = label;
- item.title = title;
- item.setAttribute('aria-label', title);
- item.addEventListener('click', () => { void action();
- });
- return item;
+const ICON_BY_LABEL: Array<[string, IconId]> = [
+ ['保存', 'save'], ['撤销', 'undo'], ['重做', 'redo'], ['复制', 'copy'], ['粘贴', 'paste'], ['删除', 'delete'],
+ ['新页面', 'new-slide'], ['文字', 'text'], ['图形', 'shape'], ['表格', 'table'], ['图片', 'image'], ['页面背景', 'background'],
+ ['排列', 'arrange'], ['左对齐', 'align'], ['水平居中', 'align'], ['等距分布', 'distribute'], ['置顶', 'arrange'], ['置底', 'arrange'],
+ ['缩小', 'zoom-out'], ['放大', 'zoom-in'], ['适应窗口', 'fit'], ['吸附', 'snapping'], ['淡化', 'transition'], ['无', 'transition'],
+ ['预览切换', 'preview'], ['动画', 'animation'], ['下一动画', 'animation'], ['查找', 'search'], ['替换', 'replace'], ['试课', 'rehearse'], ['发布冻结', 'publish'],
+ ['对象', 'selection-pane'], ['页面', 'background'], ['备注', 'notes'], ['格式刷', 'format-painter'], ['加粗', 'font'], ['斜体', 'font'], ['下划线', 'font'],
+ ['上移一层', 'arrange'], ['下移一层', 'arrange'], ['水平翻转', 'rotate'], ['垂直翻转', 'rotate'], ['隐藏此页', 'hide'],
+];
+function iconForLabel(label: string): IconId | undefined { return ICON_BY_LABEL.find(([name]) => label.startsWith(name))?.[1]; }
+function button(label: string, action: () => void | Promise<void>, className = '', title = label): HTMLButtonElement {
+ return commandSurface!.createCommandButton({ id: `legacy:${label}`, label, icon: iconForLabel(label), tooltip: title, execute: action }, 'compact', className) as HTMLButtonElement;
  }
 function input(label: string, value: string, onChange: (value: string) => void, type = 'text'): HTMLInputElement { const control = document.createElement('input');
  control.type = type;
@@ -225,6 +245,8 @@ export function mountPresentationStudio(root: HTMLElement): void {
 }
 
 async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
+ commandSurface = await import('./command-surface.js');
+ const { createCommandButton, createDropdown, createGallery, createSplitButton } = commandSurface;
     const { PresentationStudioController } = await import('./controller.js');
     const templateUrl = '/assets/presentation-webppt-blank.pptx';
     const engine = new WebPptPresentationEngineAdapter(async () => { const response = await fetch(templateUrl);
@@ -251,6 +273,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  let thumbnailGeneration = 0;
  let thumbnailAsset: WebPptPresentationAsset | null = null;
  let conflictOpen = false;
+ let imageInputMode: 'insert' | 'replace' = 'insert';
     const thumbnailSessions = new Map<string, Awaited<ReturnType<typeof engine.mountPlayer>>>();
     root.replaceChildren();
  const app = document.createElement('div');
@@ -271,7 +294,12 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  saveState.className = 'save-state';
  const headerActions = document.createElement('div');
  headerActions.className = 'header-actions';
- documentBar.append(titleInput, saveState);
+ const quickAccess = document.createElement('div');
+ quickAccess.className = 'quick-access';
+ quickAccess.setAttribute('aria-label', '快速访问工具栏');
+ const quickCommand = (id: string, label: string, icon: IconId, execute: () => void | Promise<void>, shortcut: string): HTMLButtonElement => createCommandButton({ id, label, icon, shortcut, execute }, 'icon-only');
+ quickAccess.append(quickCommand('save', '保存', 'save', () => persist(), '⌘/Ctrl+S'), quickCommand('undo', '撤销', 'undo', () => { controller.undo(); renderAll(); }, '⌘/Ctrl+Z'), quickCommand('redo', '重做', 'redo', () => { controller.redo(); renderAll(); }, '⌘/Ctrl+Shift+Z'));
+ documentBar.append(quickAccess, titleInput, saveState);
  header.append(brand, documentBar, headerActions);
  app.append(header);
  const toolbar = document.createElement('nav');
@@ -289,6 +317,12 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  stagePanel.className = 'stage-panel';
  const inspector = document.createElement('aside');
  inspector.className = 'inspector-panel';
+ const inspectorBody = document.createElement('div');
+ inspectorBody.className = 'inspector-body';
+ const selectionPaneHost = document.createElement('div');
+ selectionPaneHost.className = 'selection-pane-host';
+ selectionPaneHost.setAttribute('aria-label', '选择窗格');
+ inspector.append(inspectorBody, selectionPaneHost);
  layout.append(scenePanel, stagePanel, inspector);
  app.append(layout);
  const statusBar = document.createElement('footer');
@@ -312,12 +346,17 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  function renderRibbonTabs(): void {
   ribbonTabs.replaceChildren();
   const tabs: Array<[string, string]> = [['file', '文件'], ['start', '开始'], ['insert', '插入'], ['design', '设计'], ['transition', '切换'], ['animation', '动画'], ['show', '幻灯片放映'], ['review', '审阅'], ['view', '视图']];
+  const selected = selectedIds()[0];
+  const selectedRecord = selected ? controller.element(selected) : null;
+  if (selectedRecord?.src.kind === 'image') tabs.push(['image-format', '图片格式']);
+  if (selectedRecord?.src.kind === 'shape') tabs.push(['shape-format', '形状格式']);
   tabs.forEach(([id, label]) => {
    const tab = button(label, () => { ribbonTab = id; renderRibbonTabs(); renderToolbar(); }, `ribbon-tab${ribbonTab === id ? ' active' : ''}`, label);
    tab.setAttribute('role', 'tab');
    tab.setAttribute('aria-selected', String(ribbonTab === id));
    ribbonTabs.append(tab);
   });
+  ribbonTabs.setAttribute('role', 'tablist');
  }
  function showConflictDialog(): void {
   if (conflictOpen || !serverProject) return;
@@ -338,7 +377,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ title: `${localAsset.title} 副本`, bytesBase64: bytesToBase64(localAsset.source.bytes), mimeType: localAsset.source.mimeType, document: { ...localAsset.document, deckId: localAsset.deckId } }),
    });
-   clearPendingSyncMetadata();
+   clearPendingSyncMetadata(serverProject?.presentationId);
    dialog.close(); window.location.href = `/authoring?presentationId=${encodeURIComponent(result.presentation.presentationId)}`;
   }, 'primary-button');
   actions.append(reload, duplicate); dialog.append(heading, note, actions); document.body.append(dialog);
@@ -460,6 +499,131 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  if (updateThumbnails) void syncThumbnails();
  }
     function renderToolbar(): void { toolbar.replaceChildren();
+ const renderOfficeToolbar = (): void => {
+  const group = (label: string, controls: HTMLElement[]): void => { const section = document.createElement('div'); section.className = 'toolbar-group'; const name = document.createElement('span'); name.className = 'toolbar-label'; name.textContent = label; section.append(name, ...controls); toolbar.append(section); };
+  const command = (id: string, label: string, icon: IconId, execute: () => void | Promise<void>, shortcut?: string, disabled = false): StudioCommand => ({ id, label, icon, shortcut, disabled, execute: wrapAction(execute) });
+  const arrange: StudioMenuItem[] = [
+   command('layer-front', '置于顶层', 'arrange', () => { controller.setLayerMany(selectedIds(), 'front'); renderAll(); }),
+   command('layer-forward', '上移一层', 'arrange', () => { selectedIds().forEach(id => controller.setLayer(id, 'forward')); renderAll(); }),
+   command('layer-backward', '下移一层', 'arrange', () => { selectedIds().forEach(id => controller.setLayer(id, 'backward')); renderAll(); }),
+   command('layer-back', '置于底层', 'arrange', () => { controller.setLayerMany(selectedIds(), 'back'); renderAll(); }),
+   { ...command('align', '对齐', 'align', () => undefined), submenu: [
+    command('align-left', '左对齐', 'align', () => { controller.align(selectedIds(), 'left'); renderAll(); }),
+    command('align-center', '水平居中', 'align', () => { controller.align(selectedIds(), 'center'); renderAll(); }),
+    command('align-right', '右对齐', 'align', () => { controller.align(selectedIds(), 'right'); renderAll(); }),
+    command('align-top', '顶端对齐', 'align', () => { controller.align(selectedIds(), 'top'); renderAll(); }),
+    command('align-middle', '垂直居中', 'align', () => { controller.align(selectedIds(), 'middle'); renderAll(); }),
+    command('align-bottom', '底端对齐', 'align', () => { controller.align(selectedIds(), 'bottom'); renderAll(); }),
+   ] },
+   { ...command('distribute', '分布', 'distribute', () => undefined), submenu: [
+    command('distribute-horizontal', '水平分布', 'distribute', () => { controller.distributeHorizontal(selectedIds()); renderAll(); }, undefined, selectedIds().length < 3),
+    command('distribute-vertical', '垂直分布', 'distribute', () => { controller.distributeVertical(selectedIds()); renderAll(); }, undefined, selectedIds().length < 3),
+   ] },
+   { ...command('rotate', '旋转', 'rotate', () => undefined), submenu: [
+    command('rotate-right', '向右旋转 90°', 'rotate', () => { selectedIds().forEach(id => controller.rotate(id, 90)); renderAll(); }),
+    command('rotate-left', '向左旋转 90°', 'rotate', () => { selectedIds().forEach(id => controller.rotate(id, -90)); renderAll(); }),
+    command('flip-h', '水平翻转', 'rotate', () => { selectedIds().forEach(id => controller.setFlip(id, true)); renderAll(); }),
+    command('flip-v', '垂直翻转', 'rotate', () => { selectedIds().forEach(id => controller.setFlip(id, undefined, true)); renderAll(); }),
+   ] },
+   command('selection-pane', '选择窗格', 'selection-pane', () => { inspectorTab = 'object'; renderAll(); }),
+  ];
+  const addNewSlide = (): void => { const id = controller.addSlide(); if (id) webPpt.setView({ slideId: id, mode: 'edit' }); renderAll(); };
+  const addShape = (preset: string): void => { controller.addShape(preset); renderAll(); };
+  if (ribbonTab === 'file') group('文件', [createDropdown(command('file', '文件', 'save', () => undefined), [
+   command('new', '新建', 'new-slide', () => newDeck()),
+   command('open', '打开 PPTX', 'image', () => fileInput.click()),
+   command('save', '保存', 'save', () => persist(), '⌘/Ctrl+S'),
+   command('rehearse', '试课', 'rehearse', () => rehearse()),
+   command('publish', '发布课堂版本', 'publish', () => publish()),
+  ])]);
+  if (ribbonTab === 'start') {
+   group('剪贴板', [
+    createSplitButton(command('paste', '粘贴', 'paste', () => { controller.paste(); renderAll(); }, '⌘/Ctrl+V'), [command('paste-text', '仅保留文本', 'paste', () => { controller.paste(); renderAll(); })]),
+    button('剪切', wrapAction(() => { controller.cut(); }), 'tool-button'),
+    button('复制', wrapAction(() => { controller.copy(); }), 'tool-button'),
+    button('格式刷', wrapAction(() => { controller.startFormatPainter(); }), 'tool-button'),
+   ]);
+   group('幻灯片', [
+    createSplitButton(command('new-slide', '新建幻灯片', 'new-slide', addNewSlide), [
+     command('layout-title', '标题幻灯片', 'new-slide', addNewSlide),
+     command('layout-content', '标题和内容', 'new-slide', addNewSlide),
+     command('layout-blank', '空白', 'new-slide', addNewSlide),
+    ]),
+    button('复制', wrapAction(() => { const id = currentSlide(); if (id) { const copy = controller.duplicateSlide(id); if (copy) webPpt.setView({ slideId: copy, mode: 'edit' }); renderAll(); } }), 'tool-button'),
+    button('删除', wrapAction(() => { const id = currentSlide(); if (id) controller.removeSlide(id); renderAll(); }), 'danger-button'),
+   ]);
+   group('排列', [createDropdown(command('arrange', '排列', 'arrange', () => undefined), arrange)]);
+   group('编辑', [
+    button('查找', wrapAction(() => controller.openTextSearch({ mode: 'find' })), 'tool-button'),
+    button('替换', wrapAction(() => controller.openTextSearch({ mode: 'replace' })), 'tool-button'),
+    createDropdown(command('select', '选择', 'selection-pane', () => undefined), [
+     command('select-all', '全选', 'selection-pane', () => controller.selectAll()),
+     command('selection-pane', '选择窗格', 'selection-pane', () => { inspectorTab = 'object'; renderAll(); }),
+    ]),
+   ]);
+  }
+  if (ribbonTab === 'insert') {
+   group('文本', [button('文字', wrapAction(() => { const id = controller.addShape('rect'); if (id) { controller.editText(id, '输入文字'); controller.select({ kind: 'elements', ids: [id], enteredGroup: null }); } renderAll(); }), 'tool-button')]);
+   group('图片', [createSplitButton(command('image', '图片', 'image', () => chooseImage('insert')), [
+    command('replace-image', '替换图片', 'replace-image', () => chooseImage('replace')),
+    command('image-options', '图片选项…', 'image', () => { inspectorTab = 'object'; renderAll(); }),
+   ])]);
+   group('形状', [createGallery('shape-gallery', '形状库', [
+    { ...command('shape-rect', '矩形', 'shape', () => addShape('rect')), preview: 'preview-rect' },
+    { ...command('shape-roundrect', '圆角矩形', 'shape', () => addShape('roundRect')), preview: 'preview-roundrect' },
+    { ...command('shape-ellipse', '椭圆', 'shape', () => addShape('ellipse')), preview: 'preview-ellipse' },
+    { ...command('shape-diamond', '菱形', 'shape', () => addShape('diamond')), preview: 'preview-diamond' },
+   ], 4), button('表格', wrapAction(() => {
+    const rows = Number.parseInt(globalThis.prompt?.('行数', '3') ?? '3', 10);
+    const cols = Number.parseInt(globalThis.prompt?.('列数', '3') ?? '3', 10);
+    if (Number.isFinite(rows) && Number.isFinite(cols)) controller.addTable(Math.max(1, Math.min(10, rows)), Math.max(1, Math.min(10, cols)));
+    renderAll();
+   }), 'tool-button')]);
+  }
+  if (ribbonTab === 'design') group('设计', [
+   button('页面背景', wrapAction(() => backgroundInput.click()), 'tool-button'),
+   button('开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'),
+   button('缩小', wrapAction(() => { controller.setZoom(Math.max(.5, controller.snapshot.zoom - .1)); renderAll(false); }), 'tool-button'),
+   button('放大', wrapAction(() => { controller.setZoom(Math.min(2, controller.snapshot.zoom + .1)); renderAll(false); }), 'tool-button'),
+  ]);
+  if (ribbonTab === 'transition') group('切换', [createGallery('transition-gallery', '常用切换', [
+   { ...command('transition-none', '无', 'transition', () => { controller.setTransition(null); renderAll(false); }), preview: 'preview-none' },
+   { ...command('transition-fade', '淡化', 'transition', () => { controller.setTransition({ type: 'fade' }); renderAll(false); }), preview: 'preview-fade' },
+   { ...command('transition-push', '推进', 'transition', () => { controller.setTransition({ type: 'push', dir: 'r' }); renderAll(false); }), preview: 'preview-push' },
+   { ...command('transition-wipe', '擦除', 'transition', () => { controller.setTransition({ type: 'wipe', dir: 'r' }); renderAll(false); }), preview: 'preview-wipe' },
+   { ...command('transition-split', '分割', 'transition', () => { controller.setTransition({ type: 'split', dir: 'horz' }); renderAll(false); }), preview: 'preview-split' },
+   { ...command('transition-zoom', '缩放', 'transition', () => { controller.setTransition({ type: 'zoom' }); renderAll(false); }), preview: 'preview-zoom' },
+  ], 6), button('预览切换', wrapAction(() => controller.previewTransition()), 'tool-button')]);
+  if (ribbonTab === 'animation') group('动画', [createGallery('animation-gallery', '动画库', [
+   { ...command('animation-appear', '出现', 'animation', () => addAnimation('appear')), preview: 'preview-appear' },
+   { ...command('animation-fade', '淡入', 'animation', () => addAnimation('fade')), preview: 'preview-fade' },
+   { ...command('animation-fly', '飞入', 'animation', () => addAnimation('fly')), preview: 'preview-fly' },
+   { ...command('animation-wipe', '擦除', 'animation', () => addAnimation('wipe')), preview: 'preview-wipe' },
+   { ...command('animation-zoom', '缩放', 'animation', () => addAnimation('zoom')), preview: 'preview-zoom' },
+   { ...command('animation-spin', '旋转', 'animation', () => addAnimation('spin', 'emphasis')), preview: 'preview-spin' },
+  ], 6), button('动画窗格', wrapAction(() => { inspectorTab = 'animation'; renderAll(); }), 'tool-button'), button('预览', wrapAction(() => { void controller.previewAnimations(); }), 'tool-button')]);
+  if (ribbonTab === 'show') group('放映', [button('预览', wrapAction(() => togglePreview()), 'preview-button'), button('试课', wrapAction(() => rehearse()), 'signal-button'), button('发布冻结', wrapAction(() => publish()), 'signal-button')]);
+  if (ribbonTab === 'review') group('审阅', [button('查找', wrapAction(() => controller.openTextSearch({ mode: 'find' })), 'tool-button'), button('替换', wrapAction(() => controller.openTextSearch({ mode: 'replace' })), 'tool-button'), button('替代文字', wrapAction(() => setStatus('当前 beta.2 未提供独立 Alt Text seam，先使用选择窗格重命名对象', true)), 'tool-button')]);
+  if (ribbonTab === 'view') group('视图', [
+   button('选择窗格', wrapAction(() => { inspectorTab = 'object'; renderAll(); }), 'tool-button'),
+   button(controller.snapshot.snapping ? '关闭吸附' : '开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'),
+   button('适应窗口', wrapAction(() => { controller.setZoom(1); renderAll(false); }), 'tool-button'),
+   button('备注', wrapAction(() => { inspectorTab = 'page'; renderAll(); }), 'tool-button'),
+  ]);
+  if (ribbonTab === 'image-format') group('图片格式', [
+   button('替换图片', wrapAction(() => chooseImage('replace')), 'tool-button'),
+   button('裁剪', wrapAction(() => { controller.startImageCrop(); }), 'tool-button'),
+   button('恢复裁剪', wrapAction(() => { controller.clearImageCrop(); }), 'tool-button'),
+   createDropdown(command('image-arrange', '排列', 'arrange', () => undefined), arrange),
+  ]);
+  if (ribbonTab === 'shape-format') group('形状格式', [
+   button('形状填充', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.setFill(id, solid(rgb('#5375B8'))); renderAll(); }), 'tool-button'),
+   button('形状轮廓', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.setStroke(id, { color: rgb('#24324B'), width: 1.5, dash: null, cap: 'butt', join: 'miter', compound: 'sng' }); renderAll(); }), 'tool-button'),
+   createDropdown(command('shape-arrange', '排列', 'arrange', () => undefined), arrange),
+  ]);
+ };
+ renderOfficeToolbar();
+ return;
  const group = (label: string, controls: HTMLElement[]): void => { const section = document.createElement('div');
  section.className = 'toolbar-group';
  const name = document.createElement('span');
@@ -513,34 +677,35 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  if (ribbonTab === 'review') group('审阅', [button('查找', wrapAction(() => { controller.openTextSearch({ mode: 'find' }); }), 'tool-button'), button('替换', wrapAction(() => { controller.openTextSearch({ mode: 'replace' }); }), 'tool-button')]);
  if (ribbonTab === 'view') group('视图', [button(controller.snapshot.snapping ? '关闭吸附' : '开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'), button('适应窗口', wrapAction(() => { controller.setZoom(1); renderAll(false); }), 'tool-button')]);
  }
-    function renderInspector(): void { inspector.replaceChildren();
+    function renderInspector(): void { inspectorBody.replaceChildren();
+ selectionPaneHost.hidden = inspectorTab !== 'object';
  const tabs = document.createElement('div');
  tabs.className = 'inspector-tabs';
  (['object', 'page', 'animation'] as const).forEach(tab => { tabs.append(button(tab === 'object' ? '对象' : tab === 'page' ? '页面' : '动画', () => { inspectorTab = tab;
  renderInspector();
  }, `inspector-tab${inspectorTab === tab ? ' active' : ''}`));
  });
- inspector.append(tabs);
+ inspectorBody.append(tabs);
  if (inspectorTab === 'page') { renderPageInspector();
  return;
  } const slideId = currentSlide();
  const editor = currentSession()?.editor;
- if (!slideId || !editor) { inspector.append(emptyInspector('打开一个课件开始编辑'));
+ if (!slideId || !editor) { inspectorBody.append(emptyInspector('打开一个课件开始编辑'));
  return;
  } if (inspectorTab === 'animation') { renderAnimationInspector(slideId);
  return;
  } const ids = selectedIds();
- if (!ids.length) { inspector.append(emptyInspector('选择画布中的对象，或从对象列表进入'), createObjectList(slideId));
+ if (!ids.length) { inspectorBody.append(emptyInspector('在画布或选择窗格中选择对象'));
  return;
  } const id = ids[0];
  const record = controller.element(id);
  const element = editor.effectiveElement(id);
- if (!record || !element) { inspector.append(emptyInspector('对象已失效'));
+ if (!record || !element) { inspectorBody.append(emptyInspector('对象已失效'));
  return;
  } const heading = document.createElement('div');
  heading.className = 'inspector-heading';
  heading.textContent = `${kindLabel(record)} · ${id.slice(-8)}`;
- inspector.append(heading);
+ inspectorBody.append(heading);
  const grid = document.createElement('div');
  grid.className = 'property-grid';
  for (const [label, key, value] of [['X', 'x', element.x], ['Y', 'y', element.y], ['宽', 'w', element.w], ['高', 'h', element.h], ['旋转', 'rot', element.rot]] as const) { const field = document.createElement('label');
@@ -550,8 +715,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  renderAll(false);
  }, 'number'));
  grid.append(field);
- } inspector.append(grid);
- if (record.src.kind === 'shape' || record.src.kind === 'image' || record.src.kind === 'table') inspector.append(styleControls(id));
+ } inspectorBody.append(grid);
+ if (record.src.kind === 'shape' || record.src.kind === 'image' || record.src.kind === 'table') inspectorBody.append(styleControls(id));
  if (record.src.kind === 'shape' || record.src.kind === 'table') { const textArea = document.createElement('textarea');
  textArea.value = textOf(record);
  textArea.placeholder = '输入对象文字';
@@ -559,34 +724,37 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  textArea.addEventListener('change', () => { controller.editText(id, textArea.value);
  renderAll(false);
  });
- inspector.append(labelBlock('文字', textArea));
+ inspectorBody.append(labelBlock('文字', textArea));
  const textTools = document.createElement('div');
  textTools.className = 'layer-actions';
  textTools.append(button('加粗', wrapAction(() => { controller.setTextStyle(id, { b: true }); renderAll(false); }), 'small-button'), button('斜体', wrapAction(() => { controller.setTextStyle(id, { i: true }); renderAll(false); }), 'small-button'), button('下划线', wrapAction(() => { controller.setTextStyle(id, { u: true }); renderAll(false); }), 'small-button'));
- inspector.append(textTools);
- } if (record.src.kind === 'shape' || record.src.kind === 'image') inspector.append(layerControls(id));
+ inspectorBody.append(textTools);
+ } if (record.src.kind === 'shape' || record.src.kind === 'image') inspectorBody.append(layerControls(id));
  }
     function renderPageInspector(): void { const slideId = currentSlide();
- if (!slideId) { inspector.append(emptyInspector('没有可编辑的页面'));
+ if (!slideId) { inspectorBody.append(emptyInspector('没有可编辑的页面'));
  return;
  } const title = document.createElement('h2');
  title.textContent = `第 ${(currentSession()?.editor.doc.slideOrder.indexOf(slideId) ?? 0) + 1} 页`;
- inspector.append(title);
+ inspectorBody.append(title);
  const colors: Array<[string, string]> = [['纸张', '#F7F4EE'], ['蓝灰', '#E7ECF7'], ['珊瑚', '#F4E1DA'], ['白色', '#FFFFFF']];
  const swatches = document.createElement('div');
  swatches.className = 'swatch-row';
  colors.forEach(([label, color]) => swatches.append(button(label, wrapAction(() => { controller.setSlideBackground(slideId, solid(rgb(color)));
  renderAll();
  }), 'swatch-button')));
- inspector.append(labelBlock('页面背景', swatches));
+ inspectorBody.append(labelBlock('页面背景', swatches));
+ const customColor = input('自定义背景色', '#F7F4EE', value => { if (/^#[0-9a-f]{6}$/i.test(value)) { controller.setSlideBackground(slideId, solid(rgb(value))); renderAll(); } });
+ customColor.className = 'background-hex';
+ inspectorBody.append(labelBlock('十六进制颜色', customColor));
  const notes = document.createElement('textarea');
  notes.value = currentSession()?.editor.toSlide(slideId).notes ?? '';
  notes.placeholder = '教师备注不会出现在大屏';
  notes.addEventListener('change', () => { controller.setNotes(slideId, notes.value);
  renderAll(false);
  });
- inspector.append(labelBlock('教师备注', notes));
- inspector.append(button('隐藏此页', wrapAction(() => { controller.execute({ type: 'SetHidden', id: slideId, v: true });
+ inspectorBody.append(labelBlock('教师备注', notes));
+ inspectorBody.append(button('隐藏此页', wrapAction(() => { controller.execute({ type: 'SetHidden', id: slideId, v: true });
  renderAll();
  }), 'small-button'));
  }
@@ -596,7 +764,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const heading = document.createElement('div');
  heading.className = 'inspector-heading';
  heading.textContent = `第 ${(currentSession()?.editor.doc.slideOrder.indexOf(slideId) ?? 0) + 1} 页动画`;
- inspector.append(heading);
+ inspectorBody.append(heading);
  const list = document.createElement('div');
  list.className = 'animation-list';
  if (!animations.length) list.append(emptyInspector('当前页面暂无动画'));
@@ -605,26 +773,19 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  row.textContent = `${index + 1}. ${step.effect ?? step.kind} · ${step.trigger}`;
  list.append(row);
  });
- inspector.append(list, button('给选中对象加入淡入', wrapAction(() => addAnimation()), 'primary-button'), button('清除本页动画', wrapAction(() => { controller.setAnimations(slideId, []);
+ inspectorBody.append(list, button('给选中对象加入淡入', wrapAction(() => addAnimation()), 'primary-button'), button('清除本页动画', wrapAction(() => { controller.setAnimations(slideId, []);
  renderAll();
  }), 'danger-button'));
  }
-    function addAnimation(): void { const slideId = currentSlide();
+    function addAnimation(effect: 'appear' | 'fade' | 'fly' | 'wipe' | 'zoom' | 'spin' = 'fade', kind: 'entrance' | 'emphasis' = 'entrance'): void { const slideId = currentSlide();
  const id = selectedIds()[0];
  if (!slideId || !id) { setStatus('先选择一个对象再添加动画', true);
  return;
- } controller.appendAnimations(slideId, [{ target: id, kind: 'entrance', effect: 'fade', trigger: 'click', delayMs: 0, durationMs: 300 }]);
+ } const step = kind === 'emphasis'
+  ? { target: id, kind: 'emphasis' as const, effect: (effect === 'spin' ? 'spin' : 'grow') as 'spin' | 'grow', trigger: 'click' as const, delayMs: 0, durationMs: 300 }
+  : { target: id, kind: 'entrance' as const, effect: effect === 'spin' ? 'fade' as const : effect, trigger: 'click' as const, delayMs: 0, durationMs: 300 };
+ controller.appendAnimations(slideId, [step]);
  renderAll();
- }
-    function createObjectList(slideId: SlideId): HTMLElement { const list = document.createElement('div');
- list.className = 'object-list';
- const ids = currentSession()?.editor.doc.slides[slideId]?.children ?? [];
- [...ids].reverse().forEach(id => { const record = controller.element(id);
- list.append(button(`${kindLabel(record)} · ${id.slice(-6)}`, () => { controller.select({ kind: 'elements', ids: [id], enteredGroup: null });
- renderAll();
- }, 'object-row'));
- });
- return list;
  }
     function styleControls(id: ElementId): HTMLElement { const group = document.createElement('div');
  group.className = 'inspector-section';
@@ -706,7 +867,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    try {
     await syncServerDraft(next);
     serverSyncPending = false;
-    clearPendingSyncMetadata();
+   clearPendingSyncMetadata(serverProject?.presentationId);
    } catch (error) {
     serverSyncPending = true;
     if (error instanceof Error && error.message === 'draft-conflict') { setStatus('需要重新加载服务器版本'); showConflictDialog(); }
@@ -792,7 +953,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  published = null;
  await webPpt.applyBinding({ source: next.source!.bytes, openOptions: { idPrefix: next.document.idPrefix }, mode: 'edit', textMode: 'svg' });
  webPpt.attach(editorHost);
- webPpt.attachSelectionPane(null);
+ webPpt.attachSelectionPane(selectionPaneHost);
+ webPpt.snapshot.view?.registerTextUi(toolbar);
  controller.attachEditorSubscription();
  renderAll();
  setStatus('已打开 · 编辑状态');
@@ -803,7 +965,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   const title = titleInput.value.trim() || '未命名公开课';
   const created = await serverJson('/api/presentations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title }) });
   serverProject = { presentationId: created.presentation.presentationId, currentDraftRevision: created.presentation.currentDraftRevision };
-  saveServerProjectMetadata(serverProject); clearPendingSyncMetadata();
+  saveServerProjectMetadata(serverProject);
   await openAsset(await loadRemotePresentation(serverProject.presentationId));
  } }
  async function openFile(file: File): Promise<void> { if (!busy) { serverProject = null; clearServerProjectMetadata(); await openAsset(await createWebPptAssetFromBytes(file.name.replace(/\.pptx?$/i, '') || '本地公开课', new Uint8Array(await file.arrayBuffer()))); }
@@ -845,8 +1007,9 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  imageInput.type = 'file';
  imageInput.accept = 'image/png,image/jpeg,image/gif,image/webp';
  imageInput.hidden = true;
+ function chooseImage(mode: 'insert' | 'replace'): void { imageInputMode = mode; imageInput.click(); }
  imageInput.addEventListener('change', () => { const file = imageInput.files?.[0];
- if (file) void (async () => { try { const id = await controller.addImage(file);
+ if (file) void (async () => { try { const id = imageInputMode === 'replace' ? await controller.replaceImage(file) : await controller.addImage(file);
  controller.select({ kind: 'elements', ids: [id], enteredGroup: null });
  renderAll();
  } catch (error) { setStatus(error instanceof Error ? error.message : String(error), true);
@@ -897,7 +1060,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   const remoteId = new URLSearchParams(window.location.search).get('presentationId');
   let draft: WebPptPresentationAsset | null = null;
   try {
-   const pending = loadPendingSyncMetadata();
+   const pending = loadPendingSyncMetadata(remoteId ?? undefined);
    if (remoteId && pending?.presentationId === remoteId) {
     draft = await loadWebPptDraft();
     if (draft) { serverProject = { presentationId: pending.presentationId, currentDraftRevision: pending.baseDraftRevision }; saveServerProjectMetadata(serverProject); }
@@ -907,7 +1070,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   catch { if (remoteId) { serverProject = null; clearServerProjectMetadata(); setStatus('课件加载失败，请检查课件服务', true); } }
   await openAsset(draft ?? await engine.createBlank('未命名公开课'));
   autosaveSuspended = false;
-  if (loadPendingSyncMetadata()?.presentationId === remoteId) setStatus('等待同步');
+  if (loadPendingSyncMetadata(remoteId ?? undefined)?.presentationId === remoteId) { serverSyncPending = true; setStatus('等待同步'); }
   window.addEventListener('online', () => { if (serverSyncPending) void persist(); });
  })();
 }
