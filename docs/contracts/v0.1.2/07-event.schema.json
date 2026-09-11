@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EventContracts",
+  "$defs": {
+    "clientAppletEvent": {
+      "type": "object",
+      "required": [
+        "clientEventId",
+        "eventEnvelopeVersion",
+        "appletEventSchemaVersion",
+        "appletInstanceId",
+        "streamId",
+        "streamSeq",
+        "type",
+        "payload"
+      ],
+      "properties": {
+        "clientEventId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "eventEnvelopeVersion": {
+          "const": 1
+        },
+        "appletEventSchemaVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "appletInstanceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "streamId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "streamSeq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "payload": {
+          "type": "object"
+        },
+        "clientMonotonicTime": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "acceptedDomainEvent": {
+      "type": "object",
+      "required": [
+        "eventId",
+        "eventEnvelopeVersion",
+        "sessionId",
+        "lessonId",
+        "activityId",
+        "actor",
+        "appletInstanceId",
+        "type",
+        "payload",
+        "origin",
+        "clientStream",
+        "serverSeq",
+        "serverReceivedAt"
+      ],
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "eventEnvelopeVersion": {
+          "const": 1
+        },
+        "appletEventSchemaVersion": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lessonId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "activityId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "actor": {
+          "type": "object",
+          "required": [
+            "role",
+            "participantId"
+          ],
+          "properties": {
+            "role": {
+              "enum": [
+                "student",
+                "teacher",
+                "observer",
+                "display",
+                "system"
+              ]
+            },
+            "participantId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "appletInstanceId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "payload": {
+          "type": "object"
+        },
+        "origin": {
+          "enum": [
+            "client",
+            "server",
+            "system"
+          ]
+        },
+        "clientStream": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "required": [
+            "streamId",
+            "streamSeq"
+          ],
+          "properties": {
+            "streamId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "streamSeq": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "clientMonotonicTime": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "serverSeq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "serverReceivedAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

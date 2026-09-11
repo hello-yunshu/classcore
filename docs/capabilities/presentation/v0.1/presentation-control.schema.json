@@ -1,0 +1,9 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "title":"PresentationControlIntentV0.1",
+  "oneOf":[
+    {"type":"object","required":["action","sceneId","expectedRevision"],"properties":{"action":{"const":"goto"},"sceneId":{"type":"string","minLength":1},"step":{"type":["integer","null"],"minimum":0},"expectedRevision":{"type":"integer","minimum":0}},"additionalProperties":false},
+    {"type":"object","required":["action","step","expectedRevision"],"properties":{"action":{"const":"set-step"},"step":{"type":"integer","minimum":0},"expectedRevision":{"type":"integer","minimum":0}},"additionalProperties":false},
+    {"type":"object","required":["action","expectedRevision"],"properties":{"action":{"enum":["play","pause"]},"expectedRevision":{"type":"integer","minimum":0}},"additionalProperties":false}
+  ]
+}

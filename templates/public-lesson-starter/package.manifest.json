@@ -1,0 +1,9 @@
+{
+  "packageSchemaVersion": 1,
+  "runtimeApiVersion": 1,
+  "packageId": "lesson-package:__SLUG__",
+  "lessonRef": "lesson.json",
+  "activitiesRef": "activities.json",
+  "appletManifestsRef": "applets.manifest.json",
+  "configsRef": "configs.json"
+}

@@ -1,0 +1,57 @@
+name: classroom-runtime-ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    name: full-check (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.8.2
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14.7'
+      - name: Verify architecture
+        run: node -e "const expected='${{ matrix.arch }}'; if(process.arch!==expected){throw new Error('arch '+process.arch+' != '+expected)}"
+      - name: Verify bundled npm
+        run: test "$(npm --version)" = "11.19.0"
+      - name: Install Node dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Prepare Python validation environment
+        run: npm run python:setup
+      - name: Full check
+        run: npm run check
+
+  docker-arm64:
+    name: native-arm64-docker-build
+    runs-on: ubuntu-24.04-arm
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.8.2
+      - name: Build native linux/arm64 classroom image
+        env:
+          TARGET_PLATFORM: linux/arm64
+        run: bash deploy/docker/build-current.sh classroom-runtime:ci-arm64
+      - name: Verify image architecture and runtime user
+        run: |
+          test "$(docker image inspect classroom-runtime:ci-arm64 --format '{{.Architecture}}')" = "arm64"
+          test "$(docker image inspect classroom-runtime:ci-arm64 --format '{{.Config.User}}')" = "node"
+      - name: Run native ARM64 container restart and SQLite/WebSocket gate
+        run: npm run docker:gate

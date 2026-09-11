@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WebPresentationCapabilityV0.1",
+  "$defs": {
+    "engine": {
+      "type": "object",
+      "required": [
+        "engineId",
+        "engineVersion",
+        "documentFormatVersion"
+      ],
+      "properties": {
+        "engineId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "engineVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "documentFormatVersion": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "binding": {
+      "type": "object",
+      "required": [
+        "bindingId",
+        "widgetType",
+        "source"
+      ],
+      "properties": {
+        "bindingId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "widgetType": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$"
+        },
+        "source": {
+          "type": "object",
+          "required": [
+            "type",
+            "selector"
+          ],
+          "properties": {
+            "type": {
+              "const": "semantic"
+            },
+            "selector": {
+              "type": "string",
+              "minLength": 1
+            },
+            "parameters": {
+              "type": "object"
+            }
+          },
+          "additionalProperties": false
+        },
+        "fallback": {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "placeholder",
+                "static-text",
+                "hidden"
+              ]
+            },
+            "text": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "asset": {
+      "type": "object",
+      "required": [
+        "presentationSchemaVersion",
+        "deckId",
+        "title",
+        "engine",
+        "document",
+        "classroomBindings",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "presentationSchemaVersion": {
+          "const": 1
+        },
+        "deckId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "engine": {
+          "$ref": "#/$defs/engine"
+        },
+        "document": {
+          "oneOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "array"
+            }
+          ]
+        },
+        "classroomBindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/binding"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "updatedAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "playbackState": {
+      "type": "object",
+      "required": [
+        "sessionId",
+        "deckId",
+        "sceneId",
+        "step",
+        "playState",
+        "revision"
+      ],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deckId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sceneId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "step": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "playState": {
+          "enum": [
+            "idle",
+            "playing",
+            "paused"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/asset"
+}

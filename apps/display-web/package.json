@@ -1,0 +1,7 @@
+{
+  "name":"@classroom/display-web",
+  "version":"0.0.1",
+  "private":true,
+  "type":"module",
+  "dependencies":{"@classroom/contracts":"0.1.2","@classroom/surfaces":"0.1.0"}
+}

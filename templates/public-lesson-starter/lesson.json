@@ -1,0 +1,8 @@
+{
+  "lessonSchemaVersion": 1,
+  "lessonId": "lesson:__SLUG__",
+  "version": "0.1.0",
+  "title": "__TITLE__",
+  "activities": ["activity:intro"],
+  "assets": []
+}

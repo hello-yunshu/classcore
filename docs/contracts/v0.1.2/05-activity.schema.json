@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ActivityDefinition",
+  "type": "object",
+  "required": [
+    "activitySchemaVersion",
+    "activityId",
+    "type",
+    "participantMode",
+    "applets",
+    "adviceMode",
+    "submissionPolicy"
+  ],
+  "properties": {
+    "activitySchemaVersion": {
+      "const": 1
+    },
+    "activityId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "participantMode": {
+      "enum": [
+        "individual",
+        "pair",
+        "group",
+        "whole-class"
+      ]
+    },
+    "applets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "appletInstanceId",
+          "appletTypeId",
+          "requiredCapabilities"
+        ],
+        "properties": {
+          "appletInstanceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "appletTypeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "configRef": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requiredCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "adviceMode": {
+      "enum": [
+        "off",
+        "auto",
+        "teacher-confirm"
+      ]
+    },
+    "submissionPolicy": {
+      "enum": [
+        "none",
+        "optional",
+        "required"
+      ]
+    },
+    "completionPolicy": {
+      "type": "object"
+    },
+    "stagePolicy": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

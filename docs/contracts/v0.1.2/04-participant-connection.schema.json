@@ -1,0 +1,409 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "IdentityConnectionContracts",
+  "$defs": {
+    "participant": {
+      "type": "object",
+      "required": [
+        "participantId",
+        "role"
+      ],
+      "properties": {
+        "participantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "enum": [
+            "student",
+            "teacher",
+            "observer",
+            "display"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "membership": {
+      "type": "object",
+      "required": [
+        "membershipId",
+        "sessionId",
+        "participantId",
+        "role",
+        "status",
+        "joinedAt"
+      ],
+      "properties": {
+        "membershipId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "participantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "enum": [
+            "student",
+            "teacher",
+            "observer",
+            "display"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "active",
+            "left",
+            "revoked",
+            "expired"
+          ]
+        },
+        "joinedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expiresAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "joinRequest": {
+      "type": "object",
+      "required": [
+        "joinRequestId",
+        "runtimeApiVersion",
+        "sessionLocator",
+        "requestedRole",
+        "credential"
+      ],
+      "properties": {
+        "joinRequestId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runtimeApiVersion": {
+          "const": 1
+        },
+        "sessionLocator": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestedRole": {
+          "enum": [
+            "student",
+            "teacher",
+            "observer",
+            "display"
+          ]
+        },
+        "participantHint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "credential": {
+          "type": "object",
+          "required": [
+            "type",
+            "value"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "class-code",
+                "observer-token",
+                "teacher-issued",
+                "display-token",
+                "external"
+              ]
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "provider": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "credential": {
+                "properties": {
+                  "type": {
+                    "const": "class-code"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "requestedRole": {
+                "const": "student"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "credential": {
+                "properties": {
+                  "type": {
+                    "const": "observer-token"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "requestedRole": {
+                "const": "observer"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "credential": {
+                "properties": {
+                  "type": {
+                    "const": "teacher-issued"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "requestedRole": {
+                "const": "teacher"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "credential": {
+                "properties": {
+                  "type": {
+                    "const": "display-token"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "requestedRole": {
+                "const": "display"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "joinGrant": {
+      "type": "object",
+      "required": [
+        "membershipId",
+        "sessionId",
+        "participantId",
+        "role",
+        "accessToken",
+        "expiresAt"
+      ],
+      "properties": {
+        "membershipId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "participantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "enum": [
+            "student",
+            "teacher",
+            "observer",
+            "display"
+          ]
+        },
+        "accessToken": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expiresAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "connection": {
+      "type": "object",
+      "required": [
+        "connectionId",
+        "sessionId",
+        "membershipId",
+        "participantId",
+        "status",
+        "connectedAt",
+        "lastSeenAt"
+      ],
+      "properties": {
+        "connectionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "membershipId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "participantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "online",
+            "offline"
+          ]
+        },
+        "deviceId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "connectedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lastSeenAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "controllerLease": {
+      "type": "object",
+      "required": [
+        "leaseId",
+        "sessionId",
+        "revision",
+        "holderConnectionId",
+        "holderParticipantId",
+        "expiresAt"
+      ],
+      "properties": {
+        "leaseId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "holderConnectionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "holderParticipantId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expiresAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "holderConnectionId": {
+              "type": "null"
+            },
+            "holderParticipantId": {
+              "type": "null"
+            },
+            "expiresAt": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "holderConnectionId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "holderParticipantId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "expiresAt": {
+              "type": "number"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

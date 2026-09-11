@@ -1,0 +1,12 @@
+{
+  "name": "@classroom/contracts",
+  "version": "0.1.2",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "types": "./src/index.ts"
+}

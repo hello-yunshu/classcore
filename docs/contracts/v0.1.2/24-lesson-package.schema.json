@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LessonPackageManifest",
+  "type": "object",
+  "required": [
+    "packageSchemaVersion",
+    "runtimeApiVersion",
+    "packageId",
+    "lessonRef",
+    "activitiesRef",
+    "appletManifestsRef",
+    "configsRef"
+  ],
+  "properties": {
+    "packageSchemaVersion": {
+      "const": 1
+    },
+    "packageId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "lessonRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "activitiesRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "appletManifestsRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "configsRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "optionalRefs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "runtimeApiVersion": {
+      "const": 1
+    }
+  },
+  "additionalProperties": false
+}

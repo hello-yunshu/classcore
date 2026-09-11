@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FeatureReadinessContracts",
+  "$defs": {
+    "featurePolicy": {
+      "type": "object",
+      "required": [
+        "revision",
+        "features"
+      ],
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "features": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "capabilityReport": {
+      "type": "object",
+      "required": [
+        "capabilityReportVersion",
+        "secureContext",
+        "indexedDb",
+        "pointerEvents",
+        "webWorkers",
+        "webSocket"
+      ],
+      "properties": {
+        "capabilityReportVersion": {
+          "const": 1
+        },
+        "secureContext": {
+          "type": "boolean"
+        },
+        "indexedDb": {
+          "type": "boolean"
+        },
+        "pointerEvents": {
+          "type": "boolean"
+        },
+        "webWorkers": {
+          "type": "boolean"
+        },
+        "webSocket": {
+          "type": "boolean"
+        },
+        "offscreenCanvas": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "serviceWorker": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "maxTouchPoints": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "deviceMemoryGb": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "userAgentFamily": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "clientReadiness": {
+      "type": "object",
+      "required": [
+        "sessionId",
+        "connectionId",
+        "status",
+        "checks",
+        "capabilityReport",
+        "checkedAt"
+      ],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "connectionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "warning",
+            "failed"
+          ]
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "checkId",
+              "status",
+              "message"
+            ],
+            "properties": {
+              "checkId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "enum": [
+                  "ready",
+                  "warning",
+                  "failed"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              },
+              "details": {
+                "type": "object"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "capabilityReport": {
+          "type": "object",
+          "required": [
+            "capabilityReportVersion",
+            "secureContext",
+            "indexedDb",
+            "pointerEvents",
+            "webWorkers",
+            "webSocket"
+          ],
+          "properties": {
+            "capabilityReportVersion": {
+              "const": 1
+            },
+            "secureContext": {
+              "type": "boolean"
+            },
+            "indexedDb": {
+              "type": "boolean"
+            },
+            "pointerEvents": {
+              "type": "boolean"
+            },
+            "webWorkers": {
+              "type": "boolean"
+            },
+            "webSocket": {
+              "type": "boolean"
+            },
+            "offscreenCanvas": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "serviceWorker": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "maxTouchPoints": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "deviceMemoryGb": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "userAgentFamily": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "checkedAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "readiness": {
+      "type": "object",
+      "required": [
+        "sessionId",
+        "status",
+        "checks",
+        "checkedAt"
+      ],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "warning",
+            "failed"
+          ]
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "checkId",
+              "status",
+              "message"
+            ],
+            "properties": {
+              "checkId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "enum": [
+                  "ready",
+                  "warning",
+                  "failed"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              },
+              "details": {
+                "type": "object"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "clients": {
+          "type": "object",
+          "required": [
+            "ready",
+            "warning",
+            "failed",
+            "total"
+          ],
+          "properties": {
+            "ready": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warning": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "checkedAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@classroom/server-host",
+  "version": "0.1.2",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@classroom/contracts": "0.1.2",
+    "@classroom/runtime": "0.1.2",
+    "@classroom/storage": "0.1.2",
+    "@classroom/realtime": "0.1.2",
+    "@classroom/platform": "0.1.2",
+    "@classroom/surfaces": "0.1.0",
+    "@classroom/server-identity": "0.1.0",
+    "@classroom/server-projections": "0.1.0",
+    "@classroom/presentation": "0.1.0"
+  }
+}

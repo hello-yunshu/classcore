@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProtocolResultContracts",
+  "$defs": {
+    "protocolError": {
+      "type": "object",
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "unauthorized",
+            "forbidden",
+            "invalid-state",
+            "stale-revision",
+            "duplicate",
+            "not-found",
+            "unsupported",
+            "rate-limited",
+            "temporary-unavailable",
+            "invalid-payload",
+            "version-mismatch",
+            "capability-missing",
+            "membership-required"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    "commandResult": {
+      "type": "object",
+      "required": [
+        "commandId",
+        "ok"
+      ],
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "error": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/protocolError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "ok": {
+                "const": true
+              }
+            },
+            "required": [
+              "ok"
+            ]
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "ok": {
+                "const": false
+              }
+            },
+            "required": [
+              "ok"
+            ]
+          },
+          "then": {
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "$ref": "#/$defs/protocolError"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventAck": {
+      "type": "object",
+      "required": [
+        "clientEventId",
+        "accepted",
+        "duplicate"
+      ],
+      "properties": {
+        "clientEventId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accepted": {
+          "type": "boolean"
+        },
+        "eventId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "serverSeq": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "duplicate": {
+          "type": "boolean"
+        },
+        "error": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/protocolError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "accepted": {
+                "const": true
+              }
+            },
+            "required": [
+              "accepted"
+            ]
+          },
+          "then": {
+            "required": [
+              "eventId",
+              "serverSeq"
+            ],
+            "properties": {
+              "eventId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "serverSeq": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "accepted": {
+                "const": false
+              }
+            },
+            "required": [
+              "accepted"
+            ]
+          },
+          "then": {
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "eventId": {
+                "type": "null"
+              },
+              "serverSeq": {
+                "type": "null"
+              },
+              "duplicate": {
+                "const": false
+              },
+              "error": {
+                "$ref": "#/$defs/protocolError"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "duplicate": {
+                "const": true
+              }
+            },
+            "required": [
+              "duplicate"
+            ]
+          },
+          "then": {
+            "properties": {
+              "accepted": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

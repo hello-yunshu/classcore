@@ -1,0 +1,41 @@
+{
+  "presentationSchemaVersion": 1,
+  "deckId": "deck:pattern-restoration-public-lesson",
+  "title": "图案的还原（网页版演示示例）",
+  "engine": {
+    "engineId": "adapter:mock",
+    "engineVersion": "0.0.0",
+    "documentFormatVersion": "mock-v1"
+  },
+  "document": {
+    "scenes": [
+      {
+        "id": "scene:intro",
+        "title": "导入"
+      },
+      {
+        "id": "scene:discussion",
+        "title": "全班讨论"
+      }
+    ]
+  },
+  "classroomBindings": [
+    {
+      "bindingId": "binding:live-student",
+      "widgetType": "classroom:student-live-view",
+      "source": {
+        "type": "semantic",
+        "selector": "teacher-focus",
+        "parameters": {
+          "mode": "focus"
+        }
+      },
+      "fallback": {
+        "type": "placeholder",
+        "text": "学生实时操作"
+      }
+    }
+  ],
+  "createdAt": "2026-09-10T06:00:00Z",
+  "updatedAt": "2026-09-10T06:00:00Z"
+}

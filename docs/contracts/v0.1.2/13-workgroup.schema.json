@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Workgroup",
+  "type": "object",
+  "required": [
+    "workgroupId",
+    "sessionId",
+    "activityId",
+    "type",
+    "memberIds",
+    "status"
+  ],
+  "properties": {
+    "workgroupId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sessionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "activityId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "type": {
+      "enum": [
+        "pair",
+        "group"
+      ]
+    },
+    "memberIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 2,
+      "uniqueItems": true
+    },
+    "status": {
+      "enum": [
+        "active",
+        "closed"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "pair"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "memberIds": {
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      }
+    }
+  ]
+}

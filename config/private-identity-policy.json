@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "privateFieldNames": [
+    "participantId",
+    "studentId",
+    "membershipId",
+    "connectionId",
+    "rosterId",
+    "displayName",
+    "realName",
+    "studentName",
+    "seatNo",
+    "classId",
+    "deviceId",
+    "clientInstanceId",
+    "participantHint",
+    "reconnectToken",
+    "accessToken",
+    "credential"
+  ],
+  "participantReferencePrefixes": [
+    "student:",
+    "teacher:",
+    "observer:",
+    "display:",
+    "membership:",
+    "connection:",
+    "roster:",
+    "class:"
+  ]
+}

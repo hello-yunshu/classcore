@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "policy": "latest-current-and-stable",
+  "runtime": {
+    "node": "26.8.2",
+    "line": "26 Current",
+    "requireExactForRelease": true
+  },
+  "packageManager": {
+    "name": "npm",
+    "version": "11.19.1",
+    "source": "bundled-with-node-26.8.2",
+    "requireExactForRelease": true
+  },
+  "compiler": {
+    "typescript": "7.0.2",
+    "channel": "stable"
+  },
+  "python": {
+    "version": "3.14.7",
+    "line": "3.14",
+    "jsonschema": "4.26.0",
+    "channel": "stable",
+    "environment": ".venv"
+  },
+  "upgradePolicy": {
+    "node": "当前按用户要求使用 Node 26 最新 Current；升级由中央版本文件驱动，并必须通过完整 Release Gate。生产部署需额外确认 Current 线的稳定性与支持窗口。",
+    "dependencies": "优先最新 stable/LTS；大版本升级必须通过 Schema、类型、恢复、WebSocket、负载与 Docker Gate。",
+    "packageManager": "默认跟随所选 Node 26 官方发行包自带 npm，除非存在明确收益，不为一个补丁版本增加首次 bootstrap 摩擦。",
+    "foundation": "工具链升级不得要求修改 Foundation v0.1.2；若必须修改，单独提出架构变更。"
+  }
+}

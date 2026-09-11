@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ClassroomSession",
+  "type": "object",
+  "required": [
+    "sessionId",
+    "lesson",
+    "status",
+    "revision",
+    "featurePolicy"
+  ],
+  "properties": {
+    "sessionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "created",
+        "ready",
+        "running",
+        "paused",
+        "ended"
+      ]
+    },
+    "currentActivityId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "featurePolicy": {
+      "type": "object",
+      "required": [
+        "revision",
+        "features"
+      ],
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "features": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "lesson": {
+      "type": "object",
+      "required": [
+        "packageId",
+        "lessonId",
+        "lessonVersion",
+        "packageFingerprint"
+      ],
+      "properties": {
+        "packageId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lessonId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lessonVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "packageFingerprint": {
+          "type": "string",
+          "minLength": 16
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

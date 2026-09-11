@@ -1,0 +1,61 @@
+{
+  "joinRequest": {
+    "joinRequestId": "join:1",
+    "runtimeApiVersion": 1,
+    "sessionLocator": "5286",
+    "requestedRole": "student",
+    "participantHint": "17",
+    "credential": {
+      "type": "class-code",
+      "value": "5286"
+    }
+  },
+  "membership": {
+    "membershipId": "membership:S17",
+    "sessionId": "session:demo",
+    "participantId": "student:S17",
+    "role": "student",
+    "status": "active",
+    "joinedAt": "2026-09-10T05:00:00Z",
+    "expiresAt": null
+  },
+  "joinGrant": {
+    "membershipId": "membership:S17",
+    "sessionId": "session:demo",
+    "participantId": "student:S17",
+    "role": "student",
+    "accessToken": "example-short-lived-token",
+    "expiresAt": "2026-09-10T08:00:00Z"
+  },
+  "clientHello": {
+    "protocolVersion": 1,
+    "runtimeApiVersion": 1,
+    "clientBuild": "0.1.2-demo",
+    "capabilityReport": {
+      "capabilityReportVersion": 1,
+      "secureContext": false,
+      "indexedDb": true,
+      "pointerEvents": true,
+      "webWorkers": true,
+      "webSocket": true,
+      "offscreenCanvas": false,
+      "serviceWorker": false,
+      "maxTouchPoints": 10,
+      "deviceMemoryGb": 3,
+      "userAgentFamily": "Android WebView/Chromium"
+    }
+  },
+  "serverHello": {
+    "protocolVersion": 1,
+    "runtimeApiVersion": 1,
+    "serverBuild": "0.1.2-demo",
+    "connectionId": "connection:s17",
+    "sessionId": "session:demo",
+    "membershipId": "membership:S17",
+    "participantId": "student:S17",
+    "role": "student",
+    "heartbeatIntervalMs": 5000,
+    "deploymentProfile": "lan-http",
+    "featurePolicyRevision": 1
+  }
+}

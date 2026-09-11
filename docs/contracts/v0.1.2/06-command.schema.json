@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ClientCommandEnvelope",
+  "type": "object",
+  "required": [
+    "commandId",
+    "runtimeApiVersion",
+    "type",
+    "payload"
+  ],
+  "properties": {
+    "commandId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runtimeApiVersion": {
+      "const": 1
+    },
+    "activityId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "payload": {
+      "type": "object"
+    },
+    "expectedRevision": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false
+}

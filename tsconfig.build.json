@@ -1,0 +1,52 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "rootDir": ".",
+    "outDir": "dist",
+    "declaration": true,
+    "sourceMap": false,
+    "paths": {
+      "@classroom/contracts": [
+        "./packages/contracts/src/index.ts"
+      ],
+      "@classroom/runtime": [
+        "./packages/runtime/src/index.ts"
+      ],
+      "@classroom/applet-sdk": [
+        "./packages/applet-sdk/src/index.ts"
+      ],
+      "@classroom/storage": [
+        "./packages/storage/src/index.ts"
+      ],
+      "@classroom/platform": [
+        "./packages/platform/src/index.ts"
+      ],
+      "@classroom/realtime": [
+        "./packages/realtime/src/index.ts"
+      ],
+      "@classroom/intelligence": [
+        "./packages/intelligence/src/index.ts"
+      ],
+      "@classroom/presentation": [
+        "./packages/presentation/src/index.ts"
+      ],
+      "@classroom/surfaces": [
+        "./packages/surfaces/src/index.ts"
+      ],
+      "@classroom/server-identity": [
+        "./packages/identity/src/index.ts"
+      ],
+      "@classroom/server-projections": [
+        "./packages/projections/src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "packages/**/*.ts",
+    "apps/**/*.ts"
+  ]
+}

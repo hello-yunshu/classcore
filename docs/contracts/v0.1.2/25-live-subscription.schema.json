@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LiveSubscriptionContracts",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "subscriptionId",
+        "appletInstanceId",
+        "quality"
+      ],
+      "properties": {
+        "subscriptionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "appletInstanceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quality": {
+          "enum": [
+            "background",
+            "thumbnail",
+            "focus"
+          ]
+        },
+        "subject": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "type",
+                "id"
+              ],
+              "properties": {
+                "type": {
+                  "enum": [
+                    "participant",
+                    "pair",
+                    "group",
+                    "session"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publicSubjectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "grant": {
+      "type": "object",
+      "required": [
+        "subscriptionId",
+        "accepted",
+        "quality",
+        "effectiveHz"
+      ],
+      "properties": {
+        "subscriptionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accepted": {
+          "type": "boolean"
+        },
+        "quality": {
+          "enum": [
+            "background",
+            "thumbnail",
+            "focus"
+          ]
+        },
+        "effectiveHz": {
+          "type": "number",
+          "minimum": 0
+        },
+        "expiresAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "error": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

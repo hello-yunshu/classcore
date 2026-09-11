@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+const root = new URL('../dist/', import.meta.url);
+const checks = [
+    ['apps/student-web/src/entry.js', 'student'], ['apps/teacher-web/src/entry.js', 'teacher-runtime'],
+    ['apps/display-web/src/entry.js', 'display'], ['apps/observer-web/src/entry.js', 'observer'],
+    ['apps/backstage/src/entry.js', 'backstage'], ['apps/presentation-studio/src/entry.js', 'authoring-studio'],
+    ['apps/simulation-rehearsal/src/entry.js', 'simulation-rehearsal'],
+];
+for (const [file, surfaceId] of checks) {
+    const mod = await import(new URL(file, root));
+    assert.equal(mod.surface?.surfaceId, surfaceId, file);
+}
+const server = await import(new URL('apps/server/src/entry.js', root));
+assert.ok(server.servicePlane['classroom-server-host']);
+console.log('Dist runtime resolution check PASSED');
+import fs from 'node:fs';
+const publicRoot = new URL('../dist/public/', import.meta.url);
+for (const [file] of checks) {
+    const publicFile = new URL(`assets/${file}`, publicRoot);
+    assert.equal(fs.existsSync(publicFile), true, `missing public browser asset ${file}`);
+}
+assert.equal(fs.existsSync(new URL('assets/apps/server/src/entry.js', publicRoot)), false, 'server entry must not be public');
+console.log('Public asset isolation check PASSED');
+

@@ -1,0 +1,11 @@
+[
+  {
+    "activitySchemaVersion": 1,
+    "activityId": "activity:intro",
+    "type": "whole-class",
+    "participantMode": "whole-class",
+    "applets": [],
+    "adviceMode": "off",
+    "submissionPolicy": "none"
+  }
+]

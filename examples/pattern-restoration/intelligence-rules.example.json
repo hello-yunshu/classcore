@@ -1,0 +1,23 @@
+{
+  "rules": [
+    {
+      "code": "ROTATION_CENTER_UNSTABLE",
+      "when": {
+        "recentRotationCenterChanges": {
+          "gte": 3
+        }
+      },
+      "intervention": {
+        "level": 2,
+        "afterOccurrences": 3,
+        "cooldownSeconds": 15
+      },
+      "studentTemplates": [
+        "比较旋转前后的位置，找一找哪个点始终没有移动。",
+        "先观察中心点：图形转动时，哪个点仍保持原位？"
+      ],
+      "teacherSummary": "旋转中心判断不稳定，建议继续观察一次。",
+      "observerExplanation": "系统根据连续多次改变旋转中心的操作，将当前困难暂归为旋转中心判断不稳定。"
+    }
+  ]
+}

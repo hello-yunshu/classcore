@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AppletManifest",
+  "type": "object",
+  "required": [
+    "appletTypeId",
+    "version",
+    "hostApiVersion",
+    "configSchemaVersion",
+    "stateSchemaVersion",
+    "eventSchemaVersion",
+    "commandSchemaVersion",
+    "capabilities",
+    "emittedEventTypes",
+    "handledCommandTypes",
+    "configSchemaRef",
+    "stateSchemaRef",
+    "eventSchemaRefs",
+    "commandSchemaRefs"
+  ],
+  "properties": {
+    "appletTypeId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hostApiVersion": {
+      "const": 1
+    },
+    "configSchemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "stateSchemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "eventSchemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "emittedEventTypes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "handledCommandTypes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "requiredPlatformCapabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "optionalPlatformCapabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "displayName": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "configSchemaRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stateSchemaRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "eventSchemaRefs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "commandSchemaRefs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "commandSchemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    }
+  },
+  "additionalProperties": false
+}

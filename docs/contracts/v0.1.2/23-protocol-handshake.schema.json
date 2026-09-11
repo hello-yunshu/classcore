@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProtocolHandshakeContracts",
+  "$defs": {
+    "clientHello": {
+      "type": "object",
+      "required": [
+        "protocolVersion",
+        "runtimeApiVersion",
+        "clientBuild",
+        "capabilityReport"
+      ],
+      "properties": {
+        "protocolVersion": {
+          "const": 1
+        },
+        "runtimeApiVersion": {
+          "const": 1
+        },
+        "clientBuild": {
+          "type": "string",
+          "minLength": 1
+        },
+        "capabilityReport": {
+          "type": "object",
+          "required": [
+            "capabilityReportVersion",
+            "secureContext",
+            "indexedDb",
+            "pointerEvents",
+            "webWorkers",
+            "webSocket"
+          ],
+          "properties": {
+            "capabilityReportVersion": {
+              "const": 1
+            },
+            "secureContext": {
+              "type": "boolean"
+            },
+            "indexedDb": {
+              "type": "boolean"
+            },
+            "pointerEvents": {
+              "type": "boolean"
+            },
+            "webWorkers": {
+              "type": "boolean"
+            },
+            "webSocket": {
+              "type": "boolean"
+            },
+            "offscreenCanvas": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "serviceWorker": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "maxTouchPoints": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "deviceMemoryGb": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "userAgentFamily": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "serverHello": {
+      "type": "object",
+      "required": [
+        "protocolVersion",
+        "runtimeApiVersion",
+        "serverBuild",
+        "connectionId",
+        "sessionId",
+        "membershipId",
+        "participantId",
+        "role",
+        "heartbeatIntervalMs",
+        "deploymentProfile",
+        "featurePolicyRevision"
+      ],
+      "properties": {
+        "protocolVersion": {
+          "const": 1
+        },
+        "runtimeApiVersion": {
+          "const": 1
+        },
+        "serverBuild": {
+          "type": "string",
+          "minLength": 1
+        },
+        "connectionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "membershipId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "participantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "enum": [
+            "student",
+            "teacher",
+            "observer",
+            "display"
+          ]
+        },
+        "heartbeatIntervalMs": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "deploymentProfile": {
+          "enum": [
+            "lan-http",
+            "lan-https",
+            "remote-https",
+            "native-app"
+          ]
+        },
+        "featurePolicyRevision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

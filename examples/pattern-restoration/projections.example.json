@@ -1,0 +1,7 @@
+{
+  "teacher":{"participantId":"student:S17","displayName":"学生甲","seatNo":"17","classId":"class:5-5"},
+  "studentSelf":{"participantId":"student:S17","displayName":"学生甲","seatNo":"17"},
+  "observer":{"subjectId":"anon:01","label":"学生01"},
+  "display":{"subjectId":"anon:01","label":"学生01"},
+  "backstage":{"participantId":"student:S17","displayName":"学生甲","seatNo":"17","classId":"class:5-5","rosterId":"roster:17"}
+}

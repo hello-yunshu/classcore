@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AppletConfigEnvelope",
+  "type": "object",
+  "required": [
+    "configRef",
+    "appletTypeId",
+    "configSchemaVersion",
+    "payload"
+  ],
+  "properties": {
+    "configRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "appletTypeId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "configSchemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

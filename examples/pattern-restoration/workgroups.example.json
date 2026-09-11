@@ -1,0 +1,13 @@
+[
+  {
+    "workgroupId": "pair:demo-01",
+    "sessionId": "session:demo",
+    "activityId": "activity:instruction-exchange",
+    "type": "pair",
+    "memberIds": [
+      "student:S07",
+      "student:S23"
+    ],
+    "status": "active"
+  }
+]

@@ -1,0 +1,42 @@
+# syntax=docker/dockerfile:1.7
+# Cross-architecture classroom server. linux/arm64 is the current public-lesson
+# hard target for Apple Silicon; linux/amd64 remains a compatibility target.
+ARG NODE_VERSION=26.8.2
+
+FROM node:${NODE_VERSION}-bookworm-slim AS build
+WORKDIR /app
+ENV NODE_ENV=development
+COPY package.json package-lock.json ./
+COPY tsconfig.json tsconfig.build.json ./
+COPY apps ./apps
+COPY packages ./packages
+COPY scripts ./scripts
+COPY config ./config
+RUN npm ci --include=dev --no-audit --no-fund \
+    && npm run build
+
+FROM node:${NODE_VERSION}-bookworm-slim AS runtime
+ARG TARGETPLATFORM
+ARG TARGETARCH
+WORKDIR /app
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=8787 \
+    LOCAL_TOOLS_HOST=0.0.0.0 \
+    LOCAL_TOOLS_PORT=8788 \
+    CLASSROOM_DATA_DIR=/data \
+    CLASSROOM_RUNTIME_MODE=reference-transport \
+    CLASSROOM_AUTHENTICATION=false \
+    CLASSROOM_PRODUCT_READY=false
+LABEL org.classroom.runtime.targetplatform=$TARGETPLATFORM \
+      org.classroom.runtime.targetarch=$TARGETARCH \
+      org.classroom.runtime.mode=reference-transport \
+      org.classroom.runtime.authentication=false
+COPY --from=build --chown=node:node /app/dist/public ./dist/public
+COPY --chown=node:node apps/server/runtime ./apps/server/runtime
+RUN mkdir -p /data && chown node:node /data
+USER node
+EXPOSE 8787 8788
+VOLUME ["/data"]
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 CMD node -e "fetch('http://127.0.0.1:8787/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+CMD ["node","apps/server/runtime/server.mjs"]

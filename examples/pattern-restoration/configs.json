@@ -1,0 +1,24 @@
+{
+  "config:restore-board": {
+    "configRef": "config:restore-board",
+    "appletTypeId": "applet:transform-board",
+    "configSchemaVersion": 1,
+    "payload": {
+      "targetAssetId": "asset:target"
+    }
+  },
+  "config:instruction-builder": {
+    "configRef": "config:instruction-builder",
+    "appletTypeId": "applet:structured-instruction-builder",
+    "configSchemaVersion": 1,
+    "payload": {}
+  },
+  "config:peer-board": {
+    "configRef": "config:peer-board",
+    "appletTypeId": "applet:transform-board",
+    "configSchemaVersion": 1,
+    "payload": {
+      "targetAssetId": "asset:target"
+    }
+  }
+}

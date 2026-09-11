@@ -1,0 +1,20 @@
+{
+  "request": {
+    "subscriptionId": "subscription:1",
+    "appletInstanceId": "applet-instance:restore-independent-board",
+    "quality": "focus",
+    "subject": {
+      "type": "participant",
+      "id": "student:S17"
+    },
+    "publicSubjectId": null
+  },
+  "grant": {
+    "subscriptionId": "subscription:1",
+    "accepted": true,
+    "quality": "focus",
+    "effectiveHz": 15,
+    "expiresAt": "2026-09-10T05:10:00Z",
+    "error": null
+  }
+}

@@ -1,0 +1,4 @@
+[
+  {"sessionId":"session:pattern-demo","participantId":"student:S17","displayName":"学生甲","seatNo":"17","rosterId":"roster:17","classId":"class:5-5","updatedAt":"2026-09-10T06:00:00Z"},
+  {"sessionId":"session:pattern-demo","participantId":"student:S23","displayName":"学生乙","seatNo":"23","rosterId":"roster:23","classId":"class:5-5","updatedAt":"2026-09-10T06:00:00Z"}
+]

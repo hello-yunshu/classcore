@@ -1,0 +1,23 @@
+{
+  "sessionId": "session:demo",
+  "lesson": {
+    "packageId": "lesson-package:pattern-restoration",
+    "lessonId": "lesson:pattern-restoration",
+    "lessonVersion": "0.1.2",
+    "packageFingerprint": "sha256:resolved-demo-fingerprint-0123456789abcdef"
+  },
+  "status": "ready",
+  "currentActivityId": "activity:observe",
+  "revision": 1,
+  "featurePolicy": {
+    "revision": 1,
+    "features": {
+      "liveMirroring": true,
+      "intelligence": true,
+      "observer": true,
+      "artifactExchange": true,
+      "sceneRuntime": true,
+      "presentationRuntime": true
+    }
+  }
+}

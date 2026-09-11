@@ -1,0 +1,248 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "safe-public-pseudonym",
+      "valid": true,
+      "value": {
+        "subject": {
+          "subjectId": "anon:01",
+          "label": "学生01"
+        },
+        "progress": 0.5,
+        "chart": {
+          "name": "策略A"
+        }
+      }
+    },
+    {
+      "id": "safe-nonidentity-array",
+      "valid": true,
+      "value": {
+        "strategies": [
+          "平移",
+          "旋转"
+        ],
+        "ids": [
+          "anon:01",
+          "scene:1"
+        ]
+      }
+    },
+    {
+      "id": "private-field-participant",
+      "valid": false,
+      "value": {
+        "participantId": "student:S17"
+      }
+    },
+    {
+      "id": "private-field-seat",
+      "valid": false,
+      "value": {
+        "nested": {
+          "seatNo": "17"
+        }
+      }
+    },
+    {
+      "id": "private-reference-object-value-student",
+      "valid": false,
+      "value": {
+        "ref": "student:S17"
+      }
+    },
+    {
+      "id": "private-reference-array-student",
+      "valid": false,
+      "value": {
+        "targets": [
+          "student:S17"
+        ]
+      }
+    },
+    {
+      "id": "private-reference-object-key-student",
+      "valid": false,
+      "value": {
+        "byStudent": {
+          "student:S17": {
+            "score": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "private-reference-roster",
+      "valid": false,
+      "value": {
+        "ref": "roster:17"
+      }
+    },
+    {
+      "id": "private-reference-class",
+      "valid": false,
+      "value": {
+        "ref": "class:5-5"
+      }
+    },
+    {
+      "id": "private-reference-key-roster",
+      "valid": false,
+      "value": {
+        "byRoster": {
+          "roster:17": true
+        }
+      }
+    },
+    {
+      "id": "private-reference-nested-membership-array",
+      "valid": false,
+      "value": {
+        "groups": [
+          {
+            "members": [
+              "membership:S17"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "private-field-device",
+      "valid": false,
+      "value": {
+        "deviceId": "device:xp21a-01"
+      }
+    },
+    {
+      "id": "private-field-client-instance",
+      "valid": false,
+      "value": {
+        "clientInstanceId": "client:abc"
+      }
+    },
+    {
+      "id": "private-field-participant-hint",
+      "valid": false,
+      "value": {
+        "participantHint": "17"
+      }
+    },
+    {
+      "id": "private-field-reconnect-token",
+      "valid": false,
+      "value": {
+        "reconnectToken": "secret"
+      }
+    },
+    {
+      "id": "private-field-access-token",
+      "valid": false,
+      "value": {
+        "accessToken": "secret"
+      }
+    },
+    {
+      "id": "private-field-credential",
+      "valid": false,
+      "value": {
+        "credential": {
+          "type": "class-code",
+          "value": "123456"
+        }
+      }
+    },
+    {
+      "id": "private-reference-embedded-text",
+      "valid": false,
+      "value": {
+        "label": "已选择 student:S17"
+      }
+    },
+    {
+      "id": "private-reference-url",
+      "valid": false,
+      "value": {
+        "url": "https://classroom.local/view?participant=student:S17"
+      }
+    },
+    {
+      "id": "private-reference-stringified-json",
+      "valid": false,
+      "value": {
+        "debug": "{\"participantId\":\"student:S17\"}"
+      }
+    },
+    {
+      "id": "private-reference-percent-encoded",
+      "valid": false,
+      "value": {
+        "url": "https://classroom.local/?id=student%3AS17"
+      }
+    },
+    {
+      "id": "private-reference-double-percent-encoded",
+      "valid": false,
+      "value": {
+        "url": "https://classroom.local/?id=student%253AS17"
+      }
+    },
+    {
+      "id": "private-reference-encoded-prefix",
+      "valid": false,
+      "value": {
+        "url": "https://classroom.local/?id=%2573tudent%253AS17"
+      }
+    },
+    {
+      "id": "private-reference-unicode-escape",
+      "valid": false,
+      "value": {
+        "debug": "student\\u003AS17"
+      }
+    },
+    {
+      "id": "private-reference-escaped-prefix",
+      "valid": false,
+      "value": {
+        "debug": "\\u0073tudent\\u003AS17"
+      }
+    },
+    {
+      "id": "private-reference-hex-escape",
+      "valid": false,
+      "value": {
+        "debug": "student\\x3AS17"
+      }
+    },
+    {
+      "id": "private-reference-html-entity",
+      "valid": false,
+      "value": {
+        "debug": "student&#58;S17"
+      }
+    },
+    {
+      "id": "private-reference-html-colon",
+      "valid": false,
+      "value": {
+        "debug": "student&colon;S17"
+      }
+    },
+    {
+      "id": "private-reference-nested-html-entity",
+      "valid": false,
+      "value": {
+        "debug": "student&amp;#58;S17"
+      }
+    },
+    {
+      "id": "private-reference-percent-to-unicode",
+      "valid": false,
+      "value": {
+        "debug": "student%255Cu003AS17"
+      }
+    }
+  ]
+}

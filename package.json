@@ -1,0 +1,71 @@
+{
+  "name": "classroom-runtime-foundation-v0.1.2-roadmap-r3.9",
+  "version": "0.1.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "doctor": "node scripts/doctor.mjs",
+    "bootstrap": "node scripts/bootstrap.mjs",
+    "python:setup": "node scripts/setup-python.mjs",
+    "toolchain": "node scripts/check-toolchain.mjs",
+    "runtime:check": "node scripts/check-runtime-version.mjs",
+    "handoff:check": "node scripts/check-handoff.mjs",
+    "platform:check": "node scripts/check-platform-matrix.mjs",
+    "foundation:check": "node scripts/check-foundation-freeze.mjs",
+    "lockfile:check": "node scripts/check-lockfile.mjs",
+    "docs:check": "node scripts/check-docs.mjs",
+    "quality:check": "node scripts/check-source-quality.mjs",
+    "validate": "node scripts/validate.mjs",
+    "validate:formal": "node scripts/run-formal-validation.mjs",
+    "validate:lessons": "node scripts/validate-all-lessons.mjs",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json && node scripts/prepare-dist-workspaces.mjs && node scripts/build-web-shells.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:unit": "node --test tests/*.test.mjs",
+    "test": "npm run build && npm run test:unit",
+    "template:check": "node scripts/check-lesson-template.mjs",
+    "check:dist": "node scripts/check-dist-runtime.mjs",
+    "simulate:load": "node scripts/simulate-load.mjs",
+    "server:smoke:raw": "node scripts/server-smoke.mjs",
+    "server:smoke": "npm run build && npm run server:smoke:raw",
+    "simulate:ws:raw": "node scripts/simulate-ws-load.mjs",
+    "simulate:ws": "npm run build && npm run simulate:ws:raw",
+    "smoke:raw": "node scripts/smoke.mjs",
+    "smoke": "npm run build && npm run smoke:raw",
+    "server:dev": "npm run build && node --env-file-if-exists=.env apps/server/runtime/server.mjs",
+    "docker:gate": "npm run runtime:check && node scripts/docker-release-gate.mjs",
+    "check": "npm run toolchain && npm run handoff:check && npm run platform:check && npm run foundation:check && npm run policy:check && npm run lockfile:check && npm run workspace:check && npm run docs:check && npm run quality:check && npm run validate && npm run validate:formal && npm run validate:lessons && npm run build && npm run typecheck && npm run test:unit && npm run template:check && npm run check:dist && npm run simulate:load && npm run server:smoke:raw && npm run simulate:ws:raw && npm run smoke:raw",
+    "check:fast": "npm run runtime:check && npm run handoff:check && npm run foundation:check && npm run workspace:check && npm run policy:check && npm run lockfile:check && npm run docs:check && npm run validate && npm run test",
+    "audit:structure": "npm run handoff:check && npm run platform:check && npm run foundation:check && npm run policy:check && npm run lockfile:check && npm run workspace:check && npm run docs:check && npm run quality:check && npm run validate && npm run validate:formal && npm run validate:lessons && npm run test && npm run template:check && npm run simulate:load && npm run server:smoke:raw && npm run simulate:ws:raw && npm run smoke:raw",
+    "release:check": "npm run check && npm run integrity:check && npm run docker:gate",
+    "lesson:new": "node scripts/create-lesson.mjs",
+    "lesson:validate": "node scripts/validate-lesson-package.mjs",
+    "prebuild": "npm run runtime:check && npm run policy:check",
+    "policy:generate": "node scripts/generate-identity-policy.mjs",
+    "policy:check": "node scripts/check-identity-policy.mjs",
+    "integrity:generate": "node scripts/generate-package-integrity.mjs",
+    "integrity:check": "node scripts/check-package-integrity.mjs",
+    "d7:host": "node scripts/check-d7-host.mjs",
+    "docker:compose:gate": "node scripts/docker-compose-gate.mjs",
+    "release:d7": "npm run d7:product && npm run d7:host && npm run check && npm run integrity:check && npm run docker:d7:gate",
+    "workspace:check": "node scripts/check-workspace-boundaries.mjs",
+    "d7:product": "node scripts/check-d7-product-readiness.mjs",
+    "docker:d7:gate": "node scripts/docker-d7-gate.mjs"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "packageManager": "npm@11.19.1",
+  "engines": {
+    "node": "26.8.2",
+    "npm": "11.19.1"
+  },
+  "classroomRuntime": {
+    "foundationArchitectureVersion": "0.1.2",
+    "contractCorrectnessRevision": "CR11",
+    "roadmapRevision": "R3.10"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  }
+}

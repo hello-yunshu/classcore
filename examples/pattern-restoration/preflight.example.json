@@ -1,0 +1,32 @@
+{
+  "sessionId": "session:demo",
+  "status": "warning",
+  "checks": [
+    {
+      "checkId": "server.database",
+      "status": "ready",
+      "message": "SQLite writable"
+    },
+    {
+      "checkId": "assets.preloaded",
+      "status": "ready",
+      "message": "All required assets verified"
+    },
+    {
+      "checkId": "clients.readiness",
+      "status": "warning",
+      "message": "47 of 48 student clients ready",
+      "details": {
+        "ready": 47,
+        "total": 48
+      }
+    }
+  ],
+  "clients": {
+    "ready": 47,
+    "warning": 1,
+    "failed": 0,
+    "total": 48
+  },
+  "checkedAt": "2026-09-10T05:00:00Z"
+}

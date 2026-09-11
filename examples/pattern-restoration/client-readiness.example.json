@@ -1,0 +1,35 @@
+{
+  "sessionId": "session:demo",
+  "connectionId": "connection:s17",
+  "status": "ready",
+  "checks": [
+    {
+      "checkId": "indexeddb",
+      "status": "ready",
+      "message": "IndexedDB available"
+    },
+    {
+      "checkId": "pointer-events",
+      "status": "ready",
+      "message": "Pointer Events available"
+    },
+    {
+      "checkId": "secure-context",
+      "status": "warning",
+      "message": "LAN HTTP mode; secure-context-only features disabled"
+    }
+  ],
+  "capabilityReport": {
+    "capabilityReportVersion": 1,
+    "secureContext": false,
+    "indexedDb": true,
+    "pointerEvents": true,
+    "webWorkers": true,
+    "webSocket": true,
+    "offscreenCanvas": false,
+    "serviceWorker": false,
+    "maxTouchPoints": 10,
+    "userAgentFamily": "Android WebView/Chromium"
+  },
+  "checkedAt": "2026-09-10T05:00:00Z"
+}

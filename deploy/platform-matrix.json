@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "policy": "cross-architecture",
+  "currentPublicLesson": {
+    "host": "macOS Apple Silicon",
+    "containerRuntime": "Docker Desktop compatible",
+    "requiredServerTarget": "linux/arm64"
+  },
+  "serverTargets": [
+    {
+      "platform": "linux/arm64",
+      "status": "required-current",
+      "gate": "D7"
+    },
+    {
+      "platform": "linux/amd64",
+      "status": "compatibility-target",
+      "gate": "D21"
+    }
+  ],
+  "browserClients": {
+    "policy": "capability-driven-not-cpu-whitelist"
+  },
+  "nativeDependencyRule": "core native dependencies must support linux/arm64; prefer linux/amd64 too",
+  "runtime": {
+    "productionNodeLine": "26 Current",
+    "productionNodeVersion": "26.8.2",
+    "packageManager": "npm 11.19.1",
+    "compiler": "TypeScript 7.0.2 stable",
+    "storage": "node:sqlite / SQLite WAL behind Storage adapter",
+    "transport": "HTTP + WebSocket"
+  },
+  "versionPolicy": "Do not freeze application logic to CPU architecture; release builds must validate current Node LTS and stable toolchain from config/toolchain.json.",
+  "handoff": {
+    "cleanCheckout": "npm run doctor -> npm run bootstrap",
+    "lockfileRequired": true
+  }
+}

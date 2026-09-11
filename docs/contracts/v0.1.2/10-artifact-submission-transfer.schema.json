@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ArtifactSubmissionTransferContracts",
+  "$defs": {
+    "learningArtifact": {
+      "type": "object",
+      "required": [
+        "artifactId",
+        "sessionId",
+        "activityId",
+        "ownerScope",
+        "artifactType",
+        "revision",
+        "payload",
+        "createdAt"
+      ],
+      "properties": {
+        "artifactId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activityId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ownerScope": {
+          "type": "object",
+          "required": [
+            "type",
+            "id"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "participant",
+                "pair",
+                "group",
+                "session"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "artifactType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "payload": {
+          "type": "object"
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "submission": {
+      "type": "object",
+      "required": [
+        "submissionId",
+        "sessionId",
+        "activityId",
+        "submitterScope",
+        "submittedBy",
+        "artifacts",
+        "status"
+      ],
+      "properties": {
+        "submissionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activityId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "submitterScope": {
+          "type": "object",
+          "required": [
+            "type",
+            "id"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "participant",
+                "pair",
+                "group",
+                "session"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "submittedBy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "artifactId",
+              "revision"
+            ],
+            "properties": {
+              "artifactId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "status": {
+          "enum": [
+            "draft",
+            "submitted",
+            "accepted"
+          ]
+        },
+        "submittedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifactTransfer": {
+      "type": "object",
+      "required": [
+        "transferId",
+        "sessionId",
+        "activityId",
+        "senderId",
+        "recipientScope",
+        "artifact",
+        "status",
+        "createdAt"
+      ],
+      "properties": {
+        "transferId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activityId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "senderId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recipientScope": {
+          "type": "object",
+          "required": [
+            "type",
+            "id"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "participant",
+                "pair",
+                "group",
+                "session"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "artifact": {
+          "type": "object",
+          "required": [
+            "artifactId",
+            "revision"
+          ],
+          "properties": {
+            "artifactId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "status": {
+          "enum": [
+            "queued",
+            "sent",
+            "received",
+            "opened",
+            "completed",
+            "failed"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "updatedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

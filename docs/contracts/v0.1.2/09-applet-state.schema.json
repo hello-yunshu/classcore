@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AppletStateContracts",
+  "$defs": {
+    "snapshot": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "AppletStateSnapshot",
+      "type": "object",
+      "required": [
+        "sessionId",
+        "activityId",
+        "appletInstanceId",
+        "scope",
+        "stateSchemaVersion",
+        "revision",
+        "state",
+        "capturedAt"
+      ],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activityId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "appletInstanceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope": {
+          "type": "object",
+          "required": [
+            "type",
+            "id"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "participant",
+                "pair",
+                "group",
+                "session"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "stateSchemaVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "state": {
+          "type": "object"
+        },
+        "capturedAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "liveState": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "LiveStateFrame",
+      "type": "object",
+      "required": [
+        "sessionId",
+        "activityId",
+        "appletInstanceId",
+        "scope",
+        "streamId",
+        "seq",
+        "payload"
+      ],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activityId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "appletInstanceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scope": {
+          "type": "object",
+          "required": [
+            "type",
+            "id"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "participant",
+                "pair",
+                "group",
+                "session"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "streamId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "revision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "payload": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    "stateScope": {
+      "type": "object",
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "participant",
+            "pair",
+            "group",
+            "session"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
