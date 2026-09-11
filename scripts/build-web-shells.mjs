@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { build as bundle } from 'esbuild';
+import pptxgen from 'pptxgenjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outputDir = path.join(root, 'dist', 'public');
@@ -53,8 +55,34 @@ function studioShell() {
         '备课创作',
         readStyle('apps/presentation-studio/src/studio.css'),
         '<div id="studio-root"></div><!-- 备课创作端 · D2 Alpha -->',
-        "import { mountPresentationStudio } from '/assets/apps/presentation-studio/src/entry.js'; mountPresentationStudio(document.querySelector('#studio-root'));"
+        "import { mountPresentationStudio } from '/assets/apps/presentation-studio/bundle.js'; mountPresentationStudio(document.querySelector('#studio-root'));"
     );
+}
+
+async function buildPresentationBundle() {
+    await bundle({
+        entryPoints: [path.join(root, 'dist', 'apps', 'presentation-studio', 'src', 'entry.js')],
+        bundle: true,
+        format: 'esm',
+        platform: 'browser',
+        target: 'es2022',
+        sourcemap: false,
+        outfile: path.join(assetsDir, 'apps', 'presentation-studio', 'bundle.js'),
+        logLevel: 'warning',
+    });
+}
+
+async function buildBlankPresentationTemplate() {
+    const pptx = new pptxgen();
+    pptx.layout = 'LAYOUT_WIDE';
+    pptx.author = 'ClassCore';
+    pptx.subject = 'ClassCore web-ppt blank template';
+    const slide = pptx.addSlide();
+    slide.background = { color: 'F7F4EE' };
+    slide.addText('ClassCore 网页 Presentation', {
+        x: 1, y: 1, w: 8, h: 0.6, fontFace: 'Arial', fontSize: 24, color: '24324B',
+    });
+    await pptx.writeFile({ fileName: path.join(assetsDir, 'presentation-webppt-blank.pptx') });
 }
 
 function neutralShell({ app, label }) {
@@ -92,8 +120,12 @@ function copyCompiledAsset(relativePath) {
 }
 
 copyCompiledAsset('packages/surfaces/src/index.js');
-for (const [, app] of surfaces)
-    copyCompiledAsset(`apps/${app}/src/entry.js`);
+for (const [, app] of surfaces) {
+    if (app !== 'presentation-studio')
+        copyCompiledAsset(`apps/${app}/src/entry.js`);
+}
+await buildPresentationBundle();
+await buildBlankPresentationTemplate();
 for (const [route, app, label] of surfaces) {
     const directory = path.join(outputDir, route);
     fs.mkdirSync(directory, { recursive: true });

@@ -101,7 +101,7 @@ npm run release:d7
 
 ## 三个硬节点
 
-- **D2 / 2026-09-11**：Student Practice Alpha + Authoring Studio Web Presentation Alpha；
+- **D2 / 2026-09-11**：Student Practice Alpha + Authoring Studio Web Presentation Alpha；下一阶段继续完成 web-ppt 完整接入；
 - **D7 / 2026-09-16**：完整公开课 RC；
 - **D21 / 2026-09-30**：完整架构实现基线 + 第二节公开课扩展证明。
 
@@ -112,6 +112,7 @@ npm run release:d7
 - `docs/README.md`：中文文档总入口；
 - `docs/development/MASTER-DEVELOPMENT-PLAN.md`：唯一权威长期计划；
 - `docs/development/FRONTEND-DESIGN-BOUNDARY.md`：前端 Design 尚未冻结的边界；
+- `docs/development/PRESENTATION-WEBPPT-NEXT-PHASE.md`：web-ppt 完整接入、Studio 能力与布局计划；
 - `docs/development/NEW-PUBLIC-LESSON-GUIDE.md`：下一节公开课扩展方法；
 - `docs/deployment/PLATFORM-ARCHITECTURE-MATRIX.md`：跨架构/Docker支持矩阵；
 - `CR11-RELEASE-ASSURANCE-CLOSURE-REPORT.md` 与 `R3.10-COMPLETE-AUDIT.md`：本版 Release-Assurance 收口与完整审计。
@@ -122,4 +123,4 @@ npm run release:d7
 
 ## 仍未完成
 
-R3.10 仍是**可执行开发母版**，不是课堂成品。TransformBoard 正式 UI、真正 Presentation Engine、完整 Join/Presence/Outbox/Submission、正式 Teacher/Observer UI、lesson-specific Analytics/Rule Intelligence，以及 Apple Silicon Docker 实机 build/run/restart 与真实路由器 + XP21A LAN rehearsal 仍属于 D1-D7 的真实开发工作。自动 Docker Gate 不等价于真实路由器 + XP21A 真机演练；reference Gate 也不会把未认证 Server 暴露到 LAN。
+R3.10 仍是**可执行开发母版**，不是课堂成品。web-ppt 已完成核心接入，但完整编辑工具栏/布局、Published Presentation、完整 Join/Presence/Outbox/Submission、正式 Teacher/Observer UI、lesson-specific Analytics/Rule Intelligence，以及 Apple Silicon Docker 实机 build/run/restart 与真实路由器 + XP21A LAN rehearsal 仍属于后续真实开发工作。自动 Docker Gate 不等价于真实路由器 + XP21A 真机演练；reference Gate 也不会把未认证 Server 暴露到 LAN。

@@ -70,6 +70,6 @@ Surface职责与runtime profile已约定；颜色、字体、布局、Design Tok
 
 ## 仍可替换的实现细节
 
-React/Vue、Node Server framework、WebSocket库、SQLite driver、Canvas/SVG/Konva、PPTist/web-ppt、LLM厂商、云部署、最终视觉设计。
+React/Vue、Node Server framework、WebSocket库、SQLite driver、Canvas/SVG/Konva、web-ppt adapter implementation、LLM厂商、云部署、最终视觉设计。
 
 当前手写WebSocket与`node:sqlite`只是零外部依赖 reference vertical slice，不是不可替换的Foundation组件。

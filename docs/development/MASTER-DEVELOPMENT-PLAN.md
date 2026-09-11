@@ -16,6 +16,14 @@
 
 产品结构：6 Product Surfaces + 1 Engineering Surface + Service Plane。课堂 ClientRole 仍只有 student / teacher / observer / display。
 
+## 1.1 当前主线修订 — 2026-09-11
+
+- Presentation 编辑与播放只推进 `web-ppt`，不再保留其它编辑引擎选型分支。
+- 当前已完成的是 web-ppt 核心链和薄接入 Alpha；下一阶段要把其已有的文字、图片、表格、变换、样式、页面和动画能力接入正式 Studio。
+- Studio 布局先于工具堆叠：以教师 `1280×800` / `1440×900` 工作台为主目标，采用真实缩略图 + 16:9 中央画布 + 上下文检查台的三栏结构；详细布局和 Gate 见 `docs/development/PRESENTATION-WEBPPT-NEXT-PHASE.md`。
+- Scene Studio 仅作 contract harness、测试夹具和紧急降级，不再扩展为第二套 Office 编辑器。
+- 不修改 Foundation v0.1.2；第三方文档模型只能停留在 adapter/Studio bundle，课堂 Runtime 继续只消费 Published Presentation、Runtime Index 和权威 PlaybackState。
+
 ## 2. D2 — 双 Alpha
 
 ### Student Practice Alpha
@@ -26,12 +34,10 @@
 - `student-light`，不等待完整 Server。
 
 ### Authoring Studio Alpha
-- 浏览器创建 Deck；
-- 页面增删复制排序；
-- 文字、图片、SVG、基础图形；
-- 移动/缩放/图层；
-- 保存、重新打开、预览播放；
-- 教师从 D2 开始制作最终公开课网页版 PPT。
+- 浏览器创建/打开 Deck；
+- 当前已完成页面 CRUD、基础图形、淡入步骤、保存/重开、预览播放和本地恢复；
+- 下一阶段继续接入 web-ppt 的完整编辑能力与正式三栏布局，不把当前中性 Shell 当最终 UI；
+- 教师最终课件必须经过 validate → freeze → fingerprint 后才能进入课堂发布链。
 
 ## 3. D7 — 完整公开课 RC
 
@@ -66,11 +72,11 @@ D8 后再做通用 retention、cleanup、migration，不把“首次持久化”
 - 跨架构原则生效：Server 应用逻辑不绑定 CPU，D7 必须支持 Apple Silicon Mac + Docker 的 `linux/arm64`；
 - 可执行 Server vertical slice 已有，开始接入真实 Session/Join/Runtime；
 - Student Shell / TransformBoard pointer skeleton；
-- Presentation Engine PoC，最多 4 小时；
+- web-ppt Presentation Engine 核心 PoC 已完成并锁定版本；
 - Authoring Studio mount。
 
 ### D2
-双 Alpha。禁止为了 Teacher/Observer 美化拖延 D2。
+双 Alpha。当前 web-ppt 薄接入 Alpha 已完成；下一阶段先完成 Editor Foundation + Layout Shell，再补完整内容工具。禁止在布局未稳定前继续堆叠零散按钮。
 
 ### D3
 - Session / Join / Membership / Student identity claim；
@@ -78,7 +84,9 @@ D8 后再做通用 retention、cleanup、migration，不把“首次持久化”
 - WebSocket Presence；
 - Controller Lease；
 - 线性 Activity；
-- Presentation 基础编辑与确定性 scene/step。
+- web-ppt 完整编辑第一批：页面/缩略图、选择变换、层级、文字、图片、图形、表格、基础样式；
+- Studio 三栏布局、context toolbar、对象/页面/动画 inspector；
+- 确定性 scene/step 与本地发布校验。
 
 ### D4
 - SQLite 映射 `RuntimeRecoveryStorage`：Session（含 FeaturePolicy）/ Membership / Lease / Stage；
@@ -90,6 +98,7 @@ D8 后再做通用 retention、cleanup、migration，不把“首次持久化”
 - Live subscription / QoS；
 - Teacher/Observer/Display Projection；
 - Presentation scene/step 同步；
+- Published Presentation + AssetStore：draft→validate→publish→freeze→fingerprint；
 - 开始持久化 Session/Identity/Pseudonym/Stage/Presentation。
 
 ### D5
@@ -139,8 +148,8 @@ D21 不等于商业平台完成：不要求云账号、插件市场、原生 App
 
 ## 7. 范围保护
 
-P0：D2 双 Alpha、D7 Join/Activity/TransformBoard、Durable/Snapshot/Submission/Reconnect、Teacher 控制、Display/Observer匿名投影、Web Presentation 制作/播放/同步、Backstage最小运维、Preflight。
+P0：D2 双 Alpha、web-ppt 完整编辑与 Studio 布局、D7 Join/Activity/TransformBoard、Durable/Snapshot/Submission/Reconnect、Teacher 控制、Display/Observer匿名投影、Web Presentation 制作/播放/同步、Backstage最小运维、Preflight。
 
-P1：Learning Analytics、规则Advice、动态课堂Widget、Simulation完善、自动浏览器并发。
+P1：Published Presentation + AssetStore、Teacher/Display PlaybackState 恢复、Learning Analytics、规则Advice、动态课堂Widget、Simulation完善、自动浏览器并发。
 
-P2：复杂动画、完整PPTX兼容、长期云端、原生App、复杂第三方集成。
+P2：复杂图表/SmartArt/OLE 完整编辑、PowerPoint 全量主题/时间轴、完整PPTX兼容、多人CRDT、长期云端、原生App、其它第三方编辑引擎。

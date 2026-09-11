@@ -18,6 +18,7 @@
 - `docs/development/RECOVERY-MINIMUM-STATE.md`：D7 Server restart 最小恢复状态；
 - `docs/development/PERFORMANCE-REFERENCE-BASELINE.md`：并发/性能参考基线；
 - `docs/development/FRONTEND-DESIGN-BOUNDARY.md`：前端视觉尚未冻结；
+- `docs/development/PRESENTATION-WEBPPT-NEXT-PHASE.md`：web-ppt 完整接入与 Studio 布局计划；
 - `docs/development/NEW-PUBLIC-LESSON-GUIDE.md`：未来新公开课如何扩展；
 - `docs/development/TOOLCHAIN-REPRODUCIBILITY.md`：clean checkout / lockfile / bootstrap；
 - `docs/development/STORAGE-ADAPTER-DECISION.md`：SQLite adapter 边界；

@@ -44,26 +44,14 @@ Architecture implication:
 
 These sources support implementation choices and test strategy. They do not prove XP21A performance, school AP capacity or final classroom usability. Those claims must remain explicitly unverified unless tested in the actual environment.
 
-## PPTist — immediate PowerPoint-like web authoring candidate
-
-The upstream project is an online presentation editor/player designed to reproduce common PowerPoint authoring workflows, and its repository documents custom element extension. Current upstream is AGPL-3.0, so it must stay behind an Adapter boundary and future closed-source/commercial use requires an explicit license decision.
-
-- https://github.com/pipipi-pikachu/PPTist
-- https://github.com/pipipi-pikachu/PPTist/blob/master/doc/CustomElement.md
-
-Architecture implication:
-- strong D1 candidate for fast blank-deck authoring;
-- do not encode PPTist element structures into Foundation contracts;
-- represent classroom dynamic data through Presentation bindings/custom elements;
-- Student bundles never import the editor.
-
-## web-ppt — modular MIT alternative
+## web-ppt — current Presentation engine
 
 The project exposes separate core/edit-core/editor/viewer-core packages, performs browser-side ppt/pptx parsing/rendering, and is MIT licensed. Its editor is currently documented on a beta/`next` line.
 
 - https://github.com/unStone/web-ppt
 
 Architecture implication:
-- strong alternative/future engine because its headless viewer state and package boundaries fit synchronized playback;
-- D1 must prove blank-deck authoring and the exact D2 workflow before using it as the immediate Studio foundation;
-- Adapter design must permit a future engine swap without Foundation changes.
+- web-ppt is the only Presentation editor/playback engine continued in the current roadmap;
+- its headless viewer state and package boundaries fit synchronized playback;
+- the next phase exposes its existing text, image, table, transform, style and navigation seams through a deliberate Studio layout;
+- Adapter boundaries remain to prevent third-party document types from entering Foundation.

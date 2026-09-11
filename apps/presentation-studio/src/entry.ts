@@ -1,5 +1,11 @@
 import { getSurfaceDescriptor, CLIENT_RUNTIME_BUDGETS } from '@classroom/surfaces';
 import type { PresentationEngineAdapter } from '@classroom/presentation';
+import {
+    createWebPptAdapter,
+    WebPptPresentationEngineAdapter,
+    createWebPptAssetFromBytes,
+    type WebPptPresentationAsset,
+} from '@classroom/presentation-webppt-adapter';
 export const surface = getSurfaceDescriptor('authoring-studio');
 export const runtimeBudget = CLIENT_RUNTIME_BUDGETS['authoring-studio'];
 export interface StudioBootstrap {
@@ -193,19 +199,36 @@ function iconLabel(text: string, className = ''): HTMLSpanElement {
 }
 
 export function mountPresentationStudio(root: HTMLElement): void {
-    let documentModel = loadStudioDocument();
-    let activeSceneId = documentModel.scenes[0].id;
-    let selectedElementId: string | null = documentModel.scenes[0].elements[0]?.id ?? null;
-    let previewing = false;
-    let previewIndex = 0;
-    let drag: { elementId: string; startX: number; startY: number; originX: number; originY: number } | null = null;
+    const templateUrl = '/assets/presentation-webppt-blank.pptx';
+    const engine = new WebPptPresentationEngineAdapter(async () => {
+        const response = await fetch(templateUrl);
+        if (!response.ok)
+            throw new Error(`presentation-template-http-${response.status}`);
+        return new Uint8Array(await response.arrayBuffer());
+    });
+    const webPpt = createWebPptAdapter();
+    let asset: WebPptPresentationAsset | null = null;
+    let preview: { root: HTMLElement; session: Awaited<ReturnType<typeof engine.mountPlayer>> } | null = null;
+    let savedAt = '';
+    let busy = false;
+
     root.replaceChildren();
     const app = document.createElement('div');
     app.className = 'studio-app';
     root.append(app);
     const header = document.createElement('header');
     header.className = 'studio-header';
-    header.innerHTML = '<div class="studio-brand"><span class="brand-square">C</span><div><span class="eyebrow">Authoring Studio · D2 Alpha</span><h1>课堂课件工作台</h1></div></div><div class="studio-header-actions" id="studio-status"></div>';
+    const brand = document.createElement('div');
+    brand.className = 'studio-brand';
+    brand.innerHTML = '<span class="brand-square">C</span><div><span class="eyebrow">Authoring Studio · web-ppt PoC</span><h1>课堂课件工作台</h1></div>';
+    const status = document.createElement('div');
+    status.className = 'studio-header-actions';
+    const statusMessage = document.createElement('span');
+    statusMessage.className = 'saved-note';
+    const statusActions = document.createElement('span');
+    statusActions.className = 'studio-header-actions';
+    status.append(statusMessage, statusActions);
+    header.append(brand, status);
     app.append(header);
     const layout = document.createElement('main');
     layout.className = 'studio-layout';
@@ -217,160 +240,280 @@ export function mountPresentationStudio(root: HTMLElement): void {
     inspector.className = 'inspector-panel';
     layout.append(scenePanel, stagePanel, inspector);
     app.append(layout);
-    const sceneList = document.createElement('div');
-    const stage = document.createElement('div');
-    stage.className = 'studio-stage';
-    const elementToolbar = document.createElement('div');
-    elementToolbar.className = 'element-toolbar';
-    const status = header.querySelector<HTMLElement>('#studio-status');
 
-    function currentScene(): StudioScene {
-        return documentModel.scenes.find(scene => scene.id === activeSceneId) ?? documentModel.scenes[0];
-    }
-    function update(next: StudioDocument): void {
-        documentModel = next;
-        if (!documentModel.scenes.some(scene => scene.id === activeSceneId))
-            activeSceneId = documentModel.scenes[0].id;
-        if (!currentScene().elements.some(element => element.id === selectedElementId))
-            selectedElementId = currentScene().elements[0]?.id ?? null;
-        render();
-    }
-    function button(label: string, action: () => void, className = ''): HTMLButtonElement {
+    const sceneList = document.createElement('div');
+    const stageTitle = document.createElement('div');
+    stageTitle.className = 'stage-titlebar';
+    const stageTools = document.createElement('div');
+    stageTools.className = 'element-toolbar';
+    const editorHost = document.createElement('div');
+    editorHost.className = 'studio-stage web-ppt-stage';
+    const selectionPane = document.createElement('div');
+    selectionPane.className = 'web-ppt-selection-pane';
+    stagePanel.append(stageTitle, stageTools, editorHost);
+
+    function button(label: string, action: () => void | Promise<void>, className = ''): HTMLButtonElement {
         const item = document.createElement('button');
         item.type = 'button';
         item.className = className;
         item.textContent = label;
-        item.addEventListener('click', action);
+        item.addEventListener('click', () => { void action(); });
         return item;
     }
-    function render(): void {
-        const scene = currentScene();
+    function currentSession() {
+        return webPpt.snapshot.session;
+    }
+    function currentSceneId(): string | null {
+        return webPpt.snapshot.slideId ?? currentSession()?.editor.doc.slideOrder[0] ?? null;
+    }
+    function setStatus(text: string, error = false): void {
+        statusMessage.replaceChildren(iconLabel(text, error ? 'saved-note status-error' : 'saved-note'));
+    }
+    function renderChrome(): void {
+        const session = currentSession();
+        const slides = session?.editor.doc.slideOrder ?? [];
+        const active = currentSceneId();
         sceneList.replaceChildren();
-        const sceneHeading = document.createElement('div');
-        sceneHeading.className = 'panel-heading';
-        sceneHeading.innerHTML = '<span>页面</span><span class="count-pill">' + documentModel.scenes.length + '</span>';
-        scenePanel.replaceChildren(sceneHeading, sceneList);
-        for (const [index, item] of documentModel.scenes.entries()) {
-            const sceneButton = button('', () => { activeSceneId = item.id; selectedElementId = item.elements[0]?.id ?? null; render(); }, `scene-thumb${item.id === activeSceneId ? ' active' : ''}`);
-            const number = document.createElement('span');
-            number.className = 'scene-number';
-            number.textContent = String(index + 1).padStart(2, '0');
-            const thumb = document.createElement('span');
-            thumb.className = 'scene-mini-canvas';
-            thumb.textContent = item.title;
-            sceneButton.append(number, thumb);
-            sceneList.append(sceneButton);
-        }
+        const heading = document.createElement('div');
+        heading.className = 'panel-heading';
+        heading.innerHTML = `<span>页面</span><span class="count-pill">${slides.length}</span>`;
+        scenePanel.replaceChildren(heading, sceneList);
+        slides.forEach((sceneId: string, index: number) => {
+            const item = button(`${String(index + 1).padStart(2, '0')}  页面 ${index + 1}`, () => {
+                webPpt.setView({ slideId: sceneId, mode: 'edit' });
+                renderChrome();
+            }, `scene-thumb${sceneId === active ? ' active' : ''}`);
+            sceneList.append(item);
+        });
         const sceneActions = document.createElement('div');
         sceneActions.className = 'scene-actions';
-        sceneActions.append(button('+ 新页面', () => { const next = addScene(documentModel); activeSceneId = next.scenes[next.scenes.length - 1].id; update(next); }, 'add-scene-button'));
-        sceneActions.append(button('复制', () => { const next = cloneScene(documentModel, activeSceneId); activeSceneId = next.scenes.find((item, index) => item.id !== documentModel.scenes[index]?.id)?.id ?? activeSceneId; update(next); }, 'small-button'));
-        sceneActions.append(button('删除', () => update(removeScene(documentModel, activeSceneId)), 'small-button'));
-        scenePanel.append(sceneActions);
-        stagePanel.replaceChildren();
-        const stageTitle = document.createElement('div');
-        stageTitle.className = 'stage-titlebar';
-        stageTitle.innerHTML = `<div><span class="eyebrow">正在编辑</span><strong>${escapeText(scene.title)}</strong></div><span class="format-note">16:9 · 网页原生</span>`;
-        stagePanel.append(stageTitle, elementToolbar, stage);
-        stage.replaceChildren();
-        for (const element of [...scene.elements].sort((a, b) => a.zIndex - b.zIndex)) {
-            const node = makeElementNode(element);
-            node.classList.toggle('selected', element.id === selectedElementId);
-            node.addEventListener('pointerdown', event => {
-                event.preventDefault();
-                selectedElementId = element.id;
-                drag = { elementId: element.id, startX: event.clientX, startY: event.clientY, originX: element.x, originY: element.y };
-                node.setPointerCapture(event.pointerId);
-                render();
-            });
-            node.addEventListener('pointermove', event => {
-                if (!drag || drag.elementId !== element.id)
+        sceneActions.append(
+            button('+ 新页面', () => {
+                const current = currentSession();
+                if (!current)
                     return;
-                update(updateElement(documentModel, activeSceneId, element.id, { x: Math.max(0, drag.originX + event.clientX - drag.startX), y: Math.max(0, drag.originY + event.clientY - drag.startY) }));
-            });
-            node.addEventListener('pointerup', () => { drag = null; });
-            stage.append(node);
-        }
-        elementToolbar.replaceChildren();
-        const addTool = (label: string, action: () => void): void => elementToolbar.append(button(label, action));
-        addTool('文字', () => update(addElement(documentModel, activeSceneId, { kind: 'text', x: 120, y: 250, width: 420, height: 66, text: '新的课堂提示', color: '#24324b' })));
-        addTool('图形', () => update(addElement(documentModel, activeSceneId, { kind: 'shape', shape: 'rectangle', x: 220, y: 270, width: 150, height: 96, color: '#5375b8' })));
-        addTool('图片', () => { const src = window.prompt('输入图片 URL（也可以使用公开 SVG 地址）'); if (src) update(addElement(documentModel, activeSceneId, { kind: 'image', x: 260, y: 210, width: 220, height: 140, src, text: '课堂图片' })); });
-        addTool('SVG 图案', () => update(addElement(documentModel, activeSceneId, { kind: 'svg', svgVariant: 'burst', x: 460, y: 220, width: 150, height: 150 })));
-        const selected = scene.elements.find(element => element.id === selectedElementId);
+                const result = current.editor.exec({ type: 'AddSlide', layoutId: current.editor.doc.layoutOrder[0], at: { after: currentSceneId() } });
+                const next = [...result.createdSlides][0];
+                if (next)
+                    webPpt.setView({ slideId: next, mode: 'edit' });
+                renderChrome();
+            }, 'add-scene-button'),
+            button('复制', () => {
+                const current = currentSession();
+                const id = currentSceneId();
+                if (!current || !id)
+                    return;
+                const result = current.editor.exec({ type: 'DuplicateSlide', id });
+                const next = [...result.createdSlides][0];
+                if (next)
+                    webPpt.setView({ slideId: next, mode: 'edit' });
+                renderChrome();
+            }, 'small-button'),
+        );
+        scenePanel.append(sceneActions);
+        const sceneIndex = Math.max(0, slides.indexOf(active ?? ''));
+        stageTitle.innerHTML = `<div><span class="eyebrow">正在编辑 · ${asset?.engine.engineId ?? '未打开'}</span><strong>${escapeText(asset?.title ?? '请新建或打开课件')}</strong></div><span class="format-note">16:9 · 本地离线引擎</span>`;
+        stageTools.replaceChildren();
+        stageTools.append(
+            button('撤销', () => { webPpt.undo(); renderChrome(); }, 'small-button'),
+            button('重做', () => { webPpt.redo(); renderChrome(); }, 'small-button'),
+            button('图形', () => {
+                const current = currentSession();
+                const id = currentSceneId();
+                if (!current || !id)
+                    return;
+                current.editor.exec({ type: 'AddShape', slideId: id, preset: 'roundRect', rect: { x: 280, y: 260, w: 220, h: 120 } });
+                renderChrome();
+            }, 'small-button'),
+            button('加入淡入步骤', () => {
+                const current = currentSession();
+                const id = currentSceneId();
+                const elementId = current?.editor.selection.kind === 'elements' ? current.editor.selection.ids[0] : null;
+                if (!current || !id || !elementId)
+                    return;
+                current.editor.exec({ type: 'SetAnimations', slideId: id, steps: [{ target: elementId, kind: 'entrance', effect: 'fade', trigger: 'click', delayMs: 0, durationMs: 300 }] });
+                renderChrome();
+            }, 'small-button'),
+        );
         inspector.replaceChildren();
         const inspectorHeading = document.createElement('div');
         inspectorHeading.className = 'panel-heading';
-        inspectorHeading.innerHTML = '<span>属性</span><span class="inspector-state">' + (selected ? '已选择' : '未选择') + '</span>';
-        inspector.append(inspectorHeading);
-        if (selected) {
-            const propertyGrid = document.createElement('div');
-            propertyGrid.className = 'property-grid';
-            for (const key of ['x', 'y', 'width', 'height'] as const) {
-                const label = document.createElement('label');
-                label.textContent = key === 'x' ? '横向' : key === 'y' ? '纵向' : key === 'width' ? '宽度' : '高度';
-                const input = document.createElement('input');
-                input.type = 'number';
-                input.value = String(Math.round(selected[key]));
-                input.addEventListener('change', () => update(updateElement(documentModel, activeSceneId, selected.id, { [key]: Number(input.value) })));
-                label.append(input);
-                propertyGrid.append(label);
-            }
-            inspector.append(propertyGrid);
-            if (selected.kind === 'text') {
-                const text = document.createElement('textarea');
-                text.value = selected.text ?? '';
-                text.placeholder = '输入课堂文字';
-                text.addEventListener('change', () => update(updateElement(documentModel, activeSceneId, selected.id, { text: text.value })));
-                inspector.append(text);
-            }
-            const layers = document.createElement('div');
-            layers.className = 'layer-actions';
-            layers.append(button('上移图层', () => update(moveElementLayer(documentModel, activeSceneId, selected.id, 1)), 'small-button'), button('下移图层', () => update(moveElementLayer(documentModel, activeSceneId, selected.id, -1)), 'small-button'));
-            inspector.append(layers);
-        }
-        const sceneControls = document.createElement('div');
-        sceneControls.className = 'scene-reorder';
-        sceneControls.append(button('← 页面前移', () => update(moveScene(documentModel, activeSceneId, -1)), 'small-button'), button('页面后移 →', () => update(moveScene(documentModel, activeSceneId, 1)), 'small-button'));
-        inspector.append(sceneControls);
-        if (status) {
-            const saveButton = button('保存课件', () => {
-                const at = saveStudioDocument(documentModel);
-                status.dataset.saved = at;
-                render();
-            }, 'save-deck-button');
-            const previewButton = button(previewing ? '关闭预览' : '预览播放', () => {
-                previewing = !previewing;
-                previewIndex = documentModel.scenes.findIndex(item => item.id === activeSceneId);
-                render();
-            }, 'preview-button');
-            status.replaceChildren(saveButton, previewButton);
-            if (status.dataset.saved)
-                status.append(iconLabel(`已保存 ${status.dataset.saved}`, 'saved-note'));
-        }
-        if (previewing)
-            renderPreview();
+        inspectorHeading.innerHTML = '<span>引擎状态</span><span class="inspector-state">稳定身份 / 可保存</span>';
+        inspector.append(inspectorHeading, selectionPane);
+        const note = document.createElement('p');
+        note.className = 'inspector-note';
+        note.textContent = `第 ${sceneIndex + 1} 页 · ${webPpt.snapshot.status} · 可用撤销 ${session?.editor.history.undoCount ?? 0} 次`;
+        inspector.append(note);
+        if (savedAt)
+            inspector.append(iconLabel(`已保存 ${savedAt}`, 'saved-note'));
     }
-    function renderPreview(): void {
+    async function persist(): Promise<void> {
+        if (!asset)
+            return;
+        const bytes = await webPpt.save();
+        const saved = await createWebPptAssetFromBytes(asset.title, bytes, asset.document.idPrefix);
+        asset = { ...asset, source: saved.source, updatedAt: new Date().toISOString() };
+        await persistWebPptDraft(asset);
+        savedAt = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        setStatus(`已保存 ${savedAt}`);
+    }
+    async function publish(): Promise<void> {
+        if (!asset)
+            return;
+        const result = await engine.validate(asset);
+        if (!result.valid) {
+            setStatus(`发布阻断：${result.errors.join('、')}`, true);
+            return;
+        }
+        const index = await engine.buildRuntimeIndex(asset);
+        await persist();
+        setStatus(`已冻结发布 · ${index.scenes.length} 页 · ${asset.source?.sha256?.slice(0, 12) ?? 'no-fingerprint'}`);
+    }
+    async function openAsset(next: WebPptPresentationAsset): Promise<void> {
+        busy = true;
+        setStatus('正在打开课件…');
+        try {
+            asset = next;
+            await webPpt.applyBinding({ source: next.source!.bytes, openOptions: { idPrefix: next.document.idPrefix }, mode: 'edit', textMode: 'svg' });
+            webPpt.attach(editorHost);
+            webPpt.attachSelectionPane(selectionPane);
+            renderChrome();
+            setStatus('已打开 · 编辑状态');
+        }
+        catch (error) {
+            setStatus(error instanceof Error ? error.message : String(error), true);
+        }
+        finally {
+            busy = false;
+        }
+    }
+    async function newDeck(): Promise<void> {
+        if (busy)
+            return;
+        await openAsset(await engine.createBlank('未命名公开课'));
+    }
+    async function openFile(file: File): Promise<void> {
+        if (busy)
+            return;
+        await openAsset(await createWebPptAssetFromBytes(file.name.replace(/\.pptx?$/i, '') || '本地公开课', new Uint8Array(await file.arrayBuffer())));
+    }
+    async function togglePreview(): Promise<void> {
+        if (!asset || busy)
+            return;
+        if (preview) {
+            preview.session.dispose();
+            preview.root.remove();
+            preview = null;
+            renderChrome();
+            return;
+        }
         const overlay = document.createElement('div');
         overlay.className = 'preview-overlay';
-        const scene = documentModel.scenes[previewIndex] ?? documentModel.scenes[0];
-        const previewCanvas = document.createElement('div');
-        previewCanvas.className = 'preview-canvas';
-        for (const element of scene.elements)
-            previewCanvas.append(makeElementNode(element));
-        const caption = document.createElement('div');
-        caption.className = 'preview-caption';
-        caption.textContent = `${String(previewIndex + 1).padStart(2, '0')} / ${documentModel.scenes.length}  ·  ${scene.title}`;
+        const canvas = document.createElement('div');
+        canvas.className = 'preview-canvas web-ppt-preview';
+        overlay.append(canvas);
+        app.append(overlay);
+        const session = await engine.mountPlayer(canvas, asset, { context: { sessionId: 'local-preview', surface: 'teacher-runtime' } });
+        preview = { root: overlay, session };
         const controls = document.createElement('div');
         controls.className = 'preview-controls';
-        controls.append(button('‹', () => { previewIndex = Math.max(0, previewIndex - 1); render(); }, 'preview-nav'), button('退出预览', () => { previewing = false; render(); }, 'preview-exit'), button('›', () => { previewIndex = Math.min(documentModel.scenes.length - 1, previewIndex + 1); render(); }, 'preview-nav'));
-        overlay.append(previewCanvas, caption, controls);
-        app.append(overlay);
+        controls.append(button('上一步', () => { void preview?.session.previous?.(); }, 'preview-nav'), button('下一步', () => { void preview?.session.nextStep?.(); }, 'preview-nav'), button('退出预览', () => { void togglePreview(); }, 'preview-exit'));
+        overlay.append(controls);
     }
-    render();
+    const newButton = button('新建', () => { void newDeck(); }, 'small-button');
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.ppt,.pptx';
+    fileInput.hidden = true;
+    fileInput.addEventListener('change', () => { const file = fileInput.files?.[0]; if (file) void openFile(file); fileInput.value = ''; });
+    statusActions.append(
+        newButton,
+        button('打开 PPTX', () => fileInput.click(), 'small-button'),
+        button('保存', () => { void persist(); }, 'save-deck-button'),
+        button('重开', () => { if (asset) void openAsset({ ...asset, source: { ...asset.source!, bytes: new Uint8Array(asset.source!.bytes) } }); }, 'small-button'),
+        button('发布', () => { void publish(); }, 'small-button'),
+        button('预览播放', () => { void togglePreview(); }, 'preview-button'),
+        fileInput,
+    );
+    webPpt.subscribe(() => { renderChrome(); });
+    renderChrome();
+    void (async () => {
+        const draft = await loadWebPptDraft();
+        await openAsset(draft ?? await engine.createBlank('未命名公开课'));
+    })();
 }
 
 function escapeText(value: string): string {
     return value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character] ?? character));
+}
+
+interface StoredDraftMetadata {
+    presentationSchemaVersion: 1;
+    deckId: string;
+    title: string;
+    engine: WebPptPresentationAsset['engine'];
+    document: WebPptPresentationAsset['document'];
+    classroomBindings: WebPptPresentationAsset['classroomBindings'];
+    createdAt: string;
+    updatedAt: string;
+    source: { kind: 'bytes'; mimeType: string; sha256?: string };
+}
+
+const DRAFT_DB = 'classcore-presentation-drafts-v1';
+const DRAFT_STORE = 'assets';
+const DRAFT_META_KEY = 'classcore.presentation.draft.meta.v1';
+
+function openDraftDb(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DRAFT_DB, 1);
+        request.onupgradeneeded = () => request.result.createObjectStore(DRAFT_STORE, { keyPath: 'deckId' });
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error ?? new Error('presentation-draft-db-open-failed'));
+    });
+}
+
+async function persistWebPptDraft(asset: WebPptPresentationAsset): Promise<void> {
+    const source = asset.source;
+    if (!source)
+        throw new Error('presentation-source-required-for-save');
+    const metadata: StoredDraftMetadata = {
+        presentationSchemaVersion: 1,
+        deckId: asset.deckId,
+        title: asset.title,
+        engine: asset.engine,
+        document: asset.document,
+        classroomBindings: asset.classroomBindings,
+        createdAt: asset.createdAt,
+        updatedAt: asset.updatedAt,
+        source: { kind: 'bytes', mimeType: source.mimeType, sha256: source.sha256 },
+    };
+    localStorage.setItem(DRAFT_META_KEY, JSON.stringify(metadata));
+    const db = await openDraftDb();
+    await new Promise<void>((resolve, reject) => {
+        const request = db.transaction(DRAFT_STORE, 'readwrite').objectStore(DRAFT_STORE).put({ deckId: asset.deckId, bytes: source.bytes });
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error ?? new Error('presentation-draft-save-failed'));
+    });
+    db.close();
+}
+
+async function loadWebPptDraft(): Promise<WebPptPresentationAsset | null> {
+    try {
+        const metadata = JSON.parse(localStorage.getItem(DRAFT_META_KEY) ?? 'null') as StoredDraftMetadata | null;
+        if (!metadata || metadata.engine.engineId !== 'web-ppt')
+            return null;
+        const db = await openDraftDb();
+        const row = await new Promise<{ bytes: Uint8Array } | undefined>((resolve, reject) => {
+            const request = db.transaction(DRAFT_STORE, 'readonly').objectStore(DRAFT_STORE).get(metadata.deckId);
+            request.onsuccess = () => resolve(request.result as { bytes: Uint8Array } | undefined);
+            request.onerror = () => reject(request.error ?? new Error('presentation-draft-load-failed'));
+        });
+        db.close();
+        if (!row?.bytes)
+            return null;
+        return { ...metadata, source: { ...metadata.source, bytes: new Uint8Array(row.bytes) } };
+    }
+    catch {
+        return null;
+    }
 }

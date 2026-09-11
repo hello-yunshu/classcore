@@ -46,12 +46,18 @@ npm run bootstrap
 - 中性 Web Shell（不是最终 Design）。
 - D2 Student Practice Alpha：Student 轻量 TransformBoard 已支持选择、拖动、画布平移、旋转、旋转中心、重置、本地保存与刷新恢复；
 - D2 Authoring Studio Alpha：浏览器内 Scene Studio 已支持页面增删/复制/排序、文字/图片 URL/SVG/基础图形、元素移动/尺寸/图层、保存重开和预览播放；
+- Presentation 主线已接入真实 `@web-ppt/*@0.5.0-beta.1`：`@classroom/presentation-webppt-adapter` 负责 opaque OOXML bytes、稳定 `idPrefix`、编辑/保存/Runtime Index/Player 边界；Studio 生产 bundle 由 esbuild 构建，内置模板本地生成，草稿二进制走 IndexedDB；
+- `presentation-runtime` D7 verifier 已从 placeholder 改为真实 fail-closed 核心链 verifier，并已补齐 presentation evidence；D7 overall 仍不能宣称完成；
+- 下一阶段 Presentation 唯一主线为 web-ppt 完整接入；能力范围、三栏 Studio 布局、响应式降级和验收 Gate 见 `docs/development/PRESENTATION-WEBPPT-NEXT-PHASE.md`；
 - D2 Alpha 有模型级回归与真实浏览器验收，Student 不加载 Presentation 编辑器，Foundation 与现有 Surface/Service Plane 边界保持不变；
 
 ## 当前明确未完成
 
 - TransformBoard 与真实课堂 Server 的 Join/Activity/Submission 链接入；
-- 真正第三方 Presentation Engine（优先快速 PoC PPTist；不合适再评估 web-ppt）或 D7 级 Scene Runtime 接入；
+- Published Presentation draft→validate→publish→freeze→fingerprint 与 Server Asset API；
+- Presentation PlaybackState 接入 Teacher lease、SQLite recovery、Display player/reconnect；
+- `selected-artifact` Widget Registry/Resolver 与 public/teacher projection；
+- 浏览器 mount 的长期 soak、Server restart/Display reconnect、真实 Docker/LAN/XP21A evidence；
 - 完整 Join / Presence / Outbox / Submission / Artifact Exchange 产品链；
 - Teacher / Observer / Display 正式 UI；
 - Lesson-specific Analytics Runtime 与《图案的还原》规则智能；
@@ -61,12 +67,13 @@ npm run bootstrap
 
 ## 开发优先级
 
-1. Server真实 Session/Join/Presence + SQLite persistence；
-2. Teacher Runtime / Display / Observer 同步；
-3. D7 级 Presentation Scene/Step Runtime 与 Authoring binding；
-4. Analytics / Rule Intelligence / Advice；
-5. D6并发、断网重连、Server restart、Observer降级演练；
-6. D7冻结RC，不再加功能。
+1. web-ppt 完整编辑工具栏、真实缩略图和三栏 Studio 布局；
+2. Published Presentation + AssetStore + fingerprint；
+3. Teacher Runtime / Display PresentationPlaybackState 同步与恢复；
+4. `selected-artifact` binding / projection；
+5. Analytics / Rule Intelligence / Advice；
+6. D6并发、断网重连、Server restart、Observer降级演练；
+7. D7冻结RC，不再加功能。
 
 ## 三个硬节点
 
@@ -96,16 +103,15 @@ npm run bootstrap
 
 如果用户只说“继续推进”而没有重新指定技术方向，不要重新从零审计 Foundation。按下面顺序继续：
 
-1. 运行 `npm run doctor`，再运行 `npm run bootstrap`；首次 bootstrap 需要访问 npm/Python 包源；
-2. 先完成 Presentation Engine 限时 PoC，并让 Authoring Studio 真正能开始制作本次公开课 Deck；
-3. 同步推进 Student TransformBoard Practice Alpha；
-4. 每个小阶段至少运行 `npm run check:fast`，涉及 Runtime/Storage/Realtime/Presentation/Docker 时运行完整 `npm run check`；
+1. 运行 `npm run doctor`，再运行 `npm run bootstrap`；
+2. 继续完成 Published Presentation/AssetStore/Teacher-Display recovery vertical slice；
+3. 每个小阶段至少运行 `npm run check:fast`，涉及 Runtime/Storage/Realtime/Presentation/Docker 时运行完整 `npm run check`；
 5. 只有真实实现证据表明现有 Foundation 无法表达需求时，才提出 Foundation 变更，不要因为某个页面实现不方便而改 Core。
 
 
 ## 当前最近一次验证证据
 
-本轮升级前的独立构建自动回归为 **105/105 PASS**；升级到 Node 26.8.2/npm 11.19.1/Python 3.14.7 后必须重新复验。除 R3.8 已有的 Lesson/Authorization/Docker 反例外，CR11 在既有数组/object-key/roster/class 防线之上，继续拒绝普通文本、URL、stringified JSON 以及多层 percent/Unicode/hex/HTML 实体编码中的稳定身份 token，并把同一 mutation corpus 锁定在 TS Runtime、JS Lesson Validator 与 Python Formal Validator。
+本轮已在 Node 26.8.2/npm 11.19.1/Python 3.14.7 下完成独立构建与完整复验。除 R3.8 已有的 Lesson/Authorization/Docker 反例外，CR11 在既有数组/object-key/roster/class 防线之上，继续拒绝普通文本、URL、stringified JSON 以及多层 percent/Unicode/hex/HTML 实体编码中的稳定身份 token，并把同一 mutation corpus 锁定在 TS Runtime、JS Lesson Validator 与 Python Formal Validator。
 
 当前环境若缺少精确 Node 26.8.2/npm 11.19.1/Python 3.14.7 或 Docker，不得把对应 Gate 伪报为通过。Codex 在可联网正式环境先执行 `npm run bootstrap`；在教师 Apple Silicon Mac 冻结 RC 前执行 `npm run release:d7`，随后按 `docs/deployment/CLASSROOM-LAN-REHEARSAL.md` 完成真实 XP21A/LAN 演练。
 
@@ -113,6 +119,6 @@ npm run bootstrap
 
 ## D2 Alpha 最新验证
 
-- `npm run check`：完整通过；108/108 unit tests，Contract/Formal/Lesson/Dist/HTTP/WS/Load/Smoke 全部通过；
-- 真实浏览器：Student 旋转中心/旋转/保存/刷新恢复，Authoring 页面与元素 CRUD/保存/预览/刷新恢复通过；两端无 error/warning console log；
-- 仍未声称 D7 完成：认证课堂 Server、Join/Presence、Teacher/Observer/Display 同步、D7 Presentation Runtime、真实 Docker/LAN/XP21A 仍待完成。
+- `npm run check`：完整通过；110/110 unit tests，Contract/Formal/Lesson/Dist/HTTP/WS/Load/Smoke 全部通过；
+- 真实浏览器：Authoring web-ppt 页面 CRUD、形状与淡入步骤、保存/重开、预览/下一步、刷新恢复与本地发布指纹通过；浏览器无 error/warning console log；
+- Presentation 核心 verifier 已通过，但仍未声称 D7 完成：认证课堂 Server、Join/Presence、Teacher/Observer/Display 同步、Published Presentation/AssetStore、真实 Docker/LAN/XP21A 仍待完成。

@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@classroom/presentation": "0.1.0",
+    "@classroom/presentation-webppt-adapter": "0.1.0",
     "@classroom/contracts": "0.1.2",
     "@classroom/surfaces": "0.1.0"
   }

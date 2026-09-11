@@ -67,6 +67,8 @@
     "roadmapRevision": "R3.10"
   },
   "devDependencies": {
+    "esbuild": "0.28.2",
+    "pptxgenjs": "3.12.0",
     "typescript": "7.0.2"
   }
 }

@@ -110,6 +110,7 @@ const localToolsAssetPrefixes = [
     ...sharedBrowserAssetPrefixes,
     'apps/backstage/',
     'apps/presentation-studio/',
+    'presentation-webppt-blank.pptx',
 ];
 const classroomSurfaceRoutes = new Set(['student', 'teacher', 'display', 'observer']);
 const localToolSurfaceRoutes = new Set(['backstage', 'authoring']);

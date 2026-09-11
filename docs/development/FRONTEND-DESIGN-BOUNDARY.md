@@ -20,3 +20,7 @@ R3.10 的中性 Web Shell 只用于证明“端能运行、路由能打开、Sur
 `Product Design Principles -> Information Architecture -> Surface Layout -> Interaction Pattern -> Design Token -> Component Library -> Motion/Accessibility`
 
 其中 Student、Teacher、Observer、Display 应共享基础品牌语言，但信息密度和交互复杂度允许明显不同。
+
+## Presentation Studio 下一阶段
+
+Presentation Studio 已先确定信息架构和布局约束，但尚未冻结最终视觉 Token：采用“教师备课桌”三栏工作台（真实缩略图 / 16:9 画布 / 上下文检查台），优先适配教师 Mac 的 `1280×800` 与 `1440×900`，窄屏使用 drawer/底部页带降级。完整工具栏、对象/页面/动画 inspector 和真实缩略图必须在这个布局稳定后再扩展；具体方案见 `docs/development/PRESENTATION-WEBPPT-NEXT-PHASE.md`。

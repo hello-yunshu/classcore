@@ -9,6 +9,13 @@ export type JsonRecord = {
     [key: string]: JsonValue;
 };
 export type PresentationDocument = JsonRecord | JsonValue[];
+/** Engine-native bytes stay outside the JSON document envelope. */
+export interface PresentationBinarySource {
+    kind: 'bytes';
+    mimeType: string;
+    bytes: Uint8Array;
+    sha256?: string;
+}
 export interface PresentationEngineDescriptor {
     engineId: string;
     engineVersion: string;
@@ -39,7 +46,7 @@ export function assertIdentityNeutralBinding(binding: ClassroomWidgetBinding): v
     throw new Error(`identity-specific-binding-reference:${first.path}`);
 }
 /**
- * Engine-native document stays opaque so PPTist/web-ppt/another engine can be swapped
+ * Engine-native document stays opaque so web-ppt or a future engine can be swapped
  * without leaking their internal element schema into Classroom Runtime Foundation.
  */
 export interface PresentationAsset<TDocument extends PresentationDocument = PresentationDocument> {
@@ -48,6 +55,7 @@ export interface PresentationAsset<TDocument extends PresentationDocument = Pres
     title: string;
     engine: PresentationEngineDescriptor;
     document: TDocument;
+    source?: PresentationBinarySource;
     classroomBindings: ClassroomWidgetBinding[];
     createdAt: string;
     updatedAt: string;
@@ -105,13 +113,18 @@ export interface PresentationEditorSession<TDocument extends PresentationDocumen
 export interface PresentationPlayerSession {
     getState(): PresentationPlaybackState | null;
     applyAuthoritativeState(state: PresentationPlaybackState): Promise<void> | void;
+    goto?(sceneId: string, step?: number): Promise<void> | void;
+    next?(): Promise<void> | void;
+    previous?(): Promise<void> | void;
+    nextStep?(): Promise<void> | void;
+    finishCurrentSlideAnimations?(): Promise<void> | void;
     dispose(): Promise<void> | void;
 }
 export interface PresentationPlayerMountOptions {
     resolveWidget?: ClassroomWidgetResolver | null;
     context: ClassroomWidgetResolveContext;
 }
-/** Adapter boundary around PPTist/web-ppt/future engines. */
+/** Adapter boundary around web-ppt and future engine implementations. */
 export interface PresentationEngineAdapter<TDocument extends PresentationDocument = PresentationDocument, TEditorTarget = unknown, TPlayerTarget = unknown> {
     readonly descriptor: PresentationEngineDescriptor;
     readonly capabilities: PresentationEngineCapabilities;
@@ -233,4 +246,3 @@ export function updatePresentationState(current: PresentationPlaybackState, patc
         throw new Error('invalid-step');
     return next;
 }
-

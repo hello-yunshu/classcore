@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "requirementId": "presentation-runtime",
+  "status": "verified",
+  "engine": {
+    "engineId": "web-ppt",
+    "engineVersion": "0.5.0-beta.1",
+    "documentFormatVersion": "web-ppt-ooxml-v1"
+  },
+  "checks": [
+    {
+      "id": "node-core-create-edit-save-reopen",
+      "passed": true,
+      "evidence": "Adapter test and live verifier create a local template, add a shape, save real OOXML bytes, and reopen with the persisted idPrefix."
+    },
+    {
+      "id": "runtime-index-and-animation-batches",
+      "passed": true,
+      "evidence": "Runtime Index reports the stable sceneId and one click-triggered animation batch."
+    },
+    {
+      "id": "authoritative-playback-state",
+      "passed": true,
+      "evidence": "Headless PresentationState advances the saved deck from step 0 to step 1 deterministically."
+    },
+    {
+      "id": "browser-mount-dispose-reopen",
+      "passed": true,
+      "evidence": "Local browser session mounted the editor, reopened it after dispose-equivalent rebind, and showed the persisted two-page deck without console warnings/errors."
+    },
+    {
+      "id": "offline-local-template-and-assets",
+      "passed": true,
+      "evidence": "Production bundle and blank PPTX template are served from ClassCore local-tools assets; no CDN or remote editor runtime is used."
+    }
+  ],
+  "limitations": [
+    "Published Presentation HTTP API, SQLite playback control, Display reconnect, and Docker/LAN rehearsal remain separate D7 requirements."
+  ]
+}
