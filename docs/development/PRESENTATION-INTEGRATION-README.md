@@ -2,7 +2,7 @@
 
 ## 当前主线
 
-Authoring Studio 通过 `@classroom/presentation-webppt-adapter` 接入 web-ppt。第三方编辑器只负责网页课件的编辑、渲染、动画和 OOXML 保存；ClassCore 自己继续拥有 `PresentationAsset`、发布指纹、Runtime Index、`PresentationPlaybackState`、Projection 和课堂同步边界。
+Authoring Studio 通过 `@classroom/presentation-webppt-adapter` 接入 web-ppt。第三方编辑器只负责网页课件的编辑、渲染、动画和 OOXML 保存；ClassCore 自己继续拥有 `PresentationAsset`、Presentation Library 的 Project/Asset/Revision/Session Pin、Runtime Index、`PresentationPlaybackState`、Projection 和课堂同步边界。冻结模型详见 `docs/development/PRESENTATION-LIBRARY-AND-FREEZE-MODEL.md`。
 
 下一阶段只推进 web-ppt 的完整能力接入；工具栏、真实缩略图、三栏布局和响应式规则以 `PRESENTATION-WEBPPT-NEXT-PHASE.md` 为准。
 
@@ -37,7 +37,7 @@ Studio 使用 IndexedDB 保存二进制课件资源，localStorage 只保存小�
 
 - Node 核心 create/edit/save/reopen/index/playback：已自动验证。
 - 浏览器 mount/unmount/dispose、刷新恢复、全屏播放：需要真实浏览器证据。
-- Server Published Presentation、SQLite playback、Display reconnect、LAN/offline Docker：尚未闭环。
+- Reference Server 的 metadata-only AssetStore、Draft conflict、Recovery/Rehearsal/Published、Session Pin、Runtime Cache/GC 和 Presentation playback transport 已有模型级回归；认证账号 Server、Display reconnect、LAN/offline Docker：尚未闭环。
 - `scripts/d7-verifiers/presentation-runtime.mjs` 已从 placeholder 改为 fail-closed verifier；没有完整 evidence JSON 时，`d7:product` 必须继续失败。
 
 Scene Studio 保留为 fallback 和 contract harness，不再继续投入复杂 Office-like 编辑功能。

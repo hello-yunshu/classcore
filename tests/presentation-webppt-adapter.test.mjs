@@ -6,6 +6,8 @@ import path from 'node:path';
 import PptxGenJS from 'pptxgenjs';
 import { openEditor } from '@web-ppt/editor';
 import { WebPptPresentationEngineAdapter } from '../packages/presentation-webppt-adapter/src/index.ts';
+import { createWebPptAdapter } from '@web-ppt/editor';
+import { PresentationStudioController } from '../dist/apps/presentation-studio/src/controller.js';
 
 async function templateBytes() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'classcore-webppt-'));
@@ -58,4 +60,51 @@ test('web-ppt adapter fails closed on missing binary source', async () => {
   const result = await adapter.validate(asset);
   assert.equal(result.valid, false);
   assert.ok(result.errors.length > 0);
+});
+
+test('Studio controller uses correct MoveSlide anchors and one transaction per batch action', async () => {
+  const bytes = await templateBytes();
+  const adapter = new WebPptPresentationEngineAdapter(async () => bytes);
+  const asset = await adapter.createBlank('Controller gate');
+  const webPpt = createWebPptAdapter();
+  await webPpt.applyBinding({ source: asset.source.bytes, openOptions: { idPrefix: asset.document.idPrefix }, mode: 'edit' });
+  const controller = new PresentationStudioController(webPpt);
+  const editor = controller.editor;
+  const first = editor.doc.slideOrder[0];
+  const second = [...editor.exec({ type: 'AddSlide', layoutId: editor.doc.layoutOrder[0], at: { after: first } }).createdSlides][0];
+  const third = [...editor.exec({ type: 'AddSlide', layoutId: editor.doc.layoutOrder[0], at: { after: second } }).createdSlides][0];
+  controller.moveSlide(first, 1);
+  assert.deepEqual([...editor.doc.slideOrder], [second, first, third]);
+  controller.moveSlide(first, -1);
+  assert.deepEqual([...editor.doc.slideOrder], [first, second, third]);
+
+  const firstShape = controller.addShape('roundRect');
+  const secondShape = controller.addShape('roundRect');
+  assert.ok(firstShape && secondShape);
+  controller.select({ kind: 'elements', ids: [firstShape, secondShape], enteredGroup: null });
+  controller.removeSelected();
+  assert.equal(editor.doc.slides[first].children.includes(firstShape), false);
+  editor.undo();
+  assert.equal(editor.doc.slides[first].children.includes(firstShape), true);
+  assert.equal(editor.doc.slides[first].children.includes(secondShape), true);
+  controller.dispose();
+});
+
+test('Studio animation insertion appends and explicit empty steps clear the timeline', async () => {
+  const bytes = await templateBytes();
+  const adapter = new WebPptPresentationEngineAdapter(async () => bytes);
+  const asset = await adapter.createBlank('Animation gate');
+  const webPpt = createWebPptAdapter();
+  await webPpt.applyBinding({ source: asset.source.bytes, openOptions: { idPrefix: asset.document.idPrefix }, mode: 'edit' });
+  const controller = new PresentationStudioController(webPpt);
+  const slideId = controller.slideId;
+  const elementId = controller.addShape('roundRect');
+  assert.ok(slideId && elementId);
+  const step = { target: elementId, kind: 'entrance', effect: 'fade', trigger: 'click', delayMs: 0, durationMs: 300 };
+  controller.appendAnimations(slideId, [step]);
+  controller.appendAnimations(slideId, [step]);
+  assert.equal(webPpt.queryAnimations()?.value.length, 2);
+  controller.setAnimations(slideId, []);
+  assert.equal(webPpt.queryAnimations()?.value.length, 0);
+  controller.dispose();
 });

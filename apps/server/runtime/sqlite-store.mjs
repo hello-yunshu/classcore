@@ -149,10 +149,10 @@ export class SqliteClassroomStateStore {
     async loadPublicSubjectProjection(sessionId) {
         return this.get(sessionId, 'public-projection');
     }
-    async savePresentationPlayback(value) {
+    savePresentationPlayback(value) {
         this.put(value.sessionId, 'presentation-playback', 'singleton', value);
     }
-    async loadPresentationPlayback(sessionId) {
+    loadPresentationPlayback(sessionId) {
         return this.get(sessionId, 'presentation-playback');
     }
     // PresentationPlaybackStore-compatible aliases.
@@ -215,4 +215,3 @@ export class SqliteClassroomStateStore {
         };
     }
 }
-

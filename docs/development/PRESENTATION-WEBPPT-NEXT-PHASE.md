@@ -25,7 +25,7 @@
 
 Editor Foundation、Layout Shell 和第一批 Content & Style Tools 已完成。当前 Studio 已通过 controller façade 使用 web-ppt 的页面、对象、文字、图形、表格、图片、背景、变换、层级、对齐、动画、预览和 OOXML 保存能力；页带缩略图由独立 web-ppt Viewer 真实渲染。草稿与本地 Published AssetStore 使用 IndexedDB，发布时执行 validate、Runtime Index 和不可变 fingerprint。
 
-仍未完成的课堂接缝是 Server Published Presentation/Asset API、Teacher lease、SQLite PlaybackState recovery、Display-only player reconnect 和真实 LAN/Docker/XP21A 演练。这些能力不能由本地 Studio 发布记录替代。
+Reference Server 已补齐 metadata-only AssetStore、Draft expectedRevision conflict、Recovery/Rehearsal/Published/Restore、Session Pin、bounded Runtime Cache/GC，以及 pinned revision 的 Presentation control/sync/restart vertical slice。仍未完成的产品接缝是认证账号 owner authorization、Studio Library/Picker/云端 autosave、正式 Teacher lease、Display-only browser player reconnect 和真实 LAN/Docker/XP21A 演练；reference 实现不能替代这些 Gate。
 
 完整接入的含义是“把 web-ppt 已有的编辑能力接入产品入口”，不是在 ClassCore 里重新实现编辑器内核。
 
@@ -115,7 +115,7 @@ Editor Foundation、Layout Shell 和第一批 Content & Style Tools 已完成。
 
 ### D. Publish & Classroom
 
-补 Published Presentation/AssetStore、校验/冻结/fingerprint、Teacher lease、SQLite playback recovery、Display-only player 和 reconnect。Gate：Teacher 控制是唯一权威来源，Display 不读取编辑器或私有身份。
+补认证账号 Published Presentation/AssetStore、校验/冻结/fingerprint、Teacher lease、SQLite playback recovery、Display-only player 和 reconnect。Reference Server 已提供模型级路径和回归；正式 Gate 仍要求 Teacher 控制是唯一权威来源，Display 不读取编辑器或私有身份。
 
 ### E. Failure and Regression Gate
 
@@ -123,10 +123,10 @@ Editor Foundation、Layout Shell 和第一批 Content & Style Tools 已完成。
 
 ## 6. 下一步具体任务
 
-1. 先将当前 Studio toolbar 从直接 `editor.exec(...)` 收拢到 controller façade；
-2. 完成三栏布局和真实缩略图，再接右侧 `对象/页面/动画` inspector；
-3. 接文字、图片、表格和基础样式工具，优先覆盖真实公开课制作需求；
-4. 把保存/发布从 local-only draft 推进到 Published Presentation + AssetStore；
-5. 再接 Teacher/Display 权威播放与恢复，最后做 Docker/LAN/XP21A 证据。
+1. 将 Library/Project/Picker/版本历史从 local-only IndexedDB 接到认证账号 API，并保留 offline pending 状态；
+2. 将 Draft autosave、Recovery、Rehearsal 和 Published UI 接入教师可理解的“已保存/等待同步/版本历史”语义；
+3. 把 reference 的 pinned revision playback 接到正式 Teacher lease、Display player 和 public projection；
+4. 补 selected-artifact overlay、Playwright browser refresh/reconnect 和 bundle/offline evidence；
+5. 最后做 Docker/LAN/XP21A 证据，未运行的 Gate 继续标记未验证。
 
 每个涉及 Presentation/Runtime/Storage/Realtime 的小阶段运行 `npm run check`；布局阶段额外进行三尺寸真实浏览器截图和键盘/IME验收。

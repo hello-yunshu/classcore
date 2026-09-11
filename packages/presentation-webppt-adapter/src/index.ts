@@ -175,6 +175,50 @@ export class WebPptPresentationEngineAdapter implements PresentationEngineAdapte
         }
     }
 
+    /**
+     * Render a strip of read-only thumbnails from one parsed presentation.
+     * A Studio refresh may contain dozens of slides; mounting one full parser
+     * per slide needlessly multiplies OOXML parse cost and leaks lifecycle
+     * pressure into the editor session.
+     */
+    async mountThumbnailViews(targets: ReadonlyMap<string, HTMLElement>, asset: WebPptPresentationAsset): Promise<Map<string, PresentationPlayerSession>> {
+        const metadata = assetDocument(asset);
+        const editorSession = await openEditor(cloneBytes(sourceOf(asset)), { idPrefix: metadata.idPrefix });
+        const sceneIds = [...editorSession.editor.doc.slideOrder];
+        editorSession.dispose();
+        const presentation = await parse(cloneBytes(sourceOf(asset)), { lazy: false });
+        if (targets.size === 0) {
+            presentation.dispose?.();
+            return new Map();
+        }
+        let disposedCount = 0;
+        const sessions = new Map<string, PresentationPlayerSession>();
+        for (const [sceneId, target] of targets) {
+            const index = sceneIds.indexOf(sceneId);
+            if (index < 0) continue;
+            const viewer = new Viewer(target, presentation, { animate: false, textMode: 'svg' });
+            viewer.goTo(index, 'forward');
+            let disposed = false;
+            sessions.set(sceneId, {
+                getState: () => ({ sessionId: 'thumbnail', deckId: asset.deckId, sceneId, step: 0, playState: 'idle', revision: 0 }),
+                applyAuthoritativeState: state => {
+                    if (state.deckId !== asset.deckId) throw new Error('presentation-deck-mismatch');
+                    const nextIndex = sceneIds.indexOf(state.sceneId);
+                    if (nextIndex < 0) throw new Error('presentation-scene-not-found');
+                    viewer.goTo(nextIndex, 'forward');
+                },
+                dispose: () => {
+                    if (disposed) return;
+                    disposed = true;
+                    viewer.destroy();
+                    disposedCount += 1;
+                    if (disposedCount === sessions.size) presentation.dispose?.();
+                },
+            });
+        }
+        return sessions;
+    }
+
     async mountPlayer(target: HTMLElement, asset: WebPptPresentationAsset, _options: PresentationPlayerMountOptions): Promise<PresentationPlayerSession> {
         const metadata = assetDocument(asset);
         const editorSession = await openEditor(cloneBytes(sourceOf(asset)), { idPrefix: metadata.idPrefix });

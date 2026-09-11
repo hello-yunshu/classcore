@@ -13,7 +13,7 @@ web-ppt 通过了当前可执行的核心 Integration Gate，现已确定为 Cla
 | Studio 定位 | 已从 Scene Studio Alpha 转为 web-ppt authoring host；旧纯模型函数保留作 contract tests，旧 renderer 不再作为主编辑器。 |
 | Core 边界 | 未引入 web-ppt `EditDoc` 到 Foundation/Runtime。第三方类型只停留在 adapter/Studio bundle。 |
 | Build system | 原手写 import map 无法承载第三方 ESM graph；改为 esbuild bundle Presentation Studio，并构建本地 blank template。 |
-| Server/Storage | 已有 SQLite playback store 和 RecoveryCoordinator，但尚无 Published Presentation 资源/发布 HTTP API；这是下一条 vertical slice。 |
+| Server/Storage | Reference Server 已有 metadata-only content-addressed AssetStore、Draft conflict、有限 Recovery、Rehearsal/Published/Restore、Session Pin、Runtime Cache/GC 和最小 HTTP API；认证账号 owner authorization 与正式服务解耦仍未完成。 |
 | 权威状态 | `StageState` 只表达 `contentType`/deck 引用；`PresentationPlaybackState` 负责 scene/step/playState/revision。当前没有新增第二份 scene/step 状态。 |
 | D7 verifier | 已移除 placeholder，改为 fail-closed：它会实际运行 create/edit/save/reopen/index/headless playback，并要求浏览器/offline evidence；其它 D7 requirement 仍会继续阻断 `d7:product`。 |
 
@@ -30,8 +30,8 @@ web-ppt 通过了当前可执行的核心 Integration Gate，现已确定为 Cla
 
 ### 必须修改
 
-1. 增加 Published Presentation draft→validate→publish→freeze→fingerprint 流程及 server asset API。
-2. 将 PresentationPlaybackState 控制接入 teacher lease、SQLite recovery 和 Display player。
+1. 将 reference 的 Published Presentation draft→validate→publish→freeze→fingerprint 迁移到认证账号服务，并接入 Studio Library/Picker。
+2. 将 PresentationPlaybackState 控制接入正式 teacher lease、SQLite recovery 和 Display player。
 3. 把 classroom widget registry/resolver 接入实际的 `selected-artifact` overlay，并确保 public projection fail closed。
 4. 增加真实 browser refresh、server restart、Display reconnect、arm64/amd64 Docker 与 LAN evidence。
 
@@ -54,7 +54,7 @@ web-ppt 通过了当前可执行的核心 Integration Gate，现已确定为 Cla
 ## 下一阶段顺序
 
 ```text
-PublishedPresentation + AssetStore
+认证账号 Presentation Library + AssetStore
   -> teacher control + lease + SQLite playback
   -> Display-only adapter player + reconnect
   -> selected-artifact public/teacher resolver

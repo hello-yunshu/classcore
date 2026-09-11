@@ -72,7 +72,13 @@ export class PresentationStudioController {
         const index = order.indexOf(slideId);
         const target = index + direction;
         if (index < 0 || target < 0 || target >= order.length) return;
-        this.execute({ type: 'MoveSlide', id: slideId, at: { after: target === 0 ? null : order[target - 1] } });
+        // Moving up targets the item before the destination; moving down must
+        // land after the item that currently occupies the destination. Using
+        // the same anchor for both directions makes A-down and B-up no-ops.
+        const after = direction < 0
+            ? (target === 0 ? null : order[target - 1])
+            : order[target];
+        this.execute({ type: 'MoveSlide', id: slideId, at: { after } });
     }
 
     removeSlide(slideId: SlideId): void {
@@ -109,7 +115,8 @@ export class PresentationStudioController {
     }
 
     removeSelected(): void {
-        for (const id of this.selectedIds()) this.execute({ type: 'RemoveElement', id });
+        const commands = this.selectedIds().map(id => ({ type: 'RemoveElement', id } as const));
+        if (commands.length) this.execute(...commands);
     }
 
     setTransform(id: ElementId, patch: { x?: number; y?: number; w?: number; h?: number; rot?: number }): void {
@@ -123,6 +130,12 @@ export class PresentationStudioController {
     setStroke(id: ElementId, stroke: { type: 'none' } | { color: string; width: number; dash: null; cap: 'butt'; join: 'miter'; compound: 'sng' } | null): void { this.execute({ type: 'SetStroke', id, stroke }); }
     setSlideBackground(id: SlideId, fill: VectorFill | null): void { this.execute({ type: 'SetBackground', id, fill }); }
     setAnimations(slideId: SlideId, steps: readonly EditAnimationStep[] | null): void { this.execute({ type: 'SetAnimations', slideId, steps }); }
+    appendAnimations(slideId: SlideId, steps: readonly EditAnimationStep[]): void {
+        if (!steps.length) return;
+        const current = this.adapter.queryAnimations();
+        if (current?.sourceReadonly) throw new Error('web-ppt-animation-source-readonly');
+        this.execute({ type: 'SetAnimations', slideId, steps: [...(current?.value ?? []), ...steps] });
+    }
     setNotes(id: SlideId, text: string): void { this.execute({ type: 'SetNotes', id, text }); }
     editText(id: ElementId, text: string): void {
         const record = this.requireEditor().doc.elements[id];
@@ -150,10 +163,12 @@ export class PresentationStudioController {
         const totalWidth = records.reduce((sum, item) => sum + item.element.w, 0);
         const gap = (last - first - totalWidth) / (records.length - 1);
         let x = first;
-        for (const item of records) {
-            this.setTransform(item.id, { x });
+        const commands = records.map(item => {
+            const command = { type: 'SetXfrm', id: item.id, x } as const;
             x += item.element.w + gap;
-        }
+            return command;
+        });
+        this.execute(...commands);
     }
     setRunProps(id: ElementId, range: { from: TextPosition; to: TextPosition }, props: RunPropertyOverrides): void { this.execute({ type: 'SetRunProps', id, range, props }); }
 

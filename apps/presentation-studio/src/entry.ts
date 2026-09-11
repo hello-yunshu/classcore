@@ -203,6 +203,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  session: Awaited<ReturnType<typeof engine.mountPlayer>> } | null = null;
  let published: PublishedPresentationRecord | null = null;
  let busy = false;
+ let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+ let autosaveSuspended = true;
  let inspectorTab: 'object' | 'page' | 'animation' = 'object';
  let thumbnailGeneration = 0;
     const thumbnailSessions = new Map<string, Awaited<ReturnType<typeof engine.mountPlayer>>>();
@@ -267,14 +269,21 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  if (!asset) return;
  const hosts = [...sceneList.querySelectorAll<HTMLElement>('[data-thumbnail-host]')];
  const slideIds = [...(currentSession()?.editor.doc.slideOrder ?? [])];
- for (const host of hosts) { if (generation !== thumbnailGeneration) return;
- const slideId = host.dataset.thumbnailHost;
- if (!slideId || !slideIds.includes(slideId)) continue;
- try { const session = await engine.mountPlayer(host, asset, { context: { sessionId: 'thumbnail', surface: 'teacher-runtime' } });
- session.goto?.(slideId, 0);
- thumbnailSessions.set(slideId, session);
- } catch { host.textContent = '缩略图不可用';
- } } }
+ const targets = new Map<string, HTMLElement>();
+ for (const host of hosts) {
+  const slideId = host.dataset.thumbnailHost;
+  if (slideId && slideIds.includes(slideId)) targets.set(slideId, host);
+ }
+ try {
+  const sessions = await engine.mountThumbnailViews(targets, asset);
+  if (generation !== thumbnailGeneration) {
+   for (const session of sessions.values()) session.dispose();
+   return;
+  }
+  for (const [slideId, session] of sessions) thumbnailSessions.set(slideId, session);
+ } catch {
+  for (const host of hosts) host.textContent = '缩略图不可用';
+ } }
     function renderScenePanel(): void { const editor = currentSession()?.editor;
  const slides = editor?.doc.slideOrder ?? [];
  const active = currentSlide();
@@ -461,7 +470,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  row.textContent = `${index + 1}. ${step.effect ?? step.kind} · ${step.trigger}`;
  list.append(row);
  });
- inspector.append(list, button('给选中对象加入淡入', wrapAction(() => addAnimation()), 'primary-button'), button('清除本页动画', wrapAction(() => { controller.setAnimations(slideId, null);
+ inspector.append(list, button('给选中对象加入淡入', wrapAction(() => addAnimation()), 'primary-button'), button('清除本页动画', wrapAction(() => { controller.setAnimations(slideId, []);
  renderAll();
  }), 'danger-button'));
  }
@@ -469,7 +478,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const id = selectedIds()[0];
  if (!slideId || !id) { setStatus('先选择一个对象再添加动画', true);
  return;
- } controller.setAnimations(slideId, [{ target: id, kind: 'entrance', effect: 'fade', trigger: 'click', delayMs: 0, durationMs: 300 }]);
+ } controller.appendAnimations(slideId, [{ target: id, kind: 'entrance', effect: 'fade', trigger: 'click', delayMs: 0, durationMs: 300 }]);
  renderAll();
  }
     function createObjectList(slideId: SlideId): HTMLElement { const list = document.createElement('div');
@@ -604,7 +613,9 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  canvas.className = 'preview-canvas web-ppt-preview';
  overlay.append(canvas);
  app.append(overlay);
- const session = await engine.mountPlayer(canvas, asset, { context: { sessionId: 'local-preview', surface: 'teacher-runtime' } });
+ const previewBytes = await controller.save();
+ const previewAsset = await createWebPptAssetFromBytes(asset.title, previewBytes, asset.document.idPrefix);
+ const session = await engine.mountPlayer(canvas, previewAsset, { context: { sessionId: 'local-preview', surface: 'teacher-runtime' } });
  preview = { root: overlay, session };
  const controls = document.createElement('div');
  controls.className = 'preview-controls';
@@ -617,7 +628,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  }
     const fileInput = document.createElement('input');
  fileInput.type = 'file';
- fileInput.accept = '.ppt,.pptx';
+ fileInput.accept = '.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation';
  fileInput.hidden = true;
  fileInput.addEventListener('change', () => { const file = fileInput.files?.[0];
  if (file) void openFile(file);
@@ -648,10 +659,17 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  });
  headerActions.append(button('新建', wrapAction(() => newDeck()), 'small-button'), button('打开 PPTX', wrapAction(() => fileInput.click()), 'small-button'), button('预览', wrapAction(() => togglePreview()), 'preview-button'), fileInput, imageInput, backgroundInput);
  titleInput.addEventListener('change', () => { if (asset) asset = { ...asset, title: titleInput.value.trim() || '未命名公开课' };
+ scheduleAutosave();
  renderAll(false);
  });
- webPpt.subscribe(() => renderAll(false));
- controller.subscribe(() => renderAll(false));
+ function scheduleAutosave(): void {
+  if (autosaveSuspended || !asset || busy) return;
+  if (autosaveTimer) clearTimeout(autosaveTimer);
+  setStatus('正在保存…');
+  autosaveTimer = setTimeout(() => { autosaveTimer = null; void persist(); }, 1500);
+ }
+ webPpt.subscribe(() => { renderAll(false); scheduleAutosave(); });
+ controller.subscribe(() => { renderAll(false); scheduleAutosave(); });
  window.addEventListener('keydown', event => { const modifier = event.metaKey || event.ctrlKey;
  if (modifier && event.key.toLowerCase() === 's') { event.preventDefault();
  void persist();
@@ -669,6 +687,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  renderAll();
  void (async () => { const draft = await loadWebPptDraft();
  await openAsset(draft ?? await engine.createBlank('未命名公开课'));
+ autosaveSuspended = false;
  })();
 }
 function isTypingTarget(target: EventTarget | null): boolean { const element = target as HTMLElement | null;

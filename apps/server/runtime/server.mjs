@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SqliteClassroomStateStore } from './sqlite-store.mjs';
+import { PresentationLibraryError, PresentationLibraryStore } from './presentation-library.mjs';
 import { acceptWebSocketUpgrade } from './websocket.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../..');
@@ -41,6 +42,7 @@ if (runtimeMode !== 'reference-transport' || authentication || productReady) {
     throw new Error('unsupported-runtime-mode: authenticated-classroom-server is not implemented; reference-transport requires CLASSROOM_AUTHENTICATION=false and CLASSROOM_PRODUCT_READY=false');
 }
 const store = new SqliteClassroomStateStore(path.join(dataDir, 'classroom.sqlite'));
+const presentationLibrary = new PresentationLibraryStore(dataDir);
 const clients = new Set();
 const stats = {
     connections: 0,
@@ -51,7 +53,35 @@ const stats = {
     messages: 0,
     stageBroadcasts: 0,
     stageDrops: 0,
+    presentationBroadcasts: 0,
 };
+function presentationStateForSession(sessionId) {
+    const pin = presentationLibrary.getSessionPin(sessionId);
+    if (!pin) throw new Error('presentation-session-pin-required');
+    const revision = presentationLibrary.getRevision(pin.revisionId);
+    if (!revision) throw new Error('presentation-revision-not-found');
+    const current = store.loadPresentationPlayback(sessionId);
+    if (current && (current.presentationRevisionId !== revision.revisionId || current.assetId !== pin.assetId))
+        throw new Error('presentation-session-revision-mismatch');
+    if (current) return { pin, revision, state: current };
+    const first = revision.runtimeIndex.scenes[0];
+    if (!first) throw new Error('presentation-runtime-index-empty');
+    const state = { sessionId, presentationRevisionId: revision.revisionId, assetId: pin.assetId, deckId: revision.runtimeIndex.deckId, sceneId: first.sceneId, step: 0, playState: 'idle', revision: 0 };
+    store.savePresentationPlayback(state);
+    return { pin, revision, state };
+}
+function applyPresentationTransportControl(sessionId, message) {
+    const { revision, state: current } = presentationStateForSession(sessionId);
+    if (Number(message.expectedRevision) !== current.revision) throw new Error('stale-revision');
+    const scene = revision.runtimeIndex.scenes.find(item => item.sceneId === (message.action === 'goto' ? message.sceneId : current.sceneId));
+    if (!scene) throw new Error('presentation-scene-not-found');
+    const step = message.action === 'goto' ? Number(message.step ?? 0) : message.action === 'set-step' ? Number(message.step) : current.step;
+    if (!Number.isInteger(step) || step < 0 || step > scene.maxStep) throw new Error('presentation-step-out-of-range');
+    const playState = message.action === 'play' ? 'playing' : message.action === 'pause' ? 'paused' : current.playState;
+    const next = { ...current, sceneId: message.action === 'goto' ? message.sceneId : current.sceneId, step, playState, revision: current.revision + 1 };
+    store.savePresentationPlayback(next);
+    return next;
+}
 function sendJson(res, status, value) {
     const body = JSON.stringify(value);
     res.writeHead(status, {
@@ -59,6 +89,102 @@ function sendJson(res, status, value) {
         'content-length': Buffer.byteLength(body),
     });
     res.end(body);
+}
+function requestOwner(req) {
+    // Reference transport has no authentication. Keep the library API
+    // explicitly owner-scoped so an authenticated host can replace this
+    // adapter without changing the storage boundary.
+    return String(req.headers['x-classcore-user-id'] ?? 'demo-teacher').trim() || 'demo-teacher';
+}
+function readRequestBody(req, maxBytes = 128 * 1024 * 1024) {
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+        let size = 0;
+        req.on('data', chunk => {
+            size += chunk.length;
+            if (size > maxBytes) {
+                reject(new PresentationLibraryError('request-body-too-large'));
+                req.destroy();
+                return;
+            }
+            chunks.push(chunk);
+        });
+        req.on('end', () => resolve(Buffer.concat(chunks)));
+        req.on('error', reject);
+    });
+}
+function apiError(res, error) {
+    if (error instanceof PresentationLibraryError) {
+        const status = error.code === 'draft-conflict' ? 409 : error.code.endsWith('not-found') || error.code === 'asset-not-found' ? 404 : error.code === 'owner-required' ? 401 : 400;
+        return sendJson(res, status, { error: error.code, details: error.details ?? null });
+    }
+    console.error('PRESENTATION_API_ERROR', error);
+    return sendJson(res, 500, { error: 'presentation-api-failed' });
+}
+async function handlePresentationApi(req, res, url) {
+    const ownerUserId = requestOwner(req);
+    const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+    try {
+        if (parts[1] === 'sessions' && parts.length >= 3) {
+            const sessionId = parts[2];
+            if (req.method === 'GET' && parts[3] === 'presentation-pin') return sendJson(res, 200, { pin: presentationLibrary.getSessionPin(sessionId) });
+            if (req.method === 'PUT' && parts[3] === 'presentation-pin') {
+                const body = JSON.parse((await readRequestBody(req, 64 * 1024)).toString('utf8') || '{}');
+                return sendJson(res, 200, { pin: presentationLibrary.pinSession(sessionId, ownerUserId, body) });
+            }
+            if (req.method === 'POST' && parts[3] === 'presentation-prepare') {
+                const body = JSON.parse((await readRequestBody(req, 64 * 1024)).toString('utf8') || '{}');
+                return sendJson(res, 200, { prepared: presentationLibrary.prepareRuntimeCache(sessionId, ownerUserId, body) });
+            }
+            return sendJson(res, 404, { error: 'not-found' });
+        }
+        if (req.method === 'GET' && parts.length === 2 && parts[1] === 'presentations')
+            return sendJson(res, 200, { presentations: presentationLibrary.listPresentations(ownerUserId) });
+        if (req.method === 'POST' && parts.length === 2 && parts[1] === 'presentations') {
+            const body = JSON.parse((await readRequestBody(req, 2 * 1024 * 1024)).toString('utf8') || '{}');
+            const bytes = body.bytesBase64 ? Buffer.from(body.bytesBase64, 'base64') : null;
+            if (!bytes?.length) throw new PresentationLibraryError('presentation-bytes-required');
+            return sendJson(res, 201, { presentation: presentationLibrary.createPresentation({ ownerUserId, title: body.title, bytes, mimeType: body.mimeType, document: body.document }) });
+        }
+        if (parts[1] !== 'presentations' || parts.length < 3) return sendJson(res, 404, { error: 'not-found' });
+        const presentationId = parts[2];
+        if (req.method === 'GET' && parts.length === 3) return sendJson(res, 200, { presentation: presentationLibrary.getPresentation(presentationId, ownerUserId) });
+        if (req.method === 'PATCH' && parts.length === 3) {
+            const body = JSON.parse((await readRequestBody(req, 64 * 1024)).toString('utf8') || '{}');
+            return sendJson(res, 200, { presentation: presentationLibrary.renamePresentation(presentationId, ownerUserId, body.title) });
+        }
+        if (req.method === 'DELETE' && parts.length === 3) return sendJson(res, 200, { presentation: presentationLibrary.softDeletePresentation(presentationId, ownerUserId) });
+        if (req.method === 'GET' && parts[3] === 'draft') {
+            const draft = presentationLibrary.loadDraft(presentationId, ownerUserId);
+            if (url.searchParams.get('download') === '1') {
+                res.writeHead(200, { 'content-type': draft.asset.mimeType, 'content-length': draft.bytes.length, 'etag': String(draft.project.currentDraftRevision), 'x-content-sha256': draft.asset.sha256, 'cache-control': 'no-store' });
+                return res.end(draft.bytes);
+            }
+            return sendJson(res, 200, { project: draft.project, asset: draft.asset });
+        }
+        if (req.method === 'PUT' && parts[3] === 'draft') {
+            const document = req.headers['x-presentation-document'] ? JSON.parse(String(req.headers['x-presentation-document'])) : undefined;
+            const bytes = await readRequestBody(req, presentationLibrary.policy.maxPresentationFileBytes);
+            const expectedRevision = req.headers['if-match'] ? Number(req.headers['if-match']) : undefined;
+            return sendJson(res, 200, { presentation: presentationLibrary.saveDraft(presentationId, ownerUserId, { bytes, mimeType: String(req.headers['content-type'] ?? 'application/octet-stream'), document, expectedRevision }) });
+        }
+        if (req.method === 'GET' && parts[3] === 'revisions') return sendJson(res, 200, { revisions: presentationLibrary.listRevisions(presentationId, ownerUserId, { kind: url.searchParams.get('kind') }) });
+        if (req.method === 'POST' && parts[3] === 'rehearsals') {
+            const body = JSON.parse((await readRequestBody(req, 2 * 1024 * 1024)).toString('utf8') || '{}');
+            return sendJson(res, 201, { revision: presentationLibrary.createRevision(presentationId, ownerUserId, { ...body, kind: 'rehearsal' }) });
+        }
+        if (req.method === 'POST' && parts[3] === 'published') {
+            const body = JSON.parse((await readRequestBody(req, 2 * 1024 * 1024)).toString('utf8') || '{}');
+            return sendJson(res, 201, { revision: presentationLibrary.createRevision(presentationId, ownerUserId, { ...body, kind: 'published' }) });
+        }
+        if (req.method === 'POST' && parts[3] === 'revisions' && parts[5] === 'restore') {
+            const expectedRevision = req.headers['if-match'] ? Number(req.headers['if-match']) : undefined;
+            return sendJson(res, 200, { presentation: presentationLibrary.restoreRevision(presentationId, ownerUserId, parts[4], expectedRevision) });
+        }
+        return sendJson(res, 404, { error: 'not-found' });
+    } catch (error) {
+        return apiError(res, error);
+    }
 }
 function getContentType(file) {
     if (file.endsWith('.html'))
@@ -116,6 +242,7 @@ const classroomSurfaceRoutes = new Set(['student', 'teacher', 'display', 'observ
 const localToolSurfaceRoutes = new Set(['backstage', 'authoring']);
 const classroomServer = http.createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://classroom.local');
+    if (url.pathname.startsWith('/api/')) return void handlePresentationApi(req, res, url);
     if (url.pathname === '/healthz') {
         return sendJson(res, 200, {
             ok: true,
@@ -167,6 +294,7 @@ const classroomServer = http.createServer((req, res) => {
 });
 const localToolsServer = http.createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://backstage.local');
+    if (url.pathname.startsWith('/api/')) return void handlePresentationApi(req, res, url);
     if (url.pathname === '/healthz') {
         return sendJson(res, 200, { ok: true, service: 'classroom-local-tools', revision: 'R3.10' });
     }
@@ -231,6 +359,10 @@ classroomServer.on('upgrade', (req, socket, head) => {
                 stats.display++;
             helloAccepted = true;
             ws.send({ type: 'hello.ack', ok: true, clientId });
+            if (role === 'display' || role === 'observer') {
+                const playback = store.loadPresentationPlayback(sessionId);
+                if (playback) ws.send({ type: 'presentation.sync', state: playback, reason: 'reconnect' });
+            }
             return;
         }
         if (!helloAccepted) {
@@ -297,6 +429,38 @@ classroomServer.on('upgrade', (req, socket, head) => {
             }
             return;
         }
+        if (message.type === 'presentation.control') {
+            if (meta.role !== 'teacher') {
+                ws.send({ type: 'presentation.control.ack', ok: false, reason: 'teacher-role-required' });
+                return;
+            }
+            const controlId = String(message.controlId ?? '');
+            if (!controlId) {
+                ws.send({ type: 'presentation.control.ack', ok: false, reason: 'control-id-required' });
+                return;
+            }
+            try {
+                const accepted = store.acceptTransportControl(meta.sessionId, controlId, message);
+                const state = accepted.inserted ? applyPresentationTransportControl(meta.sessionId, message) : store.loadPresentationPlayback(meta.sessionId);
+                ws.send({ type: 'presentation.control.ack', ok: true, controlId, duplicate: !accepted.inserted, serverSeq: accepted.serverSeq, state });
+                if (!accepted.inserted) return;
+                for (const item of clients) {
+                    const sameSession = item.meta.sessionId === meta.sessionId;
+                    const publicViewer = item.meta.role === 'display' || (item.meta.role === 'observer' && item.meta.subscribed);
+                    if (!sameSession || !publicViewer) continue;
+                    if (item.ws.bufferedBytes() > observerMaxBufferedBytes) {
+                        stats.stageDrops++;
+                        continue;
+                    }
+                    item.ws.send({ type: 'presentation.sync', state, controlId });
+                    stats.presentationBroadcasts++;
+                }
+            } catch (error) {
+                const reason = error instanceof Error ? error.message : String(error);
+                ws.send({ type: 'presentation.control.ack', ok: false, controlId, reason });
+            }
+            return;
+        }
         if (message.type === 'observer.subscribe') {
             if (meta.role !== 'observer') {
                 ws.send({ type: 'observer.subscribe.ack', ok: false, reason: 'observer-role-required' });
@@ -348,6 +512,7 @@ function shutdown() {
         remaining--;
         if (remaining === 0) {
             store.close();
+            presentationLibrary.close();
             process.exit(0);
         }
     };

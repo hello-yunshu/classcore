@@ -23,3 +23,5 @@
 `Engine-native document -> PresentationAsset -> Engine Adapter -> PresentationPlaybackState`
 
 Classroom Runtime只关心Stage和权威播放状态，Student bundle永远不加载Presentation编辑器。
+
+Presentation 资源的长期归属采用独立的 Project/Asset/Revision/Session Pin 模型：Draft 可变且受乐观并发保护，Rehearsal/Published 不可变并只引用 content-addressed Asset。SQLite 只存 metadata，课堂 Prepare 阶段把 exact pinned revision 放入有界 Runtime Cache；实现与当前未验证边界见 `docs/development/PRESENTATION-LIBRARY-AND-FREEZE-MODEL.md`。

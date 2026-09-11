@@ -60,10 +60,74 @@ export interface PresentationAsset<TDocument extends PresentationDocument = Pres
     createdAt: string;
     updatedAt: string;
 }
+
+/**
+ * Teacher-facing library metadata. The binary is deliberately not embedded in
+ * this object; projects point at content-addressed assets owned by AssetStore.
+ */
+export interface PresentationDocumentMetadata {
+    format: string;
+    pageCount?: number;
+    thumbnailAssetId?: string | null;
+    [key: string]: JsonValue | undefined;
+}
+export interface PresentationProject {
+    presentationId: string;
+    ownerUserId: string;
+    title: string;
+    currentDraftAssetId: string;
+    currentDraftRevision: number;
+    currentDraftDocument: PresentationDocumentMetadata;
+    createdAt: string;
+    updatedAt: string;
+    deletedAt?: string | null;
+}
+export interface PresentationBinaryAsset {
+    assetId: string;
+    sha256: string;
+    mimeType: string;
+    size: number;
+    storagePath: string;
+    createdAt: string;
+}
+export type PresentationRevisionKind = 'rehearsal' | 'published';
+export interface PresentationRevision {
+    revisionId: string;
+    presentationId: string;
+    kind: PresentationRevisionKind;
+    engine: PresentationEngineDescriptor;
+    document: PresentationDocumentMetadata;
+    assetId: string;
+    fingerprint: string;
+    runtimeIndex: PresentationRuntimeIndex;
+    classroomBindings: ClassroomWidgetBinding[];
+    createdAt: string;
+    expiresAt?: string | null;
+    retained?: boolean;
+}
+export interface PresentationSessionPin {
+    sessionId: string;
+    presentationId: string;
+    revisionId: string;
+    assetId: string;
+    kind: PresentationRevisionKind;
+    pinnedAt: string;
+}
+export interface PresentationQuotaPolicy {
+    maxPresentationFileBytes: number;
+    maxAccountPresentationBytes: number;
+    maxRuntimePresentationCacheBytes: number;
+    rehearsalRetentionDays: number;
+    recoveryCheckpointCount: number;
+    gcGracePeriodMs: number;
+}
 /** Canonical classroom synchronization state; independent from editor engine internals. */
 export interface PresentationPlaybackState {
     sessionId: string;
     deckId: string;
+    /** Exact immutable classroom revision; deckId remains an engine/runtime alias during migration. */
+    presentationRevisionId?: string;
+    assetId?: string;
     sceneId: string;
     step: number;
     playState: PresentationPlayState;
