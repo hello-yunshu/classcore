@@ -92,8 +92,105 @@ export interface ClassroomStorage extends RuntimeRecoveryStorage, StudentClaimPe
     saveSnapshot(snapshot: AppletStateSnapshot): Promise<void>;
     getLatestSnapshot(sessionId: string, activityId: string, appletInstanceId: string, scopeKey: string): Promise<AppletStateSnapshot | null>;
     saveArtifact(artifact: LearningArtifact): Promise<void>;
+    getArtifact(artifactId: string, revision?: number): Promise<LearningArtifact | null>;
     saveSubmission(submission: Submission): Promise<void>;
+    getSubmission(submissionId: string): Promise<Submission | null>;
     saveTransfer(transfer: ArtifactTransfer): Promise<void>;
+    getTransfer(transferId: string): Promise<ArtifactTransfer | null>;
+    listEvents(sessionId: string): Promise<AcceptedDomainEvent[]>;
+}
+
+function canonical(value: unknown): string {
+    if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+    if (value && typeof value === 'object') return `{${Object.keys(value as Record<string, unknown>).sort().map(key => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(',')}}`;
+    return JSON.stringify(value);
+}
+
+/** Complete deterministic in-memory adapter used by unit/integration/rehearsal paths. */
+export class InMemoryClassroomStorage extends InMemoryRuntimeRecoveryStorage implements ClassroomStorage, StudentIdentityPersistenceStore, PublicSubjectProjectionPersistenceStore {
+    #events = new Map<string, Map<string, AcceptedDomainEvent>>();
+    #eventKeys = new Map<string, string>();
+    #snapshots = new Map<string, AppletStateSnapshot>();
+    #artifacts = new Map<string, Map<number, LearningArtifact>>();
+    #submissions = new Map<string, Submission>();
+    #transfers = new Map<string, ArtifactTransfer>();
+    #identities = new Map<string, Map<string, StudentIdentityPersistenceRecord>>();
+    #publicSubjects = new Map<string, PublicSubjectProjectionRecord>();
+    constructor(private readonly idFactory: () => string = () => globalThis.crypto.randomUUID(), private readonly clock: () => string = () => new Date().toISOString()) { super(); }
+
+    async acceptClientEventAtomically<T extends Record<string, unknown> = Record<string, unknown>>(idempotencyKey: string, draft: AcceptedDomainEventDraft<T>): Promise<{ inserted: boolean; event: AcceptedDomainEvent<T> }> {
+        const existingKey = this.#eventKeys.get(idempotencyKey);
+        if (existingKey) {
+            const existing = this.#events.get(draft.sessionId)?.get(existingKey);
+            if (!existing) throw new Error('event-index-corrupt');
+            if (canonical(existing) !== canonical({ ...draft, eventId: existing.eventId, serverSeq: existing.serverSeq, serverReceivedAt: existing.serverReceivedAt })) throw new Error('event-idempotency-payload-mismatch');
+            return { inserted: false, event: structuredClone(existing) as AcceptedDomainEvent<T> };
+        }
+        const sessionEvents = this.#events.get(draft.sessionId) ?? new Map<string, AcceptedDomainEvent>();
+        this.#events.set(draft.sessionId, sessionEvents);
+        const event: AcceptedDomainEvent<T> = { ...draft, eventId: `event:${this.idFactory()}`, serverSeq: sessionEvents.size + 1, serverReceivedAt: this.clock() } as AcceptedDomainEvent<T>;
+        sessionEvents.set(event.eventId, structuredClone(event));
+        this.#eventKeys.set(idempotencyKey, event.eventId);
+        return { inserted: true, event: structuredClone(event) };
+    }
+
+    async listEvents(sessionId: string): Promise<AcceptedDomainEvent[]> { return [...(this.#events.get(sessionId)?.values() ?? [])].sort((a, b) => a.serverSeq - b.serverSeq).map(item => structuredClone(item)); }
+
+    async saveStudentIdentity(record: StudentIdentityPersistenceRecord): Promise<void> {
+        const session = this.#identities.get(record.sessionId) ?? new Map<string, StudentIdentityPersistenceRecord>();
+        session.set(record.participantId, structuredClone(record));
+        this.#identities.set(record.sessionId, session);
+    }
+    async loadStudentIdentities(sessionId: string): Promise<StudentIdentityPersistenceRecord[]> { return [...(this.#identities.get(sessionId)?.values() ?? [])].map(item => structuredClone(item)); }
+    async savePublicSubjectProjection(record: PublicSubjectProjectionRecord): Promise<void> { this.#publicSubjects.set(record.sessionId, structuredClone(record)); }
+    async loadPublicSubjectProjection(sessionId: string): Promise<PublicSubjectProjectionRecord | null> { const value = this.#publicSubjects.get(sessionId); return value ? structuredClone(value) : null; }
+
+    async saveSnapshot(snapshot: AppletStateSnapshot): Promise<void> {
+        const key = this.snapshotKey(snapshot);
+        const existing = this.#snapshots.get(key);
+        if (existing && existing.revision > snapshot.revision) throw new Error('snapshot-revision-regression');
+        this.#snapshots.set(key, structuredClone(snapshot));
+    }
+    async getLatestSnapshot(sessionId: string, activityId: string, appletInstanceId: string, scopeKey: string): Promise<AppletStateSnapshot | null> {
+        const value = this.#snapshots.get(`${sessionId}|${activityId}|${appletInstanceId}|${scopeKey}`);
+        return value ? structuredClone(value) : null;
+    }
+    async saveArtifact(artifact: LearningArtifact): Promise<void> {
+        const revisions = this.#artifacts.get(artifact.artifactId) ?? new Map<number, LearningArtifact>();
+        const existing = revisions.get(artifact.revision);
+        if (existing && canonical(existing) !== canonical(artifact)) throw new Error('artifact-revision-immutable');
+        const latest = Math.max(0, ...revisions.keys());
+        if (artifact.revision < latest) throw new Error('artifact-revision-regression');
+        revisions.set(artifact.revision, structuredClone(artifact));
+        this.#artifacts.set(artifact.artifactId, revisions);
+    }
+    async getArtifact(artifactId: string, revision?: number): Promise<LearningArtifact | null> {
+        const revisions = this.#artifacts.get(artifactId);
+        if (!revisions) return null;
+        const selected = revision ?? Math.max(...revisions.keys());
+        const value = revisions.get(selected);
+        return value ? structuredClone(value) : null;
+    }
+    async saveSubmission(submission: Submission): Promise<void> {
+        const existing = this.#submissions.get(submission.submissionId);
+        if (existing && canonical(existing) !== canonical(submission)) throw new Error('submission-idempotency-payload-mismatch');
+        this.#submissions.set(submission.submissionId, structuredClone(submission));
+    }
+    async getSubmission(submissionId: string): Promise<Submission | null> { const value = this.#submissions.get(submissionId); return value ? structuredClone(value) : null; }
+    async saveTransfer(transfer: ArtifactTransfer): Promise<void> {
+        const existing = this.#transfers.get(transfer.transferId);
+        if (existing && !isTransferTransitionAllowed(existing.status, transfer.status)) throw new Error('transfer-state-regression');
+        this.#transfers.set(transfer.transferId, structuredClone(transfer));
+    }
+    async getTransfer(transferId: string): Promise<ArtifactTransfer | null> { const value = this.#transfers.get(transferId); return value ? structuredClone(value) : null; }
+    private snapshotKey(snapshot: AppletStateSnapshot): string { return `${snapshot.sessionId}|${snapshot.activityId}|${snapshot.appletInstanceId}|${snapshot.scope.type}:${snapshot.scope.id}`; }
+}
+
+function isTransferTransitionAllowed(from: ArtifactTransfer['status'], to: ArtifactTransfer['status']): boolean {
+    if (from === to) return true;
+    if (to === 'failed') return true;
+    const order: ArtifactTransfer['status'][] = ['queued', 'sent', 'received', 'opened', 'completed'];
+    return order.indexOf(to) >= order.indexOf(from);
 }
 /** Content-addressed lesson store used by Session pinning/restart recovery. */
 export interface ImmutableLessonPackageStore {
@@ -101,4 +198,3 @@ export interface ImmutableLessonPackageStore {
     resolveByFingerprint(packageFingerprint: string): Promise<ImmutableLessonPackageLocation | null>;
     verify(location: ImmutableLessonPackageLocation): Promise<boolean>;
 }
-

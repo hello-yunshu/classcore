@@ -1,4 +1,4 @@
-import type { AcceptedDomainEvent, AppletManifest, AuthenticatedConnectionContext, ClientAppletEvent, ClientCommandEnvelope, ControllerLease, ProtocolError, SessionFeaturePolicy, StageState, StateScopeRef, } from '@classroom/contracts';
+import type { AcceptedDomainEvent, AppletManifest, AuthenticatedConnectionContext, ClassroomSession, ClientAppletEvent, ClientCommandEnvelope, ControllerLease, JoinGrant, JoinRequest, ProtocolError, SessionFeaturePolicy, SessionMembership, StageState, StateScopeRef, ConnectionPresence, } from '@classroom/contracts';
 export interface RuntimeCommandSchemaRegistry {
     has(type: string): boolean;
     validatePayload(type: string, payload: Record<string, unknown>): {
@@ -292,3 +292,170 @@ export function checkAppletMountCompatibility(manifest: AppletManifest, availabl
     return missing.length ? { compatible: false, missingCapabilities: missing, reason: 'platform-capability-missing' } : { compatible: true, missingCapabilities: [] };
 }
 
+export interface SessionCredentialRecord {
+    sessionLocator: string;
+    role: 'student' | 'teacher' | 'observer' | 'display';
+    credentialType: string;
+    credentialValue: string;
+    participantId: string;
+    expiresAt?: number | null;
+}
+
+export interface CreateSessionInput {
+    session: ClassroomSession;
+    sessionLocator?: string;
+    credentials: SessionCredentialRecord[];
+}
+
+/** Minimal authenticated classroom authority. It is deliberately credential-based and does not trust browser identity fields. */
+export class InMemoryClassroomAuthority {
+    #sessions = new Map<string, ClassroomSession>();
+    #locators = new Map<string, string>();
+    #credentials = new Map<string, SessionCredentialRecord>();
+    #memberships = new Map<string, SessionMembership>();
+    #tokens = new Map<string, JoinGrant>();
+    #presence = new Map<string, ConnectionPresence>();
+    constructor(private readonly idFactory: () => string = () => globalThis.crypto.randomUUID()) {}
+
+    createSession(input: CreateSessionInput): ClassroomSession {
+        if (this.#sessions.has(input.session.sessionId)) throw new Error('session-already-exists');
+        this.#sessions.set(input.session.sessionId, structuredClone(input.session));
+        this.#locators.set(input.sessionLocator ?? input.session.sessionId, input.session.sessionId);
+        for (const credential of input.credentials) {
+            const key = this.credentialKey(credential.sessionLocator, credential.role, credential.credentialType, credential.credentialValue);
+            if (this.#credentials.has(key)) throw new Error('duplicate-session-credential');
+            this.#credentials.set(key, structuredClone(credential));
+        }
+        return structuredClone(input.session);
+    }
+
+    transitionSession(sessionId: string, transition: string): ClassroomSession {
+        const current = this.#sessions.get(sessionId);
+        if (!current) throw new Error('session-not-found');
+        const next = nextSessionState(current.status, transition);
+        const updated = { ...current, status: next as ClassroomSession['status'], revision: current.revision + 1 };
+        this.#sessions.set(sessionId, updated);
+        return structuredClone(updated);
+    }
+
+    getSession(sessionId: string): ClassroomSession | null {
+        const session = this.#sessions.get(sessionId);
+        return session ? structuredClone(session) : null;
+    }
+
+    join(request: JoinRequest, now = Date.now()): JoinGrant {
+        const sessionId = this.#locators.get(request.sessionLocator) ?? request.sessionLocator;
+        const session = [...this.#sessions.values()].find(item => item.sessionId === sessionId || item.lesson.lessonId === request.sessionLocator);
+        if (!session) throw new Error('session-not-found');
+        if (session.status === 'ended') throw new Error('session-ended');
+        const credential = request.credential;
+        const record = this.#credentials.get(this.credentialKey(request.sessionLocator, request.requestedRole, credential.type, credential.value));
+        if (!record || (record.expiresAt != null && record.expiresAt <= now)) throw new Error('credential-invalid');
+        if (record.participantId.startsWith('student:') && request.participantHint && record.participantId !== request.participantHint && `student:${request.participantHint}` !== record.participantId)
+            throw new Error('participant-hint-mismatch');
+        const existing = [...this.#memberships.values()].find(item => item.sessionId === session.sessionId && item.participantId === record.participantId && item.status === 'active');
+        if (existing) {
+            const previous = [...this.#tokens.values()].find(item => item.membershipId === existing.membershipId);
+            if (previous) return structuredClone(previous);
+        }
+        const membership: SessionMembership = {
+            membershipId: `membership:${this.idFactory()}`,
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            role: record.role,
+            status: 'active',
+            joinedAt: new Date(now).toISOString(),
+            expiresAt: null,
+        };
+        const grant: JoinGrant = { membershipId: membership.membershipId, sessionId: session.sessionId, participantId: record.participantId, role: record.role, accessToken: `access:${this.idFactory()}`, expiresAt: new Date(now + 8 * 60 * 60 * 1000).toISOString() };
+        this.#memberships.set(membership.membershipId, membership);
+        this.#tokens.set(grant.accessToken, grant);
+        return structuredClone(grant);
+    }
+
+    authenticate(accessToken: string, now = Date.now()): AuthenticatedConnectionContext {
+        const grant = this.#tokens.get(accessToken);
+        if (!grant || Date.parse(grant.expiresAt) <= now) throw new Error('access-token-invalid');
+        const membership = this.#memberships.get(grant.membershipId);
+        if (!membership || membership.status !== 'active') throw new Error('membership-required');
+        return { connectionId: '', sessionId: grant.sessionId, membershipId: grant.membershipId, participantId: grant.participantId, role: grant.role };
+    }
+
+    connect(accessToken: string, connectionId = `connection:${this.idFactory()}`, deviceId: string | null = null, now = Date.now()): AuthenticatedConnectionContext {
+        const context = this.authenticate(accessToken, now);
+        const existing = [...this.#presence.values()].find(item => item.membershipId === context.membershipId && item.status === 'online');
+        if (existing) this.#presence.delete(existing.connectionId);
+        this.#presence.set(connectionId, { connectionId, sessionId: context.sessionId, membershipId: context.membershipId, participantId: context.participantId, status: 'online', deviceId, connectedAt: new Date(now).toISOString(), lastSeenAt: new Date(now).toISOString() });
+        return { ...context, connectionId };
+    }
+
+    heartbeat(connectionId: string, now = Date.now()): ConnectionPresence {
+        const current = this.#presence.get(connectionId);
+        if (!current || current.status !== 'online') throw new Error('presence-offline');
+        const updated = { ...current, lastSeenAt: new Date(now).toISOString() };
+        this.#presence.set(connectionId, updated);
+        return structuredClone(updated);
+    }
+
+    disconnect(connectionId: string, now = Date.now()): ConnectionPresence {
+        const current = this.#presence.get(connectionId);
+        if (!current) throw new Error('connection-not-found');
+        const updated = { ...current, status: 'offline' as const, lastSeenAt: new Date(now).toISOString() };
+        this.#presence.set(connectionId, updated);
+        return structuredClone(updated);
+    }
+
+    listPresence(sessionId: string): ConnectionPresence[] { return [...this.#presence.values()].filter(item => item.sessionId === sessionId).map(item => structuredClone(item)); }
+    revokeMembership(membershipId: string): void {
+        const membership = this.#memberships.get(membershipId);
+        if (!membership) throw new Error('membership-not-found');
+        this.#memberships.set(membershipId, { ...membership, status: 'revoked' });
+        for (const [token, grant] of this.#tokens) if (grant.membershipId === membershipId) this.#tokens.delete(token);
+    }
+
+    private credentialKey(locator: string, role: string, type: string, value: string): string { return JSON.stringify([locator, role, type, value]); }
+}
+
+export interface DurableEventPort {
+    acceptClientEventAtomically<T extends Record<string, unknown>>(idempotencyKey: string, event: Omit<AcceptedDomainEvent<T>, 'eventId' | 'serverSeq' | 'serverReceivedAt'>): Promise<{ inserted: boolean; event: AcceptedDomainEvent<T> }>;
+}
+export interface AppletRuntimePorts extends DurableEventPort {
+    saveSnapshot(snapshot: import('@classroom/contracts').AppletStateSnapshot): Promise<void>;
+    saveArtifact(artifact: import('@classroom/contracts').LearningArtifact): Promise<void>;
+    saveSubmission(submission: import('@classroom/contracts').Submission): Promise<void>;
+    saveTransfer(transfer: import('@classroom/contracts').ArtifactTransfer): Promise<void>;
+}
+
+/** Wires Applet intent to validation, durable event persistence and snapshot/artifact operations. */
+export class AppletEventRuntime {
+    constructor(private readonly ports: AppletRuntimePorts) {}
+    async accept<T extends Record<string, unknown>>(context: EventAcceptanceContext, input: ClientAppletEvent<T>): Promise<{ inserted: boolean; event: AcceptedDomainEvent<T> }> {
+        const draft = prepareClientAppletEvent(context, input);
+        return this.ports.acceptClientEventAtomically(clientEventIdempotencyKey(context.connection, input), draft);
+    }
+    async snapshot(snapshot: import('@classroom/contracts').AppletStateSnapshot): Promise<void> { await this.ports.saveSnapshot(snapshot); }
+}
+
+export class LearningResourceRuntime {
+    constructor(private readonly ports: Pick<AppletRuntimePorts, 'saveArtifact' | 'saveSubmission' | 'saveTransfer'>, private readonly authorization: AuthorizationService) {}
+    async saveArtifact(connection: AuthenticatedConnectionContext, artifact: import('@classroom/contracts').LearningArtifact): Promise<import('@classroom/contracts').LearningArtifact> {
+        const decision = this.authorization.authorize(connection, 'submission.submit', { activityId: artifact.activityId, submitterScope: artifact.ownerScope });
+        if (!decision.allowed) throw new Error(decision.reason ?? 'artifact-forbidden');
+        await this.ports.saveArtifact(artifact);
+        return structuredClone(artifact);
+    }
+    async submit(connection: AuthenticatedConnectionContext, submission: import('@classroom/contracts').Submission): Promise<import('@classroom/contracts').Submission> {
+        const decision = this.authorization.authorize(connection, 'submission.submit', { activityId: submission.activityId, submitterScope: submission.submitterScope });
+        if (!decision.allowed) throw new Error(decision.reason ?? 'submission-forbidden');
+        if (submission.status !== 'submitted' && submission.status !== 'accepted') throw new Error('submission-must-be-submitted');
+        const next = { ...submission, submittedBy: connection.participantId, submittedAt: submission.submittedAt ?? new Date().toISOString() };
+        await this.ports.saveSubmission(next);
+        return structuredClone(next);
+    }
+    async transfer(connection: AuthenticatedConnectionContext, transfer: import('@classroom/contracts').ArtifactTransfer, ownerScope: StateScopeRef): Promise<import('@classroom/contracts').ArtifactTransfer> {
+        const decision = this.authorization.authorize(connection, 'artifact.transfer', { activityId: transfer.activityId, artifactOwnerScope: ownerScope, recipientScope: transfer.recipientScope });
+        if (!decision.allowed) throw new Error(decision.reason ?? 'transfer-forbidden');
+        await this.ports.saveTransfer(transfer);
+        return structuredClone(transfer);
+    }
+}

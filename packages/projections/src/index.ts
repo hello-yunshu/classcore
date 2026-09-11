@@ -181,3 +181,43 @@ export function assertPublicProjectionHasNoPrivateIdentity(value: unknown, path 
     throw new Error(`private-identity-reference:${violation.path}`);
 }
 
+export interface WidgetRuntimeContext {
+    sessionId: string;
+    activityId: string | null;
+    audience: StageAudience;
+    selector: string;
+    parameters: Record<string, unknown>;
+    data: Record<string, unknown>;
+}
+export interface WidgetDefinition {
+    widgetType: string;
+    render(context: WidgetRuntimeContext): Record<string, unknown>;
+}
+
+/** Generic selector-to-widget boundary. Widget code receives already projected data. */
+export class WidgetRegistry {
+    #widgets = new Map<string, WidgetDefinition>();
+    register(definition: WidgetDefinition): void {
+        if (!/^widget:[a-z0-9-]+$/.test(definition.widgetType)) throw new Error('invalid-widget-type');
+        if (this.#widgets.has(definition.widgetType)) throw new Error(`duplicate-widget:${definition.widgetType}`);
+        this.#widgets.set(definition.widgetType, definition);
+    }
+    resolve(widgetType: string): WidgetDefinition {
+        const definition = this.#widgets.get(widgetType);
+        if (!definition) throw new Error(`widget-not-found:${widgetType}`);
+        return definition;
+    }
+    render(binding: import('@classroom/contracts').WidgetBinding, context: Omit<WidgetRuntimeContext, 'selector' | 'parameters'>): Record<string, unknown> {
+        if (!binding.audience.includes(context.audience)) throw new Error('widget-audience-forbidden');
+        const payload = this.resolve(binding.widgetType).render({ ...context, selector: binding.selector, parameters: structuredClone(binding.parameters ?? {}) });
+        if (context.audience !== 'teacher-runtime') assertPublicProjectionHasNoPrivateIdentity(payload);
+        return payload;
+    }
+    list(): string[] { return [...this.#widgets.keys()]; }
+}
+
+export function resolveWidgetSelector(selector: string, data: Record<string, Record<string, unknown>>): Record<string, unknown> {
+    if (!['teacher-focus', 'recommended-resource', 'current-activity-summary', 'selected-artifact', 'selected-live-view', 'student-comparison'].includes(selector))
+        throw new Error(`unsupported-widget-selector:${selector}`);
+    return structuredClone(data[selector] ?? {});
+}

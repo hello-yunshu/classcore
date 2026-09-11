@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 const now = () => new Date().toISOString();
 function canonicalJson(value) {
@@ -58,6 +59,45 @@ export class SqliteClassroomStateStore {
         PRIMARY KEY(session_id, kind, item_id),
         UNIQUE(session_id, server_seq)
       );
+
+      CREATE TABLE IF NOT EXISTS classroom_events(
+        session_id TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        event_id TEXT NOT NULL,
+        server_seq INTEGER NOT NULL,
+        json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY(session_id, idempotency_key),
+        UNIQUE(session_id, event_id),
+        UNIQUE(session_id, server_seq)
+      );
+      CREATE TABLE IF NOT EXISTS classroom_snapshots(
+        session_id TEXT NOT NULL,
+        activity_id TEXT NOT NULL,
+        applet_instance_id TEXT NOT NULL,
+        scope_key TEXT NOT NULL,
+        revision INTEGER NOT NULL,
+        json TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY(session_id, activity_id, applet_instance_id, scope_key)
+      );
+      CREATE TABLE IF NOT EXISTS classroom_artifacts(
+        artifact_id TEXT NOT NULL,
+        revision INTEGER NOT NULL,
+        json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY(artifact_id, revision)
+      );
+      CREATE TABLE IF NOT EXISTS classroom_submissions(
+        submission_id TEXT PRIMARY KEY,
+        json TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS classroom_transfers(
+        transfer_id TEXT PRIMARY KEY,
+        json TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
     `);
         const controlColumns = this.db.prepare('PRAGMA table_info(transport_controls)').all().map((row) => row.name);
         if (!controlColumns.includes('outcome_json'))
@@ -97,7 +137,14 @@ export class SqliteClassroomStateStore {
       DO UPDATE SET last_seq=last_seq + 1
       RETURNING last_seq
     `);
-        this.sequenceCurrentStmt = this.db.prepare('SELECT last_seq FROM transport_session_sequence WHERE session_id=?');
+    this.sequenceCurrentStmt = this.db.prepare('SELECT last_seq FROM transport_session_sequence WHERE session_id=?');
+        this.classroomEventGetStmt = this.db.prepare('SELECT json FROM classroom_events WHERE session_id=? AND idempotency_key=?');
+        this.classroomEventListStmt = this.db.prepare('SELECT json FROM classroom_events WHERE session_id=? ORDER BY server_seq');
+        this.classroomSnapshotGetStmt = this.db.prepare('SELECT json FROM classroom_snapshots WHERE session_id=? AND activity_id=? AND applet_instance_id=? AND scope_key=?');
+        this.classroomArtifactGetStmt = this.db.prepare('SELECT json FROM classroom_artifacts WHERE artifact_id=? AND revision=?');
+        this.classroomArtifactLatestStmt = this.db.prepare('SELECT json FROM classroom_artifacts WHERE artifact_id=? ORDER BY revision DESC LIMIT 1');
+        this.classroomSubmissionGetStmt = this.db.prepare('SELECT json FROM classroom_submissions WHERE submission_id=?');
+        this.classroomTransferGetStmt = this.db.prepare('SELECT json FROM classroom_transfers WHERE transfer_id=?');
     }
     close() {
         this.db.close();
@@ -262,4 +309,57 @@ export class SqliteClassroomStateStore {
             sessionsWithSequence: Number(this.db.prepare('SELECT COUNT(*) AS n FROM transport_session_sequence').get().n),
         };
     }
+
+    acceptClientEventAtomically(idempotencyKey, draft) {
+        this.db.exec('BEGIN IMMEDIATE');
+        try {
+            const existing = this.classroomEventGetStmt.get(draft.sessionId, idempotencyKey);
+            if (existing) {
+                const event = JSON.parse(existing.json);
+                this.db.exec('COMMIT');
+                return { inserted: false, event };
+            }
+            const row = this.sequenceNextStmt.get(draft.sessionId);
+            const event = { ...draft, eventId: `event:${crypto.randomUUID()}`, serverSeq: Number(row.last_seq), serverReceivedAt: now() };
+            this.db.prepare('INSERT INTO classroom_events(session_id,idempotency_key,event_id,server_seq,json,created_at) VALUES(?,?,?,?,?,?)').run(draft.sessionId, idempotencyKey, event.eventId, event.serverSeq, JSON.stringify(event), event.serverReceivedAt);
+            this.db.exec('COMMIT');
+            return { inserted: true, event };
+        } catch (error) {
+            try { this.db.exec('ROLLBACK'); } catch {}
+            throw error;
+        }
+    }
+    listEvents(sessionId) { return this.classroomEventListStmt.all(sessionId).map(row => JSON.parse(row.json)); }
+    saveSnapshot(snapshot) {
+        const scopeKey = `${snapshot.scope.type}:${snapshot.scope.id}`;
+        const existing = this.classroomSnapshotGetStmt.get(snapshot.sessionId, snapshot.activityId, snapshot.appletInstanceId, scopeKey);
+        if (existing && JSON.parse(existing.json).revision > snapshot.revision) throw new Error('snapshot-revision-regression');
+        this.db.prepare(`INSERT INTO classroom_snapshots(session_id,activity_id,applet_instance_id,scope_key,revision,json,updated_at)
+            VALUES(?,?,?,?,?,?,?)
+            ON CONFLICT(session_id,activity_id,applet_instance_id,scope_key)
+            DO UPDATE SET revision=excluded.revision,json=excluded.json,updated_at=excluded.updated_at`).run(snapshot.sessionId, snapshot.activityId, snapshot.appletInstanceId, scopeKey, snapshot.revision, JSON.stringify(snapshot), now());
+    }
+    getLatestSnapshot(sessionId, activityId, appletInstanceId, scopeKey) {
+        const row = this.classroomSnapshotGetStmt.get(sessionId, activityId, appletInstanceId, scopeKey);
+        return row ? JSON.parse(row.json) : null;
+    }
+    saveArtifact(artifact) {
+        const existing = this.classroomArtifactGetStmt.get(artifact.artifactId, artifact.revision);
+        if (existing && canonicalJson(JSON.parse(existing.json)) !== canonicalJson(artifact)) throw new Error('artifact-revision-immutable');
+        const latest = this.classroomArtifactLatestStmt.get(artifact.artifactId);
+        if (latest && JSON.parse(latest.json).revision > artifact.revision) throw new Error('artifact-revision-regression');
+        this.db.prepare('INSERT OR REPLACE INTO classroom_artifacts(artifact_id,revision,json,created_at) VALUES(?,?,?,?)').run(artifact.artifactId, artifact.revision, JSON.stringify(artifact), now());
+    }
+    getArtifact(artifactId, revision) {
+        const row = revision == null ? this.classroomArtifactLatestStmt.get(artifactId) : this.classroomArtifactGetStmt.get(artifactId, revision);
+        return row ? JSON.parse(row.json) : null;
+    }
+    saveSubmission(submission) {
+        const existing = this.classroomSubmissionGetStmt.get(submission.submissionId);
+        if (existing && canonicalJson(JSON.parse(existing.json)) !== canonicalJson(submission)) throw new Error('submission-idempotency-payload-mismatch');
+        this.db.prepare('INSERT OR REPLACE INTO classroom_submissions(submission_id,json,updated_at) VALUES(?,?,?)').run(submission.submissionId, JSON.stringify(submission), now());
+    }
+    getSubmission(submissionId) { const row = this.classroomSubmissionGetStmt.get(submissionId); return row ? JSON.parse(row.json) : null; }
+    saveTransfer(transfer) { this.db.prepare('INSERT OR REPLACE INTO classroom_transfers(transfer_id,json,updated_at) VALUES(?,?,?)').run(transfer.transferId, JSON.stringify(transfer), now()); }
+    getTransfer(transferId) { const row = this.classroomTransferGetStmt.get(transferId); return row ? JSON.parse(row.json) : null; }
 }

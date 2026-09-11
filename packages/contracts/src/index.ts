@@ -546,3 +546,70 @@ export interface AppletViewerContext {
     publicSubjectId?: string | null;
 }
 
+/** Generic framework records. These types deliberately avoid lesson-specific vocabulary. */
+export interface PresenceConnectionRecord extends ConnectionPresence {
+    deviceId: string | null;
+}
+export interface AuthenticatedJoinContext extends AuthenticatedConnectionContext {
+    membershipId: string;
+    accessTokenId: string;
+}
+export interface AnalyticsEvidenceRef {
+    kind: 'event' | 'snapshot' | 'artifact' | 'submission' | 'metric';
+    id: string;
+    revision?: number | null;
+    pointer?: string | null;
+}
+export interface AnalyticsMetric {
+    name: string;
+    value: number;
+    unit?: string | null;
+}
+export interface AnalyticsFeature {
+    name: string;
+    value: string | number | boolean | null;
+}
+export interface AnalyticsInput {
+    sessionId: string;
+    activityId: string;
+    subject: StateScopeRef;
+    events: AcceptedDomainEvent[];
+    snapshots: AppletStateSnapshot[];
+    artifacts: LearningArtifact[];
+    metrics?: AnalyticsMetric[];
+    features?: AnalyticsFeature[];
+}
+export interface ClassificationResult {
+    code: string;
+    confidence: number;
+    evidence: AnalyticsEvidenceRef[];
+}
+export interface AnalyticsResult {
+    resultId: string;
+    sessionId: string;
+    activityId: string;
+    subject: StateScopeRef;
+    classifications: ClassificationResult[];
+    metrics: AnalyticsMetric[];
+    recommendations: RecommendationCandidate[];
+    provider: ProviderProvenance;
+    createdAt: string;
+}
+export interface RecommendationCandidate {
+    recommendationId: string;
+    kind: string;
+    label: string;
+    evidence: AnalyticsEvidenceRef[];
+    status: 'candidate' | 'confirmed' | 'dismissed';
+}
+export interface StageContentRecord {
+    contentType: string;
+    payload: Record<string, unknown>;
+}
+export interface WidgetBinding {
+    widgetId: string;
+    widgetType: string;
+    selector: string;
+    audience: StageAudience[];
+    parameters?: Record<string, unknown>;
+}
