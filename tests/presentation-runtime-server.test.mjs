@@ -54,6 +54,12 @@ test('reference Presentation API pins exact revision and recovers authoritative 
         assert.equal(control.message.state.step, 2);
         const synced = await waitForMessage(display, message => message.type === 'presentation.sync' && message.state?.revision === 1);
         assert.equal(synced.state.presentationRevisionId, published.revisionId);
+        const failed = await teacher.request({ type: 'presentation.control', controlId: 'presentation-control:bad', action: 'goto', sceneId: 'scene:1', step: 1, expectedRevision: 0 }, 'presentation-control:bad');
+        const failedRetry = await teacher.request({ type: 'presentation.control', controlId: 'presentation-control:bad', action: 'goto', sceneId: 'scene:1', step: 1, expectedRevision: 0 }, 'presentation-control:bad');
+        assert.equal(failed.message.ok, false);
+        assert.equal(failedRetry.message.ok, false);
+        assert.equal(failedRetry.message.duplicate, true);
+        assert.equal(failedRetry.message.reason, failed.message.reason);
 
         display.ws.close();
         teacher.ws.close();

@@ -2,7 +2,7 @@
 
 ## 结论
 
-web-ppt 通过了当前可执行的核心 Integration Gate，现已确定为 ClassCore 唯一继续推进的网页 Presentation 引擎；现有 Scene Studio 仅保留为 fallback、contract harness 和紧急降级，不再扩大为第二套 Office 编辑器。下一阶段目标是完整接入 web-ppt 已有编辑能力，并先完成稳定的三栏 Studio 布局。
+web-ppt 通过了当前可执行的核心 Integration Gate，现已确定为 ClassCore 唯一继续推进的网页 Presentation 引擎；现有 Scene Studio 仅保留为 fallback、contract harness 和紧急降级，不再扩大为第二套 Office 编辑器。本轮已继续接入 reference Teacher Library、raw Asset API、Server Draft autosave 和 Presentation infrastructure hardening；认证账号、Picker 与正式课堂 UI 仍未闭环。
 
 ## 架构审计结果
 
@@ -13,7 +13,7 @@ web-ppt 通过了当前可执行的核心 Integration Gate，现已确定为 Cla
 | Studio 定位 | 已从 Scene Studio Alpha 转为 web-ppt authoring host；旧纯模型函数保留作 contract tests，旧 renderer 不再作为主编辑器。 |
 | Core 边界 | 未引入 web-ppt `EditDoc` 到 Foundation/Runtime。第三方类型只停留在 adapter/Studio bundle。 |
 | Build system | 原手写 import map 无法承载第三方 ESM graph；改为 esbuild bundle Presentation Studio，并构建本地 blank template。 |
-| Server/Storage | Reference Server 已有 metadata-only content-addressed AssetStore、Draft conflict、有限 Recovery、Rehearsal/Published/Restore、Session Pin、Runtime Cache/GC 和最小 HTTP API；认证账号 owner authorization 与正式服务解耦仍未完成。 |
+| Server/Storage | Reference Server 已有 metadata-only content-addressed AssetStore、raw upload、owner claim、quota、Draft conflict、有限 Recovery、Rehearsal/Published/Restore、Session lifecycle、按 Session cache pin/release、Runtime Cache/GC 和 HTTP API；认证账号 owner authorization 与正式服务解耦仍未完成。 |
 | 权威状态 | `StageState` 只表达 `contentType`/deck 引用；`PresentationPlaybackState` 负责 scene/step/playState/revision。当前没有新增第二份 scene/step 状态。 |
 | D7 verifier | 已移除 placeholder，改为 fail-closed：它会实际运行 create/edit/save/reopen/index/headless playback，并要求浏览器/offline evidence；其它 D7 requirement 仍会继续阻断 `d7:product`。 |
 
@@ -31,13 +31,13 @@ web-ppt 通过了当前可执行的核心 Integration Gate，现已确定为 Cla
 ### 必须修改
 
 1. 将 reference 的 Published Presentation draft→validate→publish→freeze→fingerprint 迁移到认证账号服务，并接入 Studio Library/Picker。
-2. 将 PresentationPlaybackState 控制接入正式 teacher lease、SQLite recovery 和 Display player。
+2. 将 PresentationPlaybackState 控制接入正式 teacher lease、SQLite recovery 和 Display player；reference transport 已完成 durable success/failure outcome replay。
 3. 把 classroom widget registry/resolver 接入实际的 `selected-artifact` overlay，并确保 public projection fail closed。
 4. 增加真实 browser refresh、server restart、Display reconnect、arm64/amd64 Docker 与 LAN evidence。
 
 ### 建议修改
 
-1. 为 web-ppt Adapter 增加二进制 AssetStore 接口，Server 只保存 content-addressed asset metadata/path，不保存巨大 JSON。
+1. 为 web-ppt Adapter 增加二进制 AssetStore 接口，Server 只保存 content-addressed asset metadata/path，不保存巨大 JSON。（reference raw Asset API 已完成，认证服务接缝仍待接入。）
 2. 为 Studio 增加标题编辑、图片本地导入和播放态 full-screen keyboard controls；继续复用上游编辑器能力。
 3. 为第三方依赖记录升级策略与 license manifest，beta 版本升级必须重新跑 identity/animation/offline Gate。
 

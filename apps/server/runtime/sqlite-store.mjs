@@ -40,6 +40,7 @@ export class SqliteClassroomStateStore {
         session_id TEXT NOT NULL,
         control_id TEXT NOT NULL,
         json TEXT NOT NULL,
+        outcome_json TEXT,
         created_at TEXT NOT NULL,
         PRIMARY KEY(session_id, control_id)
       );
@@ -58,6 +59,9 @@ export class SqliteClassroomStateStore {
         UNIQUE(session_id, server_seq)
       );
     `);
+        const controlColumns = this.db.prepare('PRAGMA table_info(transport_controls)').all().map((row) => row.name);
+        if (!controlColumns.includes('outcome_json'))
+            this.db.exec('ALTER TABLE transport_controls ADD COLUMN outcome_json TEXT');
         this.putStmt = this.db.prepare(`
       INSERT INTO state_json(session_id, kind, item_key, json, updated_at)
       VALUES(?, ?, ?, ?, ?)
@@ -76,6 +80,7 @@ export class SqliteClassroomStateStore {
     `);
         this.eventGetStmt = this.db.prepare('SELECT json FROM transport_events WHERE session_id=? AND event_id=?');
         this.controlGetStmt = this.db.prepare('SELECT json FROM transport_controls WHERE session_id=? AND control_id=?');
+        this.controlOutcomeGetStmt = this.db.prepare('SELECT outcome_json FROM transport_controls WHERE session_id=? AND control_id=?');
         this.assignmentGetStmt = this.db.prepare(`
       SELECT server_seq
       FROM transport_sequence_assignment
@@ -171,6 +176,49 @@ export class SqliteClassroomStateStore {
     }
     acceptTransportControl(sessionId, controlId, payload) {
         return this.#acceptTransport('control', sessionId, controlId, payload);
+    }
+    /**
+     * Presentation controls need a stronger idempotency contract than the
+     * generic transport path: a rejected apply is a durable result and must
+     * be replayed as the same rejection on retry.
+     */
+    acceptPresentationControl(sessionId, controlId, payload, apply) {
+        this.db.exec('BEGIN IMMEDIATE');
+        try {
+            const payloadJson = canonicalJson(payload);
+            const existingAssignment = this.assignmentGetStmt.get(sessionId, 'control', controlId);
+            const persisted = this.controlGetStmt.get(sessionId, controlId);
+            if (persisted && canonicalJson(JSON.parse(persisted.json)) !== payloadJson)
+                throw new Error(`transport-id-payload-mismatch:control:${controlId}`);
+            if (existingAssignment || persisted) {
+                const outcomeRow = this.controlOutcomeGetStmt.get(sessionId, controlId);
+                const outcome = outcomeRow?.outcome_json ? JSON.parse(outcomeRow.outcome_json) : null;
+                this.db.exec('COMMIT');
+                return { inserted: false, serverSeq: existingAssignment ? Number(existingAssignment.server_seq) : null, outcome };
+            }
+            const outcome = (() => {
+                try {
+                    return { ok: true, value: apply() };
+                }
+                catch (error) {
+                    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+                }
+            })();
+            this.controlInsertStmt.run(sessionId, controlId, payloadJson, now());
+            let serverSeq = null;
+            if (outcome.ok) {
+                const sequenceRow = this.sequenceNextStmt.get(sessionId);
+                serverSeq = Number(sequenceRow.last_seq);
+                this.assignmentInsertStmt.run(sessionId, 'control', controlId, serverSeq);
+            }
+            this.db.prepare('UPDATE transport_controls SET outcome_json=? WHERE session_id=? AND control_id=?').run(JSON.stringify(outcome), sessionId, controlId);
+            this.db.exec('COMMIT');
+            return { inserted: true, serverSeq, outcome };
+        }
+        catch (error) {
+            try { this.db.exec('ROLLBACK'); } catch { /* preserve original */ }
+            throw error;
+        }
     }
     #acceptTransport(kind, sessionId, itemId, payload) {
         this.db.exec('BEGIN IMMEDIATE');

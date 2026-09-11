@@ -128,6 +128,12 @@ export class PresentationLibraryStore {
             created_at TEXT NOT NULL,
             gc_candidate_at TEXT
           );
+          CREATE TABLE IF NOT EXISTS presentation_asset_claims(
+            asset_id TEXT NOT NULL,
+            owner_user_id TEXT NOT NULL,
+            claimed_at TEXT NOT NULL,
+            PRIMARY KEY(asset_id, owner_user_id)
+          );
           CREATE TABLE IF NOT EXISTS presentation_checkpoints(
             checkpoint_id TEXT PRIMARY KEY,
             presentation_id TEXT NOT NULL,
@@ -159,6 +165,26 @@ export class PresentationLibraryStore {
             asset_id TEXT NOT NULL,
             kind TEXT NOT NULL CHECK(kind IN ('rehearsal','published')),
             pinned_at TEXT NOT NULL
+          );
+          CREATE TABLE IF NOT EXISTS presentation_sessions(
+            session_id TEXT PRIMARY KEY,
+            status TEXT NOT NULL CHECK(status IN ('prepared','active','ended')),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            ended_at TEXT
+          );
+          CREATE TABLE IF NOT EXISTS presentation_runtime_cache_pins(
+            session_id TEXT NOT NULL,
+            asset_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY(session_id, asset_id)
+          );
+          CREATE TABLE IF NOT EXISTS presentation_session_history(
+            session_id TEXT PRIMARY KEY,
+            presentation_id TEXT NOT NULL,
+            revision_id TEXT NOT NULL,
+            fingerprint TEXT NOT NULL,
+            ended_at TEXT NOT NULL
           );
           CREATE TABLE IF NOT EXISTS presentation_cache_entries(
             asset_id TEXT PRIMARY KEY,
@@ -214,9 +240,35 @@ export class PresentationLibraryStore {
         return bytes;
     }
 
-    createPresentation({ ownerUserId, title, bytes, mimeType, document }) {
+    #claimAsset(ownerUserId, assetId) {
         if (!String(ownerUserId ?? '').trim()) throw new PresentationLibraryError('owner-required');
-        const asset = this.#ensureAsset(bytes, mimeType);
+        const asset = this.getAsset(assetId);
+        if (!asset) throw new PresentationLibraryError('asset-not-found');
+        this.db.prepare('INSERT OR IGNORE INTO presentation_asset_claims(asset_id,owner_user_id,claimed_at) VALUES(?,?,?)').run(assetId, String(ownerUserId), isoNow());
+        return asset;
+    }
+
+    #ownerReferencesAsset(ownerUserId, assetId) {
+        const direct = this.db.prepare(`SELECT 1 FROM presentation_projects WHERE owner_user_id=? AND current_draft_asset_id=?
+          UNION SELECT 1 FROM presentation_revisions r JOIN presentation_projects p ON p.presentation_id=r.presentation_id WHERE p.owner_user_id=? AND r.asset_id=?
+          UNION SELECT 1 FROM presentation_checkpoints c JOIN presentation_projects p ON p.presentation_id=c.presentation_id WHERE p.owner_user_id=? AND c.asset_id=? LIMIT 1`).get(ownerUserId, assetId, ownerUserId, assetId, ownerUserId, assetId);
+        return Boolean(direct);
+    }
+
+    #assertOwnerQuota(ownerUserId, assetId) {
+        const asset = this.getAsset(assetId);
+        if (!asset) throw new PresentationLibraryError('asset-not-found');
+        if (!this.#ownerReferencesAsset(ownerUserId, assetId) && this.uniqueReferencedBytes(ownerUserId) + asset.size > this.policy.maxAccountPresentationBytes)
+            throw new PresentationLibraryError('account-presentation-quota-exceeded');
+    }
+
+    createPresentation({ ownerUserId, title, assetId, bytes, mimeType, document }) {
+        if (!String(ownerUserId ?? '').trim()) throw new PresentationLibraryError('owner-required');
+        const asset = assetId != null
+            ? (this.getOwnedAsset(assetId, ownerUserId) ?? (() => { throw new PresentationLibraryError('asset-not-found'); })())
+            : this.#ensureAsset(bytes, mimeType);
+        this.#claimAsset(ownerUserId, asset.assetId);
+        this.#assertOwnerQuota(ownerUserId, asset.assetId);
         const now = isoNow();
         const presentationId = uuid('presentation');
         const value = {
@@ -247,6 +299,17 @@ export class PresentationLibraryStore {
         return projectFrom(row);
     }
 
+    ingestAsset(ownerUserId, { bytes, mimeType }) {
+        const asset = this.#ensureAsset(bytes, mimeType);
+        this.#claimAsset(ownerUserId, asset.assetId);
+        return asset;
+    }
+
+    getOwnedAsset(assetId, ownerUserId) {
+        const row = this.db.prepare('SELECT a.* FROM presentation_assets a JOIN presentation_asset_claims c ON c.asset_id=a.asset_id WHERE a.asset_id=? AND c.owner_user_id=?').get(assetId, ownerUserId);
+        return assetFrom(row);
+    }
+
     renamePresentation(presentationId, ownerUserId, title) {
         const project = this.#requireProject(presentationId, ownerUserId);
         const updatedAt = isoNow();
@@ -267,6 +330,8 @@ export class PresentationLibraryStore {
             throw new PresentationLibraryError('draft-conflict', 'draft-conflict', { current: project });
         }
         const asset = this.#ensureAsset(bytes, mimeType);
+        this.#claimAsset(ownerUserId, asset.assetId);
+        this.#assertOwnerQuota(ownerUserId, asset.assetId);
         const now = isoNow();
         const revision = project.currentDraftRevision + 1;
         this.db.exec('BEGIN IMMEDIATE');
@@ -296,10 +361,12 @@ export class PresentationLibraryStore {
 
     getAssetBytes(assetId) { return this.#bytes(assetId); }
 
-    createRevision(presentationId, ownerUserId, { kind, assetId, engine, document, runtimeIndex, classroomBindings = [], fingerprint, expiresAt, retained = false }) {
+    createRevision(presentationId, ownerUserId, { kind, assetId, engine, document, runtimeIndex, classroomBindings = [], fingerprint: _fingerprint, expiresAt, retained = false }) {
         if (kind !== 'rehearsal' && kind !== 'published') throw new PresentationLibraryError('invalid-revision-kind');
         const project = this.#requireProject(presentationId, ownerUserId);
-        const selectedAssetId = assetId ?? project.currentDraftAssetId;
+        if (assetId != null && assetId !== project.currentDraftAssetId)
+            throw new PresentationLibraryError('revision-source-must-be-current-draft');
+        const selectedAssetId = project.currentDraftAssetId;
         const asset = this.getAsset(selectedAssetId);
         if (!asset) throw new PresentationLibraryError('asset-not-found');
         if (!runtimeIndex || !Array.isArray(runtimeIndex.scenes)) throw new PresentationLibraryError('runtime-index-required');
@@ -310,7 +377,7 @@ export class PresentationLibraryStore {
             engine: engine ?? { engineId: 'unknown', engineVersion: 'unknown', documentFormatVersion: 'unknown' },
             document: document ?? project.currentDraftDocument,
             assetId: selectedAssetId,
-            fingerprint: fingerprint ?? asset.sha256,
+            fingerprint: asset.sha256,
             runtimeIndex,
             classroomBindings,
             createdAt: isoNow(),
@@ -342,9 +409,39 @@ export class PresentationLibraryStore {
         return this.saveDraft(presentationId, ownerUserId, { bytes, mimeType: this.getAsset(revision.assetId).mimeType, document: revision.document, expectedRevision });
     }
 
+    ensureSession(sessionId, status = 'prepared') {
+        const existing = this.getSessionLifecycle(sessionId);
+        if (existing) return existing;
+        if (!['prepared', 'active', 'ended'].includes(status)) throw new PresentationLibraryError('invalid-session-status');
+        const now = isoNow();
+        this.db.prepare('INSERT INTO presentation_sessions(session_id,status,created_at,updated_at,ended_at) VALUES(?,?,?,?,?)').run(sessionId, status, now, now, status === 'ended' ? now : null);
+        return this.getSessionLifecycle(sessionId);
+    }
+
+    getSessionLifecycle(sessionId) {
+        const row = this.db.prepare('SELECT session_id AS sessionId,status,created_at AS createdAt,updated_at AS updatedAt,ended_at AS endedAt FROM presentation_sessions WHERE session_id=?').get(sessionId);
+        return row ?? null;
+    }
+
+    setSessionLifecycle(sessionId, status) {
+        if (!['prepared', 'active', 'ended'].includes(status)) throw new PresentationLibraryError('invalid-session-status');
+        const current = this.ensureSession(sessionId);
+        if (current.status === 'ended' && status !== 'ended') throw new PresentationLibraryError('session-ended');
+        if (current.status === 'active' && status === 'prepared') throw new PresentationLibraryError('invalid-session-transition');
+        const updatedAt = isoNow();
+        this.db.prepare('UPDATE presentation_sessions SET status=?,updated_at=?,ended_at=? WHERE session_id=?').run(status, updatedAt, status === 'ended' ? updatedAt : current.endedAt, sessionId);
+        if (status === 'ended') this.releaseRuntimeCacheForSession(sessionId);
+        return this.getSessionLifecycle(sessionId);
+    }
+
     pinSession(sessionId, ownerUserId, { presentationId, revisionId }) {
+        const session = this.ensureSession(sessionId);
         const revision = this.getRevision(revisionId, ownerUserId);
         if (!revision || revision.presentationId !== presentationId) throw new PresentationLibraryError('revision-not-found');
+        const current = this.getSessionPin(sessionId);
+        if (session.status === 'ended') throw new PresentationLibraryError('session-ended');
+        if (session.status === 'active' && current && current.revisionId !== revisionId)
+            throw new PresentationLibraryError('active-session-revision-fixed');
         const pin = { sessionId, presentationId, revisionId, assetId: revision.assetId, kind: revision.kind, pinnedAt: isoNow() };
         this.db.prepare(`INSERT INTO presentation_session_pins(session_id,presentation_id,revision_id,asset_id,kind,pinned_at)
           VALUES(?,?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET presentation_id=excluded.presentation_id,revision_id=excluded.revision_id,asset_id=excluded.asset_id,kind=excluded.kind,pinned_at=excluded.pinned_at`).run(pin.sessionId, pin.presentationId, pin.revisionId, pin.assetId, pin.kind, pin.pinnedAt);
@@ -355,19 +452,87 @@ export class PresentationLibraryStore {
         return this.db.prepare('SELECT session_id AS sessionId,presentation_id AS presentationId,revision_id AS revisionId,asset_id AS assetId,kind,pinned_at AS pinnedAt FROM presentation_session_pins WHERE session_id=?').get(sessionId) ?? null;
     }
 
-    prepareRuntimeCache(sessionId, ownerUserId, { presentationId, revisionId }) {
-        const pin = this.pinSession(sessionId, ownerUserId, { presentationId, revisionId });
-        const asset = this.getAsset(pin.assetId);
-        const bytes = this.#bytes(pin.assetId);
+    prepareRuntimeCache(sessionId, ownerUserId, { presentationId, revisionId, allowRevisionSwitch = false }) {
+        const session = this.ensureSession(sessionId);
+        if (session.status === 'ended') throw new PresentationLibraryError('session-ended');
+        const revision = this.getRevision(revisionId, ownerUserId);
+        if (!revision || revision.presentationId !== presentationId) throw new PresentationLibraryError('revision-not-found');
+        const currentPin = this.getSessionPin(sessionId);
+        if (session.status === 'active' && currentPin && currentPin.revisionId !== revisionId && !allowRevisionSwitch)
+            throw new PresentationLibraryError('active-session-revision-fixed');
+        const asset = this.getAsset(revision.assetId);
+        const bytes = this.#bytes(revision.assetId);
         const filename = path.join(this.cacheRoot, asset.assetId);
-        if (!fs.existsSync(filename)) fs.writeFileSync(filename, bytes, { flag: 'wx' });
-        this.db.prepare(`INSERT INTO presentation_cache_entries(asset_id,size,last_accessed_at,pinned) VALUES(?,?,?,1)
-          ON CONFLICT(asset_id) DO UPDATE SET last_accessed_at=excluded.last_accessed_at,pinned=1`).run(asset.assetId, asset.size, isoNow());
-        this.evictRuntimeCache();
+        let createdCache = false;
+        if (!fs.existsSync(filename)) {
+            const temporary = `${filename}.tmp-${process.pid}-${crypto.randomUUID()}`;
+            const handle = fs.openSync(temporary, 'wx');
+            try {
+                fs.writeFileSync(handle, bytes);
+                fs.fsyncSync(handle);
+            }
+            finally { fs.closeSync(handle); }
+            fs.renameSync(temporary, filename);
+            createdCache = true;
+        }
+        const pin = { sessionId, presentationId, revisionId, assetId: revision.assetId, kind: revision.kind, pinnedAt: isoNow() };
+        this.db.exec('BEGIN IMMEDIATE');
+        try {
+            this.db.prepare(`INSERT INTO presentation_cache_entries(asset_id,size,last_accessed_at,pinned) VALUES(?,?,?,0)
+              ON CONFLICT(asset_id) DO UPDATE SET last_accessed_at=excluded.last_accessed_at`).run(asset.assetId, asset.size, isoNow());
+            this.db.prepare(`INSERT INTO presentation_session_pins(session_id,presentation_id,revision_id,asset_id,kind,pinned_at)
+              VALUES(?,?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET presentation_id=excluded.presentation_id,revision_id=excluded.revision_id,asset_id=excluded.asset_id,kind=excluded.kind,pinned_at=excluded.pinned_at`).run(pin.sessionId, pin.presentationId, pin.revisionId, pin.assetId, pin.kind, pin.pinnedAt);
+            this.db.prepare('DELETE FROM presentation_runtime_cache_pins WHERE session_id=? AND asset_id<>?').run(sessionId, asset.assetId);
+            this.db.prepare('INSERT OR REPLACE INTO presentation_runtime_cache_pins(session_id,asset_id,created_at) VALUES(?,?,?)').run(sessionId, asset.assetId, pin.pinnedAt);
+            this.#refreshCachePins();
+            this.evictRuntimeCache();
+            this.db.exec('COMMIT');
+        }
+        catch (error) {
+            try { this.db.exec('ROLLBACK'); } catch { /* preserve original */ }
+            if (createdCache) { try { fs.unlinkSync(filename); } catch { /* preserve original */ } }
+            throw error;
+        }
         return { ...asset, cachePath: filename, prepared: true };
     }
 
+    switchSessionPresentationRevision(sessionId, ownerUserId, { presentationId, revisionId }) {
+        const session = this.ensureSession(sessionId);
+        if (session.status !== 'active') throw new PresentationLibraryError('active-session-required');
+        const revision = this.getRevision(revisionId, ownerUserId);
+        if (!revision || revision.presentationId !== presentationId) throw new PresentationLibraryError('revision-not-found');
+        this.prepareRuntimeCache(sessionId, ownerUserId, { presentationId, revisionId, allowRevisionSwitch: true });
+        const cache = this.db.prepare('SELECT 1 FROM presentation_runtime_cache_pins WHERE session_id=? AND asset_id=?').get(sessionId, revision.assetId);
+        if (!cache) throw new PresentationLibraryError('presentation-runtime-cache-not-prepared');
+        const pin = { sessionId, presentationId, revisionId, assetId: revision.assetId, kind: revision.kind, pinnedAt: isoNow() };
+        this.db.exec('BEGIN IMMEDIATE');
+        try {
+            this.db.prepare('UPDATE presentation_session_pins SET presentation_id=?,revision_id=?,asset_id=?,kind=?,pinned_at=? WHERE session_id=?').run(pin.presentationId, pin.revisionId, pin.assetId, pin.kind, pin.pinnedAt, sessionId);
+            this.db.exec('COMMIT');
+            return pin;
+        } catch (error) { try { this.db.exec('ROLLBACK'); } catch { /* preserve original */ } throw error; }
+    }
+
+    releaseRuntimeCacheForSession(sessionId) {
+        const pin = this.getSessionPin(sessionId);
+        if (pin) {
+            const revision = this.getRevision(pin.revisionId);
+            if (revision) this.db.prepare(`INSERT OR REPLACE INTO presentation_session_history(session_id,presentation_id,revision_id,fingerprint,ended_at) VALUES(?,?,?,?,?)`).run(sessionId, pin.presentationId, pin.revisionId, revision.fingerprint, isoNow());
+        }
+        this.db.prepare('DELETE FROM presentation_runtime_cache_pins WHERE session_id=?').run(sessionId);
+        this.db.prepare('DELETE FROM presentation_session_pins WHERE session_id=?').run(sessionId);
+        this.#refreshCachePins();
+        return this.evictRuntimeCache();
+    }
+
+    #refreshCachePins() {
+        this.db.exec(`UPDATE presentation_cache_entries SET pinned=CASE WHEN EXISTS(
+          SELECT 1 FROM presentation_runtime_cache_pins p WHERE p.asset_id=presentation_cache_entries.asset_id
+        ) THEN 1 ELSE 0 END`);
+    }
+
     evictRuntimeCache(now = Date.now()) {
+        this.#refreshCachePins();
         const rows = this.db.prepare('SELECT * FROM presentation_cache_entries ORDER BY last_accessed_at ASC').all();
         let total = rows.reduce((sum, row) => sum + Number(row.size), 0);
         for (const row of rows) {
@@ -430,5 +595,37 @@ export class PresentationLibraryStore {
         const project = this.getPresentation(presentationId, ownerUserId);
         if (!project || project.deletedAt) throw new PresentationLibraryError('presentation-not-found');
         return project;
+    }
+}
+
+export class PresentationMaintenanceRunner {
+    constructor(store, { intervalMs = 60 * 60 * 1000, now = () => new Date() } = {}) {
+        this.store = store;
+        this.intervalMs = intervalMs;
+        this.now = now;
+        this.timer = null;
+    }
+
+    runOnce() {
+        const now = this.now();
+        const expiredRehearsals = this.store.expireRehearsals(now);
+        const garbage = this.store.collectGarbage(now);
+        const cache = this.store.evictRuntimeCache(now.getTime());
+        return { expiredRehearsals, garbage, cache };
+    }
+
+    start() {
+        this.runOnce();
+        this.timer = setInterval(() => {
+            try { this.runOnce(); }
+            catch (error) { console.error('PRESENTATION_MAINTENANCE_ERROR', error); }
+        }, this.intervalMs);
+        this.timer.unref?.();
+        return this;
+    }
+
+    stop() {
+        if (this.timer) clearInterval(this.timer);
+        this.timer = null;
     }
 }

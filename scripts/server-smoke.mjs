@@ -37,6 +37,11 @@ try {
     if (!studentResponse.ok || !studentHtml.includes('视觉与交互设计尚未冻结')) {
         throw new Error('student-web-shell-failed');
     }
+    const teacherResponse = await fetch(`${baseUrl}/teacher`);
+    const teacherHtml = await teacherResponse.text();
+    if (!teacherResponse.ok || !teacherHtml.includes('我的课件')) {
+        throw new Error('teacher-library-shell-failed');
+    }
     const backstageOnClassroom = await fetch(`${baseUrl}/backstage`);
     if (backstageOnClassroom.status !== 404)
         throw new Error('backstage-must-not-share-classroom-port');
@@ -84,4 +89,3 @@ finally {
     await waitForChild(child);
     fs.rmSync(dataDir, { recursive: true, force: true });
 }
-

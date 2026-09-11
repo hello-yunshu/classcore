@@ -49,6 +49,9 @@ npm run bootstrap
 - Presentation 主线已接入真实 `@web-ppt/*@0.5.0-beta.1`：`@classroom/presentation-webppt-adapter` 负责 opaque OOXML bytes、稳定 `idPrefix`、编辑/保存/Runtime Index/Player 边界；Studio 生产 bundle 由 esbuild 构建，内置模板本地生成，草稿二进制走 IndexedDB；
 - Presentation Studio 下一阶段 Editor Foundation + Layout Shell + 内容工具已完成：controller façade 收拢 web-ppt 命令，三栏工作台、真实 Viewer 缩略图、对象/页面/动画检查台、页面/对象 CRUD、文字/图形/表格/图片/背景、变换/层级/对齐/复制粘贴、撤销重做、键盘快捷键和响应式降级已接入；本地 Published AssetStore 已完成 validate→Runtime Index→freeze→fingerprint 不可变发布记录；
 - Presentation Library reference vertical slice 已接入：Project/Current Draft/有限 Recovery Checkpoint/Rehearsal TTL/Published immutable Revision/Restore/Session Pin、content-addressed metadata-only AssetStore、唯一 blob quota、GC grace period、bounded Runtime Cache 和 Draft expectedRevision conflict detection；模型与边界见 `docs/development/PRESENTATION-LIBRARY-AND-FREEZE-MODEL.md`；
+- Presentation Infrastructure Hardening 已继续收口：raw Asset API、owner asset claim、current-draft-only freeze、server-derived fingerprint、account quota enforcement、Session lifecycle、按 Session runtime cache pins/release、startup/periodic maintenance runner、prepare failure-safe 和 active revision guard；
+- Teacher Presentation Library reference slice 已接入 Teacher Runtime 的“我的课件”入口，支持列表/搜索/导入/软删除/进入 Studio；Studio 已把 generation-drained autosave、Server Draft `If-Match`、offline pending 与当前编辑态缩略图接到 reference API；
+- Presentation control 的 durable outcome dedup 已收口：相同 control payload 会重放第一次成功或失败结果，失败重试不会被转成 duplicate success；
 - Studio 代码回归已修复页面上下移 anchor、当前编辑态 Preview、动画 append/显式 clear、批量删除/等距分布单 transaction；Teacher `presentation.control` 会校验 pinned RuntimeIndex、持久化 SQLite PlaybackState 并向 Display/Observer 广播；
 - `presentation-runtime` D7 verifier 已从 placeholder 改为真实 fail-closed 核心链 verifier，并已补齐 presentation evidence；D7 overall 仍不能宣称完成；
 - 当前 Presentation 唯一主线为 web-ppt；Studio 接入结果、课堂接缝边界和验收 Gate 见 `docs/development/PRESENTATION-WEBPPT-NEXT-PHASE.md`；
@@ -57,12 +60,12 @@ npm run bootstrap
 ## 当前明确未完成
 
 - TransformBoard 与真实课堂 Server 的 Join/Activity/Submission 链接入；
-- 认证账号服务器接入、真实身份 owner authorization、Studio Library UI/Picker/版本历史/云端 autosave 与 offline pending 状态；reference API 的模型级路径已存在，但不是认证产品能力；
+- 认证账号服务器接入、真实身份 owner authorization、Studio Library 的完整版本历史 UI 与课堂 Picker/设计绑定；reference API 的模型级路径已存在，但不是认证产品能力；
 - Presentation PlaybackState 与 Teacher lease 的正式课堂授权、Display player/reconnect 的真实浏览器闭环；reference transport 已有 pinned revision + SQLite sync 接缝，仍未宣称 D7；
 - `selected-artifact` Widget Registry/Resolver 与 public/teacher projection；
 - 浏览器 mount 的长期 soak、Server restart/Display reconnect、真实 Docker/LAN/XP21A evidence；
 - 完整 Join / Presence / Outbox / Submission / Artifact Exchange 产品链；
-- Teacher / Observer / Display 正式 UI；
+- Teacher / Observer / Display 的完整正式课堂 UI（Teacher 目前只有课件库入口，课堂控制仍是 reference transport）；
 - Lesson-specific Analytics Runtime 与《图案的还原》规则智能；
 - Apple Silicon Mac 上真实 Docker build/run/restart；
 - 真实路由器 + XP21A LAN rehearsal（自动 host LAN-interface probe 不能替代）；

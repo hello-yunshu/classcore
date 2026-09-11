@@ -100,6 +100,7 @@ const DRAFT_STORE = 'assets';
 const PUBLISHED_STORE = 'published';
 const DRAFT_META_KEY = 'classcore.presentation.draft.meta.v1';
 const PUBLISHED_META_KEY = 'classcore.presentation.published.meta.v1';
+const SERVER_META_KEY = 'classcore.presentation.server.meta.v1';
 
 function openDraftDb(): Promise<IDBDatabase> { return new Promise((resolve, reject) => { const request = indexedDB.open(DRAFT_DB, 2);
  request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains(DRAFT_STORE)) request.result.createObjectStore(DRAFT_STORE, { keyPath: 'deckId' });
@@ -121,6 +122,19 @@ interface StoredDraftMetadata { presentationSchemaVersion: 1;
  mimeType: string;
  sha256?: string };
  }
+
+interface ServerProjectMetadata { presentationId: string; currentDraftRevision: number; }
+function loadServerProjectMetadata(): ServerProjectMetadata | null {
+ try { return JSON.parse(localStorage.getItem(SERVER_META_KEY) ?? 'null') as ServerProjectMetadata | null; } catch { return null; }
+}
+function saveServerProjectMetadata(value: ServerProjectMetadata): void { localStorage.setItem(SERVER_META_KEY, JSON.stringify(value)); }
+function clearServerProjectMetadata(): void { localStorage.removeItem(SERVER_META_KEY); }
+function serverHeaders(extra: Record<string, string> = {}): HeadersInit { return { 'x-classcore-user-id': 'demo-teacher', ...extra }; }
+async function serverJson(path: string, init: RequestInit = {}): Promise<any> {
+ const response = await fetch(path, { ...init, headers: { ...serverHeaders(), ...(init.headers ?? {}) } });
+ if (!response.ok) throw new Error(`presentation-server-http-${response.status}`);
+ return response.json();
+}
 async function persistWebPptDraft(asset: WebPptPresentationAsset): Promise<void> { if (!asset.source) throw new Error('presentation-source-required-for-save');
  const metadata: StoredDraftMetadata = { presentationSchemaVersion: 1, deckId: asset.deckId, title: asset.title, engine: asset.engine, document: asset.document, classroomBindings: asset.classroomBindings, createdAt: asset.createdAt, updatedAt: asset.updatedAt, source: { kind: 'bytes', mimeType: asset.source.mimeType, sha256: asset.source.sha256 } };
  localStorage.setItem(DRAFT_META_KEY, JSON.stringify(metadata));
@@ -203,10 +217,17 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  session: Awaited<ReturnType<typeof engine.mountPlayer>> } | null = null;
  let published: PublishedPresentationRecord | null = null;
  let busy = false;
+ let serverProject: ServerProjectMetadata | null = loadServerProjectMetadata();
+ let serverSyncPending = false;
  let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+ let thumbnailRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+ let savePromise: Promise<void> | null = null;
+ let editGeneration = 0;
+ let savedGeneration = 0;
  let autosaveSuspended = true;
  let inspectorTab: 'object' | 'page' | 'animation' = 'object';
  let thumbnailGeneration = 0;
+ let thumbnailAsset: WebPptPresentationAsset | null = null;
     const thumbnailSessions = new Map<string, Awaited<ReturnType<typeof engine.mountPlayer>>>();
     root.replaceChildren();
  const app = document.createElement('div');
@@ -263,10 +284,49 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  } catch (error) { setStatus(error instanceof Error ? error.message : String(error), true);
  } };
  }
+ async function loadRemotePresentation(presentationId: string): Promise<WebPptPresentationAsset> {
+  const result = await serverJson(`/api/presentations/${encodeURIComponent(presentationId)}`);
+  const project = result.presentation;
+  const response = await fetch(`/api/presentations/${encodeURIComponent(presentationId)}/draft?download=1`, { headers: serverHeaders() });
+  if (!response.ok) throw new Error(`presentation-server-http-${response.status}`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const document = project.currentDraftDocument as WebPptPresentationAsset['document'];
+  if (!document?.idPrefix) throw new Error('presentation-server-document-metadata-missing');
+  serverProject = { presentationId, currentDraftRevision: project.currentDraftRevision };
+  saveServerProjectMetadata(serverProject);
+  return createWebPptAssetFromBytes(project.title, bytes, document.idPrefix).then(next => ({ ...next, document, updatedAt: project.updatedAt }));
+ }
+
+ async function syncServerDraft(next: WebPptPresentationAsset): Promise<void> {
+  if (!next.source) throw new Error('presentation-source-required-for-save');
+  if (!serverProject) {
+   const uploaded = await fetch('/api/presentation-assets', { method: 'POST', headers: serverHeaders({ 'content-type': next.source.mimeType }), body: next.source.bytes as unknown as BodyInit });
+   if (!uploaded.ok) throw new Error(`presentation-server-http-${uploaded.status}`);
+   const { asset: uploadedAsset } = await uploaded.json();
+   const created = await serverJson('/api/presentations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: next.title, assetId: uploadedAsset.assetId, document: { ...next.document, deckId: next.deckId } }) });
+   serverProject = { presentationId: created.presentation.presentationId, currentDraftRevision: created.presentation.currentDraftRevision };
+   saveServerProjectMetadata(serverProject);
+   return;
+  }
+  const response = await fetch(`/api/presentations/${encodeURIComponent(serverProject.presentationId)}/draft`, {
+   method: 'PUT',
+   headers: serverHeaders({
+    'content-type': next.source.mimeType,
+    'if-match': String(serverProject.currentDraftRevision),
+    'x-presentation-document': JSON.stringify({ ...next.document, deckId: next.deckId }),
+   }),
+   body: next.source.bytes as unknown as BodyInit,
+  });
+  if (response.status === 409) throw new Error('draft-conflict');
+  if (!response.ok) throw new Error(`presentation-server-http-${response.status}`);
+  const result = await response.json();
+  serverProject.currentDraftRevision = result.presentation.currentDraftRevision;
+  saveServerProjectMetadata(serverProject);
+ }
     async function syncThumbnails(): Promise<void> { const generation = ++thumbnailGeneration;
  for (const session of thumbnailSessions.values()) session.dispose();
  thumbnailSessions.clear();
- if (!asset) return;
+ if (!thumbnailAsset) return;
  const hosts = [...sceneList.querySelectorAll<HTMLElement>('[data-thumbnail-host]')];
  const slideIds = [...(currentSession()?.editor.doc.slideOrder ?? [])];
  const targets = new Map<string, HTMLElement>();
@@ -275,7 +335,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   if (slideId && slideIds.includes(slideId)) targets.set(slideId, host);
  }
  try {
-  const sessions = await engine.mountThumbnailViews(targets, asset);
+  const sessions = await engine.mountThumbnailViews(targets, thumbnailAsset);
   if (generation !== thumbnailGeneration) {
    for (const session of sessions.values()) session.dispose();
    return;
@@ -550,17 +610,57 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  stageFooter.textContent = `${controller.snapshot.status} · ${controller.snapshot.zoom.toFixed(2)}× · ${currentSession()?.editor.history.undoCount ?? 0} 个可撤销操作${published ? ` · 已发布 ${published.fingerprint.slice(0, 12)}` : ''}`;
  if (!thumbnails) thumbnailGeneration += 1;
  }
-    async function persist(): Promise<void> { if (!asset || busy) return;
- busy = true;
- setStatus('正在保存…');
- try { const bytes = await controller.save();
- const saved = await createWebPptAssetFromBytes(asset.title, bytes, asset.document.idPrefix);
- asset = { ...asset, source: saved.source, updatedAt: new Date().toISOString() };
- await persistWebPptDraft(asset);
- setStatus(`已保存 ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
- renderAll(false);
- } finally { busy = false;
- } }
+    async function persist(): Promise<void> {
+ if (!asset || (busy && !savePromise)) return;
+ if (savePromise) return savePromise;
+ savePromise = (async () => {
+  busy = true;
+  do {
+   const generation = editGeneration;
+   const sourceAsset: WebPptPresentationAsset = asset!;
+   setStatus('正在保存…');
+   const bytes = await controller.save();
+   const saved = await createWebPptAssetFromBytes(sourceAsset.title, bytes, sourceAsset.document.idPrefix);
+   const next: WebPptPresentationAsset = { ...sourceAsset, source: saved.source, updatedAt: new Date().toISOString() };
+   asset = next;
+   thumbnailAsset = next;
+   await persistWebPptDraft(next);
+   try {
+    await syncServerDraft(next);
+    serverSyncPending = false;
+   } catch (error) {
+    serverSyncPending = true;
+    setStatus(error instanceof Error && error.message === 'draft-conflict' ? '需要重新加载服务器版本' : '等待同步');
+   }
+   savedGeneration = generation;
+   renderAll(false);
+   if (editGeneration > generation) setStatus('正在保存…');
+  } while (editGeneration > savedGeneration);
+  if (!serverSyncPending) setStatus(`已保存 ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+ })().finally(() => {
+  busy = false;
+  savePromise = null;
+  if (editGeneration > savedGeneration) void persist();
+ });
+ return savePromise;
+ }
+
+ function scheduleThumbnailRefresh(): void {
+  if (!asset || autosaveSuspended) return;
+  if (thumbnailRefreshTimer) clearTimeout(thumbnailRefreshTimer);
+  thumbnailRefreshTimer = setTimeout(() => {
+   thumbnailRefreshTimer = null;
+   const generation = editGeneration;
+   void controller.save().then(async bytes => {
+    const current = asset;
+    if (!current) return;
+    const next = await createWebPptAssetFromBytes(current.title, bytes, current.document.idPrefix);
+    if (generation !== editGeneration) return;
+    thumbnailAsset = next;
+    void syncThumbnails();
+   }).catch(() => { /* thumbnail refresh must not block editing */ });
+  }, 120);
+ }
     async function publish(): Promise<void> { if (!asset || busy) return;
  busy = true;
  setStatus('正在校验并冻结…');
@@ -569,9 +669,11 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const validation = await engine.validate(saved);
  if (!validation.valid) throw new Error(`发布阻断：${validation.errors.join('、')}`);
  const runtimeIndex = await engine.buildRuntimeIndex(saved);
- const record: PublishedPresentationRecord = { version: 1, deckId: saved.deckId, title: saved.title, fingerprint: saved.source?.sha256 ?? '', publishedAt: new Date().toISOString(), runtimeIndex, bytes: saved.source!.bytes };
  await persistWebPptDraft(saved);
- await persistPublished(record);
+ await syncServerDraft(saved);
+ const publishedResponse = await serverJson(`/api/presentations/${encodeURIComponent(serverProject!.presentationId)}/published`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ engine: saved.engine, document: { ...saved.document, deckId: saved.deckId }, runtimeIndex }) });
+ const publishedRevision = publishedResponse.revision;
+ const record: PublishedPresentationRecord = { version: 1, deckId: saved.deckId, title: saved.title, fingerprint: publishedRevision.fingerprint, publishedAt: publishedRevision.createdAt, runtimeIndex, bytes: saved.source!.bytes };
  asset = saved;
  published = record;
  titleInput.value = saved.title;
@@ -586,6 +688,9 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  for (const session of thumbnailSessions.values()) session.dispose();
  thumbnailSessions.clear();
  asset = next;
+ thumbnailAsset = next;
+ editGeneration = 0;
+ savedGeneration = 0;
  titleInput.value = next.title;
  published = null;
  await webPpt.applyBinding({ source: next.source!.bytes, openOptions: { idPrefix: next.document.idPrefix }, mode: 'edit', textMode: 'svg' });
@@ -597,9 +702,9 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  } catch (error) { setStatus(error instanceof Error ? error.message : String(error), true);
  } finally { busy = false;
  } }
-    async function newDeck(): Promise<void> { if (!busy) await openAsset(await engine.createBlank(titleInput.value.trim() || '未命名公开课'));
+ async function newDeck(): Promise<void> { if (!busy) { serverProject = null; clearServerProjectMetadata(); await openAsset(await engine.createBlank(titleInput.value.trim() || '未命名公开课')); }
  }
-    async function openFile(file: File): Promise<void> { if (!busy) await openAsset(await createWebPptAssetFromBytes(file.name.replace(/\.pptx?$/i, '') || '本地公开课', new Uint8Array(await file.arrayBuffer())));
+ async function openFile(file: File): Promise<void> { if (!busy) { serverProject = null; clearServerProjectMetadata(); await openAsset(await createWebPptAssetFromBytes(file.name.replace(/\.pptx?$/i, '') || '本地公开课', new Uint8Array(await file.arrayBuffer()))); }
  }
     async function togglePreview(): Promise<void> { if (!asset || busy) return;
  if (preview) { preview.session.dispose();
@@ -659,17 +764,18 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  });
  headerActions.append(button('新建', wrapAction(() => newDeck()), 'small-button'), button('打开 PPTX', wrapAction(() => fileInput.click()), 'small-button'), button('预览', wrapAction(() => togglePreview()), 'preview-button'), fileInput, imageInput, backgroundInput);
  titleInput.addEventListener('change', () => { if (asset) asset = { ...asset, title: titleInput.value.trim() || '未命名公开课' };
+ editGeneration += 1;
  scheduleAutosave();
  renderAll(false);
  });
  function scheduleAutosave(): void {
-  if (autosaveSuspended || !asset || busy) return;
+  if (autosaveSuspended || !asset) return;
   if (autosaveTimer) clearTimeout(autosaveTimer);
   setStatus('正在保存…');
   autosaveTimer = setTimeout(() => { autosaveTimer = null; void persist(); }, 1500);
  }
- webPpt.subscribe(() => { renderAll(false); scheduleAutosave(); });
- controller.subscribe(() => { renderAll(false); scheduleAutosave(); });
+ webPpt.subscribe(() => { editGeneration += 1; renderAll(false); scheduleThumbnailRefresh(); scheduleAutosave(); });
+ controller.subscribe(() => { editGeneration += 1; renderAll(false); scheduleThumbnailRefresh(); scheduleAutosave(); });
  window.addEventListener('keydown', event => { const modifier = event.metaKey || event.ctrlKey;
  if (modifier && event.key.toLowerCase() === 's') { event.preventDefault();
  void persist();
@@ -685,9 +791,14 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  renderAll();
  } });
  renderAll();
- void (async () => { const draft = await loadWebPptDraft();
- await openAsset(draft ?? await engine.createBlank('未命名公开课'));
- autosaveSuspended = false;
+ void (async () => {
+  const remoteId = new URLSearchParams(window.location.search).get('presentationId');
+  let draft: WebPptPresentationAsset | null = null;
+  try { draft = remoteId ? await loadRemotePresentation(remoteId) : await loadWebPptDraft(); }
+  catch { if (remoteId) { serverProject = null; clearServerProjectMetadata(); setStatus('课件加载失败，请检查课件服务', true); } }
+  await openAsset(draft ?? await engine.createBlank('未命名公开课'));
+  autosaveSuspended = false;
+  window.addEventListener('online', () => { if (serverSyncPending) void persist(); });
  })();
 }
 function isTypingTarget(target: EventTarget | null): boolean { const element = target as HTMLElement | null;

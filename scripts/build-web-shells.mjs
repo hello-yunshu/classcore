@@ -59,6 +59,15 @@ function studioShell() {
     );
 }
 
+function teacherShell() {
+    return baseDocument(
+        '我的课件',
+        readStyle('apps/teacher-web/src/teacher.css'),
+        '<div id="teacher-root"></div>',
+        "import { mountTeacherLibrary } from '/assets/apps/teacher-web/src/entry.js'; mountTeacherLibrary(document.querySelector('#teacher-root'));"
+    );
+}
+
 async function buildPresentationBundle() {
     await bundle({
         entryPoints: [path.join(root, 'dist', 'apps', 'presentation-studio', 'src', 'entry.js')],
@@ -107,6 +116,8 @@ function buildShell({ route, app, label }) {
         return studentShell();
     if (route === 'authoring')
         return studioShell();
+    if (route === 'teacher')
+        return teacherShell();
     return neutralShell({ app, label });
 }
 

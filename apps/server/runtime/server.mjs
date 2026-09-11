@@ -3,8 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SqliteClassroomStateStore } from './sqlite-store.mjs';
-import { PresentationLibraryError, PresentationLibraryStore } from './presentation-library.mjs';
+import { PresentationLibraryError, PresentationLibraryStore, PresentationMaintenanceRunner } from './presentation-library.mjs';
 import { acceptWebSocketUpgrade } from './websocket.mjs';
+import { applyValidatedPresentationControl } from '../../../dist/packages/presentation/src/index.js';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../..');
 function readPositiveInt(name, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
@@ -43,6 +44,9 @@ if (runtimeMode !== 'reference-transport' || authentication || productReady) {
 }
 const store = new SqliteClassroomStateStore(path.join(dataDir, 'classroom.sqlite'));
 const presentationLibrary = new PresentationLibraryStore(dataDir);
+const presentationMaintenance = new PresentationMaintenanceRunner(presentationLibrary, {
+    intervalMs: Number(process.env.PRESENTATION_MAINTENANCE_INTERVAL_MS ?? 60 * 60 * 1000),
+}).start();
 const clients = new Set();
 const stats = {
     connections: 0,
@@ -72,13 +76,7 @@ function presentationStateForSession(sessionId) {
 }
 function applyPresentationTransportControl(sessionId, message) {
     const { revision, state: current } = presentationStateForSession(sessionId);
-    if (Number(message.expectedRevision) !== current.revision) throw new Error('stale-revision');
-    const scene = revision.runtimeIndex.scenes.find(item => item.sceneId === (message.action === 'goto' ? message.sceneId : current.sceneId));
-    if (!scene) throw new Error('presentation-scene-not-found');
-    const step = message.action === 'goto' ? Number(message.step ?? 0) : message.action === 'set-step' ? Number(message.step) : current.step;
-    if (!Number.isInteger(step) || step < 0 || step > scene.maxStep) throw new Error('presentation-step-out-of-range');
-    const playState = message.action === 'play' ? 'playing' : message.action === 'pause' ? 'paused' : current.playState;
-    const next = { ...current, sceneId: message.action === 'goto' ? message.sceneId : current.sceneId, step, playState, revision: current.revision + 1 };
+    const next = applyValidatedPresentationControl(current, message, revision.runtimeIndex);
     store.savePresentationPlayback(next);
     return next;
 }
@@ -125,8 +123,27 @@ async function handlePresentationApi(req, res, url) {
     const ownerUserId = requestOwner(req);
     const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
     try {
+        if (req.method === 'POST' && parts.length === 2 && parts[1] === 'presentation-assets') {
+            const asset = presentationLibrary.ingestAsset(ownerUserId, {
+                bytes: await readRequestBody(req, presentationLibrary.policy.maxPresentationFileBytes),
+                mimeType: String(req.headers['content-type'] ?? 'application/octet-stream'),
+            });
+            return sendJson(res, 201, { asset: { assetId: asset.assetId, sha256: asset.sha256, size: asset.size } });
+        }
+        if (req.method === 'GET' && parts.length === 3 && parts[1] === 'presentation-assets') {
+            const asset = presentationLibrary.getOwnedAsset(parts[2], ownerUserId);
+            if (!asset) return sendJson(res, 404, { error: 'asset-not-found' });
+            const bytes = presentationLibrary.getAssetBytes(asset.assetId);
+            res.writeHead(200, { 'content-type': asset.mimeType, 'content-length': bytes.length, 'x-content-sha256': asset.sha256, 'cache-control': 'no-store' });
+            return res.end(bytes);
+        }
         if (parts[1] === 'sessions' && parts.length >= 3) {
             const sessionId = parts[2];
+            if (req.method === 'GET' && parts[3] === 'presentation-lifecycle') return sendJson(res, 200, { session: presentationLibrary.ensureSession(sessionId) });
+            if (req.method === 'POST' && parts[3] === 'presentation-lifecycle') {
+                const body = JSON.parse((await readRequestBody(req, 64 * 1024)).toString('utf8') || '{}');
+                return sendJson(res, 200, { session: presentationLibrary.setSessionLifecycle(sessionId, body.status) });
+            }
             if (req.method === 'GET' && parts[3] === 'presentation-pin') return sendJson(res, 200, { pin: presentationLibrary.getSessionPin(sessionId) });
             if (req.method === 'PUT' && parts[3] === 'presentation-pin') {
                 const body = JSON.parse((await readRequestBody(req, 64 * 1024)).toString('utf8') || '{}');
@@ -136,6 +153,16 @@ async function handlePresentationApi(req, res, url) {
                 const body = JSON.parse((await readRequestBody(req, 64 * 1024)).toString('utf8') || '{}');
                 return sendJson(res, 200, { prepared: presentationLibrary.prepareRuntimeCache(sessionId, ownerUserId, body) });
             }
+            if (req.method === 'POST' && parts[3] === 'presentation-switch') {
+                const body = JSON.parse((await readRequestBody(req, 64 * 1024)).toString('utf8') || '{}');
+                const pin = presentationLibrary.switchSessionPresentationRevision(sessionId, ownerUserId, body);
+                const revision = presentationLibrary.getRevision(pin.revisionId, ownerUserId);
+                const first = revision?.runtimeIndex?.scenes?.[0];
+                if (!first) throw new PresentationLibraryError('presentation-runtime-index-empty');
+                const state = { sessionId, presentationRevisionId: pin.revisionId, assetId: pin.assetId, deckId: revision.runtimeIndex.deckId, sceneId: first.sceneId, step: 0, playState: 'idle', revision: 0 };
+                store.savePresentationPlayback(state);
+                return sendJson(res, 200, { pin, state });
+            }
             return sendJson(res, 404, { error: 'not-found' });
         }
         if (req.method === 'GET' && parts.length === 2 && parts[1] === 'presentations')
@@ -143,8 +170,8 @@ async function handlePresentationApi(req, res, url) {
         if (req.method === 'POST' && parts.length === 2 && parts[1] === 'presentations') {
             const body = JSON.parse((await readRequestBody(req, 2 * 1024 * 1024)).toString('utf8') || '{}');
             const bytes = body.bytesBase64 ? Buffer.from(body.bytesBase64, 'base64') : null;
-            if (!bytes?.length) throw new PresentationLibraryError('presentation-bytes-required');
-            return sendJson(res, 201, { presentation: presentationLibrary.createPresentation({ ownerUserId, title: body.title, bytes, mimeType: body.mimeType, document: body.document }) });
+            if (!body.assetId && !bytes?.length) throw new PresentationLibraryError('presentation-bytes-required');
+            return sendJson(res, 201, { presentation: presentationLibrary.createPresentation({ ownerUserId, title: body.title, assetId: body.assetId, bytes, mimeType: body.mimeType, document: body.document }) });
         }
         if (parts[1] !== 'presentations' || parts.length < 3) return sendJson(res, 404, { error: 'not-found' });
         const presentationId = parts[2];
@@ -440,8 +467,12 @@ classroomServer.on('upgrade', (req, socket, head) => {
                 return;
             }
             try {
-                const accepted = store.acceptTransportControl(meta.sessionId, controlId, message);
-                const state = accepted.inserted ? applyPresentationTransportControl(meta.sessionId, message) : store.loadPresentationPlayback(meta.sessionId);
+                const accepted = store.acceptPresentationControl(meta.sessionId, controlId, message, () => ({ state: applyPresentationTransportControl(meta.sessionId, message) }));
+                if (!accepted.outcome?.ok) {
+                    ws.send({ type: 'presentation.control.ack', ok: false, controlId, duplicate: !accepted.inserted, serverSeq: accepted.serverSeq, reason: accepted.outcome?.reason ?? 'presentation-control-failed' });
+                    return;
+                }
+                const state = accepted.outcome.value.state;
                 ws.send({ type: 'presentation.control.ack', ok: true, controlId, duplicate: !accepted.inserted, serverSeq: accepted.serverSeq, state });
                 if (!accepted.inserted) return;
                 for (const item of clients) {
@@ -510,7 +541,8 @@ function shutdown() {
     let remaining = 2;
     const closed = () => {
         remaining--;
-        if (remaining === 0) {
+    if (remaining === 0) {
+            presentationMaintenance.stop();
             store.close();
             presentationLibrary.close();
             process.exit(0);

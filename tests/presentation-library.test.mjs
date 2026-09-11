@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { PresentationLibraryStore, PresentationLibraryError } from '../apps/server/runtime/presentation-library.mjs';
+import { SqliteClassroomStateStore } from '../apps/server/runtime/sqlite-store.mjs';
 
 function makeStore(policy = {}) {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'classcore-presentation-library-'));
@@ -97,6 +98,96 @@ test('unreferenced assets are marked before grace-period deletion', () => {
         const deleted = store.collectGarbage(new Date('2026-09-11T00:00:02.000Z'));
         assert.deepEqual(deleted, [{ assetId: oldAsset, action: 'deleted' }]);
         assert.equal(store.getAsset(oldAsset), null);
+    } finally {
+        store.close();
+        fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+});
+
+test('presentation control outcomes are durable, replayable, and do not consume a sequence on failure', () => {
+    const { dataDir } = makeStore();
+    const store = new SqliteClassroomStateStore(path.join(dataDir, 'transport.sqlite'));
+    try {
+        let applies = 0;
+        const failed = store.acceptPresentationControl('session:control', 'control:failed', { action: 'goto', expectedRevision: 9 }, () => {
+            applies += 1;
+            throw new Error('stale-revision');
+        });
+        const retry = store.acceptPresentationControl('session:control', 'control:failed', { expectedRevision: 9, action: 'goto' }, () => {
+            applies += 1;
+            return { state: 'must-not-run' };
+        });
+        assert.equal(failed.outcome.ok, false);
+        assert.equal(retry.outcome.ok, false);
+        assert.equal(retry.outcome.reason, 'stale-revision');
+        assert.equal(retry.inserted, false);
+        assert.equal(applies, 1);
+        assert.equal(store.currentTransportSeq('session:control'), 0);
+
+        let successfulApplies = 0;
+        const first = store.acceptPresentationControl('session:control', 'control:ok', { action: 'pause', expectedRevision: 0 }, () => {
+            successfulApplies += 1;
+            return { state: { revision: 1 } };
+        });
+        const duplicate = store.acceptPresentationControl('session:control', 'control:ok', { expectedRevision: 0, action: 'pause' }, () => {
+            successfulApplies += 1;
+            return { state: { revision: 2 } };
+        });
+        assert.equal(first.outcome.value.state.revision, 1);
+        assert.equal(duplicate.outcome.value.state.revision, 1);
+        assert.equal(duplicate.serverSeq, first.serverSeq);
+        assert.equal(successfulApplies, 1);
+    } finally {
+        store.close();
+        fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+});
+
+test('session-aware cache retention releases only after the last prepared session ends', () => {
+    const { dataDir, store } = makeStore({ maxRuntimePresentationCacheBytes: 3 });
+    try {
+        const project = store.createPresentation({ ownerUserId: 'teacher:1', title: '课件', bytes: Buffer.from('ppt'), document: { format: 'test' } });
+        const published = store.createRevision(project.presentationId, 'teacher:1', { kind: 'published', runtimeIndex });
+        store.prepareRuntimeCache('session:a', 'teacher:1', { presentationId: project.presentationId, revisionId: published.revisionId });
+        store.prepareRuntimeCache('session:b', 'teacher:1', { presentationId: project.presentationId, revisionId: published.revisionId });
+        assert.equal(Number(store.db.prepare('SELECT pinned FROM presentation_cache_entries WHERE asset_id=?').get(published.assetId).pinned), 1);
+        store.setSessionLifecycle('session:a', 'ended');
+        assert.equal(Number(store.db.prepare('SELECT pinned FROM presentation_cache_entries WHERE asset_id=?').get(published.assetId).pinned), 1);
+        store.setSessionLifecycle('session:b', 'ended');
+        assert.equal(Number(store.db.prepare('SELECT pinned FROM presentation_cache_entries WHERE asset_id=?').get(published.assetId).pinned), 0);
+    } finally {
+        store.close();
+        fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+});
+
+test('account quota and server-derived revision fingerprint fail closed', () => {
+    const { dataDir, store } = makeStore({ maxAccountPresentationBytes: 3 });
+    try {
+        const project = store.createPresentation({ ownerUserId: 'teacher:1', title: '课件', bytes: Buffer.from('abc'), document: { format: 'test' } });
+        assert.throws(() => store.saveDraft(project.presentationId, 'teacher:1', { bytes: Buffer.from('abcd'), expectedRevision: 1 }), error => error instanceof PresentationLibraryError && error.code === 'account-presentation-quota-exceeded');
+        const published = store.createRevision(project.presentationId, 'teacher:1', { kind: 'published', runtimeIndex, fingerprint: 'client-controlled' });
+        assert.equal(published.fingerprint, store.getAsset(published.assetId).sha256);
+    } finally {
+        store.close();
+        fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+});
+
+test('active sessions require an explicit prepared revision switch', () => {
+    const { dataDir, store } = makeStore();
+    try {
+        const project = store.createPresentation({ ownerUserId: 'teacher:1', title: '课件', bytes: Buffer.from('one'), document: { format: 'test' } });
+        const first = store.createRevision(project.presentationId, 'teacher:1', { kind: 'published', runtimeIndex });
+        const next = store.saveDraft(project.presentationId, 'teacher:1', { bytes: Buffer.from('two'), expectedRevision: 1, document: { format: 'test' } });
+        const second = store.createRevision(project.presentationId, 'teacher:1', { kind: 'published', runtimeIndex: { ...runtimeIndex, deckId: 'deck:two' } });
+        store.prepareRuntimeCache('session:switch', 'teacher:1', { presentationId: project.presentationId, revisionId: first.revisionId });
+        store.setSessionLifecycle('session:switch', 'active');
+        assert.throws(() => store.prepareRuntimeCache('session:switch', 'teacher:1', { presentationId: project.presentationId, revisionId: second.revisionId }), /active-session-revision-fixed/);
+        const pin = store.switchSessionPresentationRevision('session:switch', 'teacher:1', { presentationId: project.presentationId, revisionId: second.revisionId });
+        assert.equal(pin.revisionId, second.revisionId);
+        assert.equal(store.getSessionLifecycle('session:switch').status, 'active');
+        assert.equal(next.currentDraftRevision, 2);
     } finally {
         store.close();
         fs.rmSync(dataDir, { recursive: true, force: true });
