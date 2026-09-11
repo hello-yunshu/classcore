@@ -75,6 +75,7 @@ function projectFrom(row) {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         deletedAt: row.deleted_at,
+        draftHasUnpublishedChanges: false,
     };
 }
 
@@ -342,13 +343,13 @@ export class PresentationLibraryStore {
 
     listPresentations(ownerUserId, { includeDeleted = false } = {}) {
         const rows = this.db.prepare(`SELECT * FROM presentation_projects WHERE owner_user_id=? ${includeDeleted ? '' : 'AND deleted_at IS NULL'} ORDER BY updated_at DESC`).all(ownerUserId);
-        return rows.map(projectFrom);
+        return rows.map(row => this.#withPublishedFreshness(projectFrom(row)));
     }
 
     getPresentation(presentationId, ownerUserId = null) {
         const row = this.db.prepare('SELECT * FROM presentation_projects WHERE presentation_id=?').get(presentationId);
         if (!row || (ownerUserId != null && row.owner_user_id !== ownerUserId)) return null;
-        return projectFrom(row);
+        return this.#withPublishedFreshness(projectFrom(row));
     }
 
     ingestAsset(ownerUserId, { bytes, mimeType }) {
@@ -370,9 +371,10 @@ export class PresentationLibraryStore {
         return this.getPresentation(presentationId, ownerUserId);
     }
 
-    duplicatePresentation(presentationId, ownerUserId, title = undefined) {
-        const draft = this.loadDraft(presentationId, ownerUserId);
-        return this.createPresentation({ ownerUserId, title: title ?? `${draft.project.title} 副本`, bytes: draft.bytes, mimeType: draft.asset.mimeType, document: draft.project.currentDraftDocument });
+    duplicatePresentation(presentationId, ownerUserId, title = undefined, local = undefined) {
+        const draft = local?.bytes ? null : this.loadDraft(presentationId, ownerUserId);
+        const source = local?.bytes ? { bytes: asBytes(local.bytes), mimeType: local.mimeType ?? 'application/octet-stream', document: local.document } : draft;
+        return this.createPresentation({ ownerUserId, title: title ?? `${source.project?.title ?? '未命名课件'} 副本`, bytes: source.bytes, mimeType: source.mimeType ?? source.asset?.mimeType, document: source.document ?? source.project?.currentDraftDocument });
     }
 
     softDeletePresentation(presentationId, ownerUserId) {
@@ -470,7 +472,7 @@ export class PresentationLibraryStore {
         if (!runtimeIndex || !Array.isArray(runtimeIndex.scenes) || runtimeIndex.scenes.length === 0)
             throw new PresentationLibraryError('runtime-index-required');
         const selectedDocument = document ?? project.currentDraftDocument;
-        const selectedEngine = engine ?? { engineId: 'web-ppt', engineVersion: '0.5.0-beta.1', documentFormatVersion: selectedDocument?.format };
+        const selectedEngine = engine ?? { engineId: 'web-ppt', engineVersion: WEB_PPT_ENGINE.engineVersion, documentFormatVersion: selectedDocument?.format };
         if (selectedEngine.engineId !== 'web-ppt') throw new PresentationLibraryError('freeze-engine-mismatch');
         if (selectedDocument?.idPrefix && project.currentDraftDocument?.idPrefix && selectedDocument.idPrefix !== project.currentDraftDocument.idPrefix)
             throw new PresentationLibraryError('freeze-document-id-prefix-mismatch');
@@ -536,32 +538,29 @@ export class PresentationLibraryStore {
         if (document?.format !== WEB_PPT_ENGINE.documentFormatVersion)
             return this.createRevision(presentationId, ownerUserId, options);
         const draft = this.loadDraft(presentationId, ownerUserId);
-        let runtimeIndex;
-        try {
-            runtimeIndex = await buildTrustedWebPptRuntimeIndex(draft.bytes, {
-                idPrefix: document.idPrefix,
-                deckId: document.deckId,
-            });
-        }
-        catch (error) {
-            // Keep the old reference-transport fixture API usable for model
-            // tests that intentionally use non-PPTX bytes. Product callers
-            // send engine/document explicitly and therefore fail closed.
-            if (options.engine || options.document) throw error;
-            return this.createRevision(presentationId, ownerUserId, {
-                ...options,
-                assetId: project.currentDraftAssetId,
-                document,
-                runtimeIndex: options.runtimeIndex,
-                trustedRuntimeIndex: true,
-            });
-        }
+        const runtimeIndex = await buildTrustedWebPptRuntimeIndex(draft.bytes, {
+            idPrefix: document.idPrefix,
+            deckId: document.deckId,
+        });
         return this.createRevision(presentationId, ownerUserId, {
             ...options,
             assetId: project.currentDraftAssetId,
             engine: options.engine ?? WEB_PPT_ENGINE,
             document,
             runtimeIndex,
+            trustedRuntimeIndex: true,
+        });
+    }
+
+    /** Synthetic engine is test-only and cannot be reached by production callers. */
+    createSyntheticRevisionForTest(presentationId, ownerUserId, options) {
+        if (process.env.NODE_ENV !== 'test') throw new PresentationLibraryError('synthetic-engine-forbidden');
+        const project = this.#requireProject(presentationId, ownerUserId);
+        return this.createRevision(presentationId, ownerUserId, {
+            ...options,
+            assetId: project.currentDraftAssetId,
+            engine: options.engine ?? { engineId: 'web-ppt', engineVersion: 'test', documentFormatVersion: 'test' },
+            document: { ...(options.document ?? project.currentDraftDocument), format: 'test' },
             trustedRuntimeIndex: true,
         });
     }
@@ -599,6 +598,9 @@ export class PresentationLibraryStore {
 
     async prepareClassroom(sessionId, ownerUserId, { presentationId, revisionId = null }) {
         this.#requireProject(presentationId, ownerUserId);
+        const project = this.#requireProject(presentationId, ownerUserId);
+        if (!revisionId && project.draftHasUnpublishedChanges)
+            throw new PresentationLibraryError('published-stale', 'published-stale', { presentationId, currentDraftRevision: project.currentDraftRevision });
         let revision = revisionId ? this.getRevision(revisionId, ownerUserId) : this.getLatestRevision(presentationId, ownerUserId, 'published');
         if (!revision) revision = await this.createTrustedRevision(presentationId, ownerUserId, { kind: 'published' });
         if (revision.kind !== 'published') throw new PresentationLibraryError('published-revision-required');
@@ -912,6 +914,12 @@ export class PresentationLibraryStore {
         const project = this.getPresentation(presentationId, ownerUserId);
         if (!project || project.deletedAt) throw new PresentationLibraryError('presentation-not-found');
         return project;
+    }
+
+    #withPublishedFreshness(project) {
+        if (!project) return null;
+        const row = this.db.prepare(`SELECT revision_id, asset_id FROM presentation_revisions WHERE presentation_id=? AND kind='published' ORDER BY created_at DESC LIMIT 1`).get(project.presentationId);
+        return { ...project, draftHasUnpublishedChanges: Boolean(row && row.asset_id !== project.currentDraftAssetId), latestPublishedRevisionId: row?.revision_id ?? null };
     }
 }
 

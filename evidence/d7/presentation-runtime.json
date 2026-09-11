@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "requirementId": "presentation-runtime",
-  "status": "verified",
+  "status": "partial",
   "engine": {
     "engineId": "web-ppt",
-    "engineVersion": "0.5.0-beta.1",
+    "engineVersion": "0.5.0-beta.2",
     "documentFormatVersion": "web-ppt-ooxml-v1"
   },
   "checks": [
@@ -25,8 +25,8 @@
     },
     {
       "id": "browser-mount-dispose-reopen",
-      "passed": true,
-      "evidence": "Local browser session mounted the editor, reopened it after dispose-equivalent rebind, and showed the persisted two-page deck without console warnings/errors."
+      "passed": false,
+      "evidence": "Not evaluated in this run; requires a real browser mount/dispose/reopen session with console and persistence evidence."
     },
     {
       "id": "offline-local-template-and-assets",

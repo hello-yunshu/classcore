@@ -128,7 +128,7 @@ export class PresentationStudioController {
     setLayerMany(ids: readonly ElementId[], to: ElementLayerTarget): void {
         if (ids.length) this.execute(...ids.map(id => ({ type: 'SetZ', id, to }) as const));
     }
-    align(ids: readonly ElementId[], edge: AlignEdge): void { if (ids.length > 1) this.execute({ type: 'AlignElements', ids, edge }); }
+    align(ids: readonly ElementId[], edge: AlignEdge): void { if (ids.length) this.execute({ type: 'AlignElements', ids, edge }); }
     setFill(id: ElementId, fill: VectorFill | null): void { this.execute({ type: 'SetFill', id, fill }); }
     setStroke(id: ElementId, stroke: { type: 'none' } | { color: string; width: number; dash: null; cap: 'butt'; join: 'miter'; compound: 'sng' } | null): void { this.execute({ type: 'SetStroke', id, stroke }); }
     setSlideBackground(id: SlideId, fill: VectorFill | null): void { this.execute({ type: 'SetBackground', id, fill }); }
@@ -174,6 +174,28 @@ export class PresentationStudioController {
         this.execute(...commands);
     }
     setRunProps(id: ElementId, range: { from: TextPosition; to: TextPosition }, props: RunPropertyOverrides): void { this.execute({ type: 'SetRunProps', id, range, props }); }
+
+    group(ids: readonly ElementId[]): void { if (ids.length >= 2) this.execute({ type: 'Group', ids }); }
+    ungroup(id: ElementId): void { this.execute({ type: 'Ungroup', id }); }
+    setLocked(id: ElementId, locked: boolean): void { this.execute({ type: 'SetLocked', id, locked }); }
+    setHidden(id: ElementId, hidden: boolean): void { this.execute({ type: 'SetElementHidden', id, hidden }); }
+
+    startFormatPainter(options?: Parameters<WebPptAdapter['startFormatPainter']>[0]): boolean { return this.adapter.startFormatPainter(options); }
+    cancelFormatPainter(): void { this.adapter.cancelFormatPainter(); }
+    openTextSearch(options?: Parameters<WebPptAdapter['openTextSearch']>[0]): void { this.adapter.openTextSearch(options); }
+    closeTextSearch(): void { this.adapter.closeTextSearch(); }
+    setTextSearchQuery(query: string): void { this.adapter.setTextSearchQuery(query); }
+    setTextSearchReplacement(replacement: string): void { this.adapter.setTextSearchReplacement(replacement); }
+    nextTextSearch(): ReturnType<WebPptAdapter['nextTextSearch']> { return this.adapter.nextTextSearch(); }
+    previousTextSearch(): ReturnType<WebPptAdapter['previousTextSearch']> { return this.adapter.previousTextSearch(); }
+    replaceCurrentText(): boolean { return this.adapter.replaceCurrentText(); }
+    replaceAllText(): number { return this.adapter.replaceAllText(); }
+    queryTransition(): ReturnType<WebPptAdapter['queryTransition']> { return this.adapter.queryTransition(); }
+    setTransition(value: Parameters<WebPptAdapter['setTransition']>[0]): boolean { return this.adapter.setTransition(value); }
+    previewTransition(value?: Parameters<WebPptAdapter['previewTransition']>[0]): ReturnType<WebPptAdapter['previewTransition']> { return this.adapter.previewTransition(value); }
+    setSnapping(snapping: boolean): void { this.adapter.setView({ snapping }); }
+    setZoom(zoom: number): void { this.adapter.setView({ zoom }); }
+    attachSelectionPane(container: HTMLElement | null): void { this.adapter.attachSelectionPane(container); }
 
     copy(): boolean {
         const ids = this.selectedIds();

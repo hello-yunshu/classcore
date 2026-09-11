@@ -101,6 +101,7 @@ const PUBLISHED_STORE = 'published';
 const DRAFT_META_KEY = 'classcore.presentation.draft.meta.v1';
 const PUBLISHED_META_KEY = 'classcore.presentation.published.meta.v1';
 const SERVER_META_KEY = 'classcore.presentation.server.meta.v1';
+const PENDING_SYNC_META_KEY = 'classcore.presentation.pending-sync.meta.v1';
 
 function openDraftDb(): Promise<IDBDatabase> { return new Promise((resolve, reject) => { const request = indexedDB.open(DRAFT_DB, 2);
  request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains(DRAFT_STORE)) request.result.createObjectStore(DRAFT_STORE, { keyPath: 'deckId' });
@@ -124,11 +125,31 @@ interface StoredDraftMetadata { presentationSchemaVersion: 1;
  }
 
 interface ServerProjectMetadata { presentationId: string; currentDraftRevision: number; }
+interface PendingSyncMetadata {
+ presentationId: string;
+ baseDraftRevision: number;
+ deckId: string;
+ title: string;
+ document: WebPptPresentationAsset['document'];
+ savedAt: string;
+}
 function loadServerProjectMetadata(): ServerProjectMetadata | null {
  try { return JSON.parse(localStorage.getItem(SERVER_META_KEY) ?? 'null') as ServerProjectMetadata | null; } catch { return null; }
 }
 function saveServerProjectMetadata(value: ServerProjectMetadata): void { localStorage.setItem(SERVER_META_KEY, JSON.stringify(value)); }
 function clearServerProjectMetadata(): void { localStorage.removeItem(SERVER_META_KEY); }
+function loadPendingSyncMetadata(): PendingSyncMetadata | null {
+ try { return JSON.parse(localStorage.getItem(PENDING_SYNC_META_KEY) ?? 'null') as PendingSyncMetadata | null; } catch { return null; }
+}
+function savePendingSyncMetadata(asset: WebPptPresentationAsset, project: ServerProjectMetadata): void {
+ localStorage.setItem(PENDING_SYNC_META_KEY, JSON.stringify({ presentationId: project.presentationId, baseDraftRevision: project.currentDraftRevision, deckId: asset.deckId, title: asset.title, document: asset.document, savedAt: asset.updatedAt } satisfies PendingSyncMetadata));
+}
+function clearPendingSyncMetadata(): void { localStorage.removeItem(PENDING_SYNC_META_KEY); }
+function bytesToBase64(bytes: Uint8Array): string {
+ let binary = '';
+ for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+ return btoa(binary);
+}
 function serverHeaders(extra: Record<string, string> = {}): HeadersInit { return { 'x-classcore-user-id': 'demo-teacher', ...extra }; }
 async function serverJson(path: string, init: RequestInit = {}): Promise<any> {
  const response = await fetch(path, { ...init, headers: { ...serverHeaders(), ...(init.headers ?? {}) } });
@@ -226,6 +247,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  let savedGeneration = 0;
  let autosaveSuspended = true;
  let inspectorTab: 'object' | 'page' | 'animation' = 'object';
+ let ribbonTab = 'start';
  let thumbnailGeneration = 0;
  let thumbnailAsset: WebPptPresentationAsset | null = null;
  let conflictOpen = false;
@@ -252,10 +274,13 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  documentBar.append(titleInput, saveState);
  header.append(brand, documentBar, headerActions);
  app.append(header);
-    const toolbar = document.createElement('nav');
+ const toolbar = document.createElement('nav');
  toolbar.className = 'context-toolbar';
  toolbar.setAttribute('aria-label', '课件编辑工具');
- app.append(toolbar);
+ const ribbonTabs = document.createElement('nav');
+ ribbonTabs.className = 'ribbon-tabs';
+ ribbonTabs.setAttribute('aria-label', '功能区选项卡');
+ app.append(ribbonTabs, toolbar);
  const layout = document.createElement('main');
  layout.className = 'studio-layout';
  const scenePanel = document.createElement('aside');
@@ -266,6 +291,9 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  inspector.className = 'inspector-panel';
  layout.append(scenePanel, stagePanel, inspector);
  app.append(layout);
+ const statusBar = document.createElement('footer');
+ statusBar.className = 'status-bar';
+ app.append(statusBar);
     const sceneList = document.createElement('div');
  sceneList.className = 'scene-list';
  const stageTitle = document.createElement('div');
@@ -280,7 +308,18 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  } function selectedIds() { return controller.selectedIds();
  } function setStatus(message: string, error = false): void { saveState.textContent = message;
  saveState.className = `save-state${error ? ' status-error' : ''}`;
- } function showConflictDialog(): void {
+ }
+ function renderRibbonTabs(): void {
+  ribbonTabs.replaceChildren();
+  const tabs: Array<[string, string]> = [['file', '文件'], ['start', '开始'], ['insert', '插入'], ['design', '设计'], ['transition', '切换'], ['animation', '动画'], ['show', '幻灯片放映'], ['review', '审阅'], ['view', '视图']];
+  tabs.forEach(([id, label]) => {
+   const tab = button(label, () => { ribbonTab = id; renderRibbonTabs(); renderToolbar(); }, `ribbon-tab${ribbonTab === id ? ' active' : ''}`, label);
+   tab.setAttribute('role', 'tab');
+   tab.setAttribute('aria-selected', String(ribbonTab === id));
+   ribbonTabs.append(tab);
+  });
+ }
+ function showConflictDialog(): void {
   if (conflictOpen || !serverProject) return;
   conflictOpen = true;
   const dialog = document.createElement('dialog'); dialog.className = 'conflict-dialog';
@@ -292,7 +331,14 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    await openAsset(remote); serverSyncPending = false; setStatus('已加载服务器版本'); dialog.close();
   }, 'card-secondary');
   const duplicate = button('另存为副本', async () => {
-   const result = await serverJson(`/api/presentations/${encodeURIComponent(serverProject!.presentationId)}/duplicate`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}) });
+   const localAsset = asset;
+   if (!localAsset?.source) throw new Error('本地冲突内容不可用');
+   const result = await serverJson(`/api/presentations/${encodeURIComponent(serverProject!.presentationId)}/duplicate`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title: `${localAsset.title} 副本`, bytesBase64: bytesToBase64(localAsset.source.bytes), mimeType: localAsset.source.mimeType, document: { ...localAsset.document, deckId: localAsset.deckId } }),
+   });
+   clearPendingSyncMetadata();
    dialog.close(); window.location.href = `/authoring?presentationId=${encodeURIComponent(result.presentation.presentationId)}`;
   }, 'primary-button');
   actions.append(reload, duplicate); dialog.append(heading, note, actions); document.body.append(dialog);
@@ -422,7 +468,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  section.append(name, ...controls);
  toolbar.append(section);
  };
- group('编辑', [button('撤销', wrapAction(() => { controller.undo();
+ if (ribbonTab === 'start' || ribbonTab === 'file') group('编辑', [button('撤销', wrapAction(() => { controller.undo();
  renderAll();
  }), 'tool-button'), button('重做', wrapAction(() => { controller.redo();
  renderAll();
@@ -432,7 +478,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  }), 'tool-button'), button('删除', wrapAction(() => { controller.removeSelected();
  renderAll();
  }), 'tool-button')]);
- group('插入', [button('文字', wrapAction(() => { const id = controller.addShape('rect');
+ if (ribbonTab === 'start' || ribbonTab === 'insert') group('插入', [button('文字', wrapAction(() => { const id = controller.addShape('rect');
  if (id) { controller.editText(id, '输入文字');
  controller.select({ kind: 'elements', ids: [id], enteredGroup: null });
  } renderAll();
@@ -443,7 +489,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  if (Number.isFinite(rows) && Number.isFinite(cols)) controller.addTable(Math.max(1, Math.min(10, rows)), Math.max(1, Math.min(10, cols)));
  renderAll();
  }), 'tool-button'), button('图片', wrapAction(() => imageInput.click()), 'tool-button'), button('页面背景', wrapAction(() => backgroundInput.click()), 'tool-button')]);
- group('排列', [button('左对齐', wrapAction(() => { controller.align(selectedIds(), 'left');
+ if (ribbonTab === 'start') group('排列', [button('左对齐', wrapAction(() => { controller.align(selectedIds(), 'left');
  renderAll();
  }), 'tool-button'), button('水平居中', wrapAction(() => { controller.align(selectedIds(), 'center');
  renderAll();
@@ -452,9 +498,20 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  }), 'tool-button'), button('等距分布', wrapAction(() => { controller.distributeHorizontal(selectedIds()); renderAll(); }), 'tool-button'), button('置底', wrapAction(() => { controller.setLayerMany(selectedIds(), 'back');
  renderAll();
  }), 'tool-button')]);
- group('课堂动作', [button('下一动画', wrapAction(() => { if (preview) void preview.session.nextStep?.();
+ if (ribbonTab === 'start' || ribbonTab === 'file') group('课堂动作', [button('下一动画', wrapAction(() => { if (preview) void preview.session.nextStep?.();
  else addAnimation();
  }), 'tool-button'), button('保存', wrapAction(() => persist()), 'tool-button'), button('开始试课', wrapAction(() => rehearse()), 'tool-button'), button('发布冻结', wrapAction(() => publish()), 'signal-button')]);
+ if (ribbonTab === 'design') group('设计', [
+  button('页面背景', wrapAction(() => backgroundInput.click()), 'tool-button'),
+  button(controller.snapshot.snapping ? '关闭吸附' : '开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'),
+  button('缩小', wrapAction(() => { controller.setZoom(Math.max(.5, controller.snapshot.zoom - .1)); renderAll(false); }), 'tool-button'),
+  button('放大', wrapAction(() => { controller.setZoom(Math.min(2, controller.snapshot.zoom + .1)); renderAll(false); }), 'tool-button'),
+ ]);
+ if (ribbonTab === 'transition') group('切换', [button('淡化', wrapAction(() => { controller.setTransition({ type: 'fade' }); renderAll(false); }), 'tool-button'), button('无', wrapAction(() => { controller.setTransition(null); renderAll(false); }), 'tool-button'), button('预览切换', wrapAction(() => controller.previewTransition()), 'tool-button')]);
+ if (ribbonTab === 'animation') group('动画', [button('给选中对象加入淡入', wrapAction(() => addAnimation()), 'tool-button'), button('下一动画', wrapAction(() => { if (preview) void preview.session.nextStep?.(); }), 'tool-button')]);
+ if (ribbonTab === 'show') group('放映', [button('预览', wrapAction(() => togglePreview()), 'preview-button')]);
+ if (ribbonTab === 'review') group('审阅', [button('查找', wrapAction(() => { controller.openTextSearch({ mode: 'find' }); }), 'tool-button'), button('替换', wrapAction(() => { controller.openTextSearch({ mode: 'replace' }); }), 'tool-button')]);
+ if (ribbonTab === 'view') group('视图', [button(controller.snapshot.snapping ? '关闭吸附' : '开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'), button('适应窗口', wrapAction(() => { controller.setZoom(1); renderAll(false); }), 'tool-button')]);
  }
     function renderInspector(): void { inspector.replaceChildren();
  const tabs = document.createElement('div');
@@ -613,7 +670,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     function kindLabel(record: ElementRecord | null): string { const kind = record?.src.kind;
  return kind === 'shape' ? '图形' : kind === 'image' ? '图片' : kind === 'table' ? '表格' : kind === 'group' ? '组合' : '对象';
  }
-    function renderAll(thumbnails = true): void { renderScenePanel(thumbnails);
+    function renderAll(thumbnails = true): void { renderRibbonTabs(); renderScenePanel(thumbnails);
  renderToolbar();
  renderInspector();
  const slideId = currentSlide();
@@ -626,6 +683,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  meta.textContent = `16:9 · 第 ${Math.max(0, index + 1)} / ${currentSession()?.editor.doc.slideOrder.length ?? 0} 页`;
  stageTitle.append(title, meta);
  stageFooter.textContent = `${controller.snapshot.status} · ${controller.snapshot.zoom.toFixed(2)}× · ${currentSession()?.editor.history.undoCount ?? 0} 个可撤销操作${published ? ` · 已发布 ${published.fingerprint.slice(0, 12)}` : ''}`;
+ const pageNumber = (currentSession()?.editor.doc.slideOrder.indexOf(currentSlide() ?? '') ?? -1) + 1;
+ statusBar.textContent = `${pageNumber} / ${currentSession()?.editor.doc.slideOrder.length ?? 0} 页 · ${controller.snapshot.snapping ? '吸附开启' : '吸附关闭'} · ${Math.round(controller.snapshot.zoom * 100)}%`;
  if (!thumbnails) thumbnailGeneration += 1;
  }
     async function persist(): Promise<void> {
@@ -643,9 +702,11 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    asset = next;
    thumbnailAsset = next;
    await persistWebPptDraft(next);
+   if (serverProject) savePendingSyncMetadata(next, serverProject);
    try {
     await syncServerDraft(next);
     serverSyncPending = false;
+    clearPendingSyncMetadata();
    } catch (error) {
     serverSyncPending = true;
     if (error instanceof Error && error.message === 'draft-conflict') { setStatus('需要重新加载服务器版本'); showConflictDialog(); }
@@ -738,8 +799,13 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  } catch (error) { setStatus(error instanceof Error ? error.message : String(error), true);
  } finally { busy = false;
  } }
- async function newDeck(): Promise<void> { if (!busy) { serverProject = null; clearServerProjectMetadata(); await openAsset(await engine.createBlank(titleInput.value.trim() || '未命名公开课')); }
- }
+ async function newDeck(): Promise<void> { if (!busy) {
+  const title = titleInput.value.trim() || '未命名公开课';
+  const created = await serverJson('/api/presentations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title }) });
+  serverProject = { presentationId: created.presentation.presentationId, currentDraftRevision: created.presentation.currentDraftRevision };
+  saveServerProjectMetadata(serverProject); clearPendingSyncMetadata();
+  await openAsset(await loadRemotePresentation(serverProject.presentationId));
+ } }
  async function openFile(file: File): Promise<void> { if (!busy) { serverProject = null; clearServerProjectMetadata(); await openAsset(await createWebPptAssetFromBytes(file.name.replace(/\.pptx?$/i, '') || '本地公开课', new Uint8Array(await file.arrayBuffer()))); }
  }
     async function togglePreview(): Promise<void> { if (!asset || busy) return;
@@ -830,10 +896,18 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  void (async () => {
   const remoteId = new URLSearchParams(window.location.search).get('presentationId');
   let draft: WebPptPresentationAsset | null = null;
-  try { draft = remoteId ? await loadRemotePresentation(remoteId) : await loadWebPptDraft(); }
+  try {
+   const pending = loadPendingSyncMetadata();
+   if (remoteId && pending?.presentationId === remoteId) {
+    draft = await loadWebPptDraft();
+    if (draft) { serverProject = { presentationId: pending.presentationId, currentDraftRevision: pending.baseDraftRevision }; saveServerProjectMetadata(serverProject); }
+   }
+   if (!draft) draft = remoteId ? await loadRemotePresentation(remoteId) : await loadWebPptDraft();
+  }
   catch { if (remoteId) { serverProject = null; clearServerProjectMetadata(); setStatus('课件加载失败，请检查课件服务', true); } }
   await openAsset(draft ?? await engine.createBlank('未命名公开课'));
   autosaveSuspended = false;
+  if (loadPendingSyncMetadata()?.presentationId === remoteId) setStatus('等待同步');
   window.addEventListener('online', () => { if (serverSyncPending) void persist(); });
  })();
 }

@@ -3,7 +3,7 @@ import { openEditor } from '@web-ppt/editor';
 
 export const WEB_PPT_ENGINE = Object.freeze({
     engineId: 'web-ppt',
-    engineVersion: '0.5.0-beta.1',
+    engineVersion: '0.5.0-beta.2',
     documentFormatVersion: 'web-ppt-ooxml-v1',
 });
 

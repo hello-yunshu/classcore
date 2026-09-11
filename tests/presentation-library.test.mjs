@@ -54,6 +54,35 @@ test('draft saves reject stale editors and preserve bounded recovery checkpoints
     }
 });
 
+test('published freshness is explicit and prepare does not silently reuse a stale revision', async () => {
+    const { dataDir, store } = makeStore();
+    try {
+        const project = store.createPresentation({ ownerUserId: 'teacher:1', title: '课件', bytes: Buffer.from('draft-one'), document: { format: 'test' } });
+        store.createRevision(project.presentationId, 'teacher:1', { kind: 'published', engine: { engineId: 'web-ppt', engineVersion: 'test', documentFormatVersion: 'test' }, runtimeIndex });
+        store.saveDraft(project.presentationId, 'teacher:1', { bytes: Buffer.from('draft-two'), expectedRevision: 1, document: { format: 'test' } });
+        const current = store.getPresentation(project.presentationId, 'teacher:1');
+        assert.equal(current.draftHasUnpublishedChanges, true);
+        await assert.rejects(() => store.prepareClassroom('session:stale', 'teacher:1', { presentationId: project.presentationId }), error => error instanceof PresentationLibraryError && error.code === 'published-stale');
+    } finally {
+        store.close();
+        fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+});
+
+test('duplicate can persist the local conflict bytes as a new owned project', () => {
+    const { dataDir, store } = makeStore();
+    try {
+        const project = store.createPresentation({ ownerUserId: 'teacher:1', title: '原课件', bytes: Buffer.from('server'), document: { format: 'test' } });
+        const duplicate = store.duplicatePresentation(project.presentationId, 'teacher:1', '本地副本', { bytes: Buffer.from('local-conflict'), mimeType: 'application/octet-stream', document: { format: 'test', idPrefix: 'local' } });
+        assert.notEqual(duplicate.presentationId, project.presentationId);
+        assert.equal(store.loadDraft(duplicate.presentationId, 'teacher:1').bytes.toString(), 'local-conflict');
+        assert.equal(store.getPresentation(duplicate.presentationId, 'teacher:1').currentDraftDocument.idPrefix, 'local');
+    } finally {
+        store.close();
+        fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+});
+
 test('rehearsal is immutable and expires independently from published revisions', () => {
     const { dataDir, store } = makeStore({ rehearsalRetentionDays: 1 });
     try {
@@ -227,7 +256,7 @@ test('web-ppt freeze rejects forged document identity and runtime index metadata
     const { dataDir, store } = makeStore();
     try {
         const project = store.createPresentation({ ownerUserId: 'teacher:1', title: '严格冻结', bytes: Buffer.from('pptx'), document: { format: 'web-ppt-ooxml-v1', idPrefix: 'prefix-a', deckId: 'deck-a' } });
-        const engine = { engineId: 'web-ppt', engineVersion: '0.5.0-beta.1', documentFormatVersion: 'web-ppt-ooxml-v1' };
+        const engine = { engineId: 'web-ppt', engineVersion: '0.5.0-beta.2', documentFormatVersion: 'web-ppt-ooxml-v1' };
         const index = { ...runtimeIndex, deckId: 'deck-a', documentFormatVersion: 'web-ppt-ooxml-v1' };
         assert.throws(() => store.createRevision(project.presentationId, 'teacher:1', { kind: 'published', engine, document: { format: 'web-ppt-ooxml-v1', idPrefix: 'prefix-b', deckId: 'deck-a' }, runtimeIndex: index }), /freeze-document-id-prefix-mismatch/);
         assert.throws(() => store.createRevision(project.presentationId, 'teacher:1', { kind: 'published', engine, document: project.currentDraftDocument, runtimeIndex: { ...index, scenes: [{ sceneId: 'scene:1', index: 2, maxStep: 0 }] } }), /freeze-runtime-index-invalid/);

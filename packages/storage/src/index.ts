@@ -106,6 +106,30 @@ function canonical(value: unknown): string {
     return JSON.stringify(value);
 }
 
+function comparableEvent(value: AcceptedDomainEvent): string {
+    const { eventId: _eventId, serverSeq: _serverSeq, serverReceivedAt: _serverReceivedAt, ...input } = value;
+    return canonical(input);
+}
+
+function comparableSnapshot(value: AppletStateSnapshot): string {
+    // capturedAt is a server/runtime observation, not the snapshot payload.
+    const { capturedAt: _capturedAt, ...payload } = value;
+    return canonical(payload);
+}
+
+function artifactContext(value: LearningArtifact): string {
+    return canonical({ sessionId: value.sessionId, activityId: value.activityId, ownerScope: value.ownerScope });
+}
+
+function submissionContext(value: Submission): string {
+    return canonical({ sessionId: value.sessionId, activityId: value.activityId, submitterScope: value.submitterScope, submittedBy: value.submittedBy });
+}
+
+function submissionTransitionAllowed(from: Submission['status'], to: Submission['status']): boolean {
+    const order: Submission['status'][] = ['draft', 'submitted', 'accepted'];
+    return order.indexOf(to) >= order.indexOf(from);
+}
+
 /** Complete deterministic in-memory adapter used by unit/integration/rehearsal paths. */
 export class InMemoryClassroomStorage extends InMemoryRuntimeRecoveryStorage implements ClassroomStorage, StudentIdentityPersistenceStore, PublicSubjectProjectionPersistenceStore {
     #events = new Map<string, Map<string, AcceptedDomainEvent>>();
@@ -119,18 +143,19 @@ export class InMemoryClassroomStorage extends InMemoryRuntimeRecoveryStorage imp
     constructor(private readonly idFactory: () => string = () => globalThis.crypto.randomUUID(), private readonly clock: () => string = () => new Date().toISOString()) { super(); }
 
     async acceptClientEventAtomically<T extends Record<string, unknown> = Record<string, unknown>>(idempotencyKey: string, draft: AcceptedDomainEventDraft<T>): Promise<{ inserted: boolean; event: AcceptedDomainEvent<T> }> {
-        const existingKey = this.#eventKeys.get(idempotencyKey);
+        const scopedKey = `${draft.sessionId}\u0000${idempotencyKey}`;
+        const existingKey = this.#eventKeys.get(scopedKey);
         if (existingKey) {
             const existing = this.#events.get(draft.sessionId)?.get(existingKey);
             if (!existing) throw new Error('event-index-corrupt');
-            if (canonical(existing) !== canonical({ ...draft, eventId: existing.eventId, serverSeq: existing.serverSeq, serverReceivedAt: existing.serverReceivedAt })) throw new Error('event-idempotency-payload-mismatch');
+            if (comparableEvent(existing) !== comparableEvent({ ...draft, eventId: existing.eventId, serverSeq: existing.serverSeq, serverReceivedAt: existing.serverReceivedAt })) throw new Error('event-idempotency-payload-mismatch');
             return { inserted: false, event: structuredClone(existing) as AcceptedDomainEvent<T> };
         }
         const sessionEvents = this.#events.get(draft.sessionId) ?? new Map<string, AcceptedDomainEvent>();
         this.#events.set(draft.sessionId, sessionEvents);
         const event: AcceptedDomainEvent<T> = { ...draft, eventId: `event:${this.idFactory()}`, serverSeq: sessionEvents.size + 1, serverReceivedAt: this.clock() } as AcceptedDomainEvent<T>;
         sessionEvents.set(event.eventId, structuredClone(event));
-        this.#eventKeys.set(idempotencyKey, event.eventId);
+        this.#eventKeys.set(scopedKey, event.eventId);
         return { inserted: true, event: structuredClone(event) };
     }
 
@@ -149,6 +174,10 @@ export class InMemoryClassroomStorage extends InMemoryRuntimeRecoveryStorage imp
         const key = this.snapshotKey(snapshot);
         const existing = this.#snapshots.get(key);
         if (existing && existing.revision > snapshot.revision) throw new Error('snapshot-revision-regression');
+        if (existing && existing.revision === snapshot.revision) {
+            if (comparableSnapshot(existing) !== comparableSnapshot(snapshot)) throw new Error('snapshot-revision-payload-mismatch');
+            return;
+        }
         this.#snapshots.set(key, structuredClone(snapshot));
     }
     async getLatestSnapshot(sessionId: string, activityId: string, appletInstanceId: string, scopeKey: string): Promise<AppletStateSnapshot | null> {
@@ -159,8 +188,11 @@ export class InMemoryClassroomStorage extends InMemoryRuntimeRecoveryStorage imp
         const revisions = this.#artifacts.get(artifact.artifactId) ?? new Map<number, LearningArtifact>();
         const existing = revisions.get(artifact.revision);
         if (existing && canonical(existing) !== canonical(artifact)) throw new Error('artifact-revision-immutable');
+        if (existing) return;
         const latest = Math.max(0, ...revisions.keys());
         if (artifact.revision < latest) throw new Error('artifact-revision-regression');
+        const latestArtifact = revisions.get(latest);
+        if (latestArtifact && artifactContext(latestArtifact) !== artifactContext(artifact)) throw new Error('artifact-revision-context-mismatch');
         revisions.set(artifact.revision, structuredClone(artifact));
         this.#artifacts.set(artifact.artifactId, revisions);
     }
@@ -173,7 +205,12 @@ export class InMemoryClassroomStorage extends InMemoryRuntimeRecoveryStorage imp
     }
     async saveSubmission(submission: Submission): Promise<void> {
         const existing = this.#submissions.get(submission.submissionId);
-        if (existing && canonical(existing) !== canonical(submission)) throw new Error('submission-idempotency-payload-mismatch');
+        if (existing) {
+            if (canonical(existing) === canonical(submission)) return;
+            if (submissionContext(existing) !== submissionContext(submission)) throw new Error('submission-authority-immutable');
+            if (!submissionTransitionAllowed(existing.status, submission.status)) throw new Error('submission-state-regression');
+            if (existing.status !== 'draft' && existing.status === submission.status) throw new Error('submission-state-immutable');
+        }
         this.#submissions.set(submission.submissionId, structuredClone(submission));
     }
     async getSubmission(submissionId: string): Promise<Submission | null> { const value = this.#submissions.get(submissionId); return value ? structuredClone(value) : null; }
@@ -186,8 +223,9 @@ export class InMemoryClassroomStorage extends InMemoryRuntimeRecoveryStorage imp
     private snapshotKey(snapshot: AppletStateSnapshot): string { return `${snapshot.sessionId}|${snapshot.activityId}|${snapshot.appletInstanceId}|${snapshot.scope.type}:${snapshot.scope.id}`; }
 }
 
-function isTransferTransitionAllowed(from: ArtifactTransfer['status'], to: ArtifactTransfer['status']): boolean {
+export function isTransferTransitionAllowed(from: ArtifactTransfer['status'], to: ArtifactTransfer['status']): boolean {
     if (from === to) return true;
+    if (from === 'failed') return false;
     if (to === 'failed') return true;
     const order: ArtifactTransfer['status'][] = ['queued', 'sent', 'received', 'opened', 'completed'];
     return order.indexOf(to) >= order.indexOf(from);

@@ -22,7 +22,7 @@ export type WebPptPlaybackAsset = PresentationAsset<WebPptPlaybackDocument>;
 
 export const WEB_PPT_PLAYBACK_DESCRIPTOR: PresentationEngineDescriptor = Object.freeze({
     engineId: 'web-ppt',
-    engineVersion: '0.5.0-beta.1',
+    engineVersion: '0.5.0-beta.2',
     documentFormatVersion: FORMAT,
 });
 

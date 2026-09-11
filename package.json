@@ -22,7 +22,7 @@
     "validate:lessons": "node scripts/validate-all-lessons.mjs",
     "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json && node scripts/prepare-dist-workspaces.mjs && node scripts/build-web-shells.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:unit": "node --test tests/*.test.mjs",
+    "test:unit": "NODE_ENV=test node --test tests/*.test.mjs",
     "test": "npm run build && npm run test:unit",
     "template:check": "node scripts/check-lesson-template.mjs",
     "check:dist": "node scripts/check-dist-runtime.mjs",

@@ -7,7 +7,7 @@
 ## 决策
 
 ### web-ppt：唯一继续推进的网页 Presentation 引擎
-固定版本：`@web-ppt/core@0.5.0-beta.1`、`@web-ppt/edit-core@0.5.0-beta.1`、`@web-ppt/editor@0.5.0-beta.1`、`@web-ppt/viewer-core@0.5.0-beta.1`，许可证为 MIT。
+当前集成版本：`@web-ppt/core@0.5.0-beta.2`、`@web-ppt/edit-core@0.5.0-beta.2`、`@web-ppt/editor@0.5.0-beta.2`、`@web-ppt/viewer-core@0.5.0-beta.2`，许可证为 MIT。升级以四包同版本、构建和真实保存/重开验证为前提；beta.5 当前不在 registry 可用版本中。
 
 真实 PoC 已验证：本地模板新建、OOXML 保存/重开、固定 `idPrefix` 后的 scene identity、编辑命令、淡入 click batch、Runtime Index 以及 headless `PresentationState` 控制。下一阶段不再做引擎选型，而是补齐 web-ppt 已有能力的产品工具栏、布局和课堂资源链。
 

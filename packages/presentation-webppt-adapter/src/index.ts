@@ -17,7 +17,7 @@ import type {
 } from '@classroom/presentation';
 
 const MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-const ENGINE_VERSION = '0.5.0-beta.1';
+const ENGINE_VERSION = '0.5.0-beta.2';
 const FORMAT = 'web-ppt-ooxml-v1';
 
 export interface WebPptDocumentMetadata {

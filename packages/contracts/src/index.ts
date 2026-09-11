@@ -331,6 +331,9 @@ export interface LiveStateFrame<T extends Record<string, unknown> = Record<strin
 export type LiveQuality = 'background' | 'thumbnail' | 'focus';
 export interface LiveSubscriptionRequest {
     subscriptionId: string;
+    /** Optional for legacy in-process callers; server subscriptions should provide both. */
+    sessionId?: string | null;
+    activityId?: string | null;
     appletInstanceId: string;
     quality: LiveQuality;
     subject?: StateScopeRef | null;

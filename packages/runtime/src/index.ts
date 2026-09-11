@@ -39,6 +39,7 @@ export interface AuthorizationAuthority {
     isParticipantInScope(sessionId: string, activityId: string | null, participantId: string, scope: StateScopeRef): boolean;
     areParticipantsPaired(sessionId: string, activityId: string | null, leftParticipantId: string, rightParticipantId: string): boolean;
     canTransferArtifact(sessionId: string, activityId: string | null, senderParticipantId: string, ownerScope: StateScopeRef, recipientScope: StateScopeRef): boolean;
+    isActivityInSession?(sessionId: string, activityId: string): boolean;
     getRequiredFeatureForStageContent?(contentType: string): string | null;
 }
 const CONTROL_ACTIONS = new Set<RuntimeAction>([
@@ -76,6 +77,9 @@ export function hasValidControllerLease(lease: ControllerLease | undefined | nul
 }
 export class AuthorizationService {
     constructor(private readonly authority: AuthorizationAuthority) { }
+    isActivityInSession(sessionId: string, activityId: string): boolean {
+        return this.authority.isActivityInSession?.(sessionId, activityId) ?? true;
+    }
     authorize(connection: AuthenticatedConnectionContext, action: RuntimeAction, resource: AuthorizationResource = {}, now = Date.now()): AuthorizationDecision {
         const policy = this.authority.getFeaturePolicy(connection.sessionId);
         if (action === 'stage.set' && !resource.stageContentType)
@@ -343,6 +347,10 @@ export class InMemoryClassroomAuthority {
         return session ? structuredClone(session) : null;
     }
 
+    isActivityInSession(sessionId: string, activityId: string): boolean {
+        return this.#sessions.get(sessionId)?.currentActivityId === activityId;
+    }
+
     join(request: JoinRequest, now = Date.now()): JoinGrant {
         const sessionId = this.#locators.get(request.sessionLocator) ?? request.sessionLocator;
         const session = [...this.#sessions.values()].find(item => item.sessionId === sessionId || item.lesson.lessonId === request.sessionLocator);
@@ -424,6 +432,8 @@ export interface AppletRuntimePorts extends DurableEventPort {
     saveArtifact(artifact: import('@classroom/contracts').LearningArtifact): Promise<void>;
     saveSubmission(submission: import('@classroom/contracts').Submission): Promise<void>;
     saveTransfer(transfer: import('@classroom/contracts').ArtifactTransfer): Promise<void>;
+    getArtifact?(artifactId: string, revision?: number): Promise<import('@classroom/contracts').LearningArtifact | null>;
+    getSubmission?(submissionId: string): Promise<import('@classroom/contracts').Submission | null>;
 }
 
 /** Wires Applet intent to validation, durable event persistence and snapshot/artifact operations. */
@@ -437,25 +447,67 @@ export class AppletEventRuntime {
 }
 
 export class LearningResourceRuntime {
-    constructor(private readonly ports: Pick<AppletRuntimePorts, 'saveArtifact' | 'saveSubmission' | 'saveTransfer'>, private readonly authorization: AuthorizationService) {}
+    constructor(private readonly ports: Pick<AppletRuntimePorts, 'saveArtifact' | 'saveSubmission' | 'saveTransfer'> & Partial<Pick<AppletRuntimePorts, 'getArtifact' | 'getSubmission'>>, private readonly authorization: AuthorizationService, private readonly clock: () => string = () => new Date().toISOString()) {}
     async saveArtifact(connection: AuthenticatedConnectionContext, artifact: import('@classroom/contracts').LearningArtifact): Promise<import('@classroom/contracts').LearningArtifact> {
+        this.assertSessionAndActivity(connection, artifact.sessionId, artifact.activityId);
         const decision = this.authorization.authorize(connection, 'submission.submit', { activityId: artifact.activityId, submitterScope: artifact.ownerScope });
         if (!decision.allowed) throw new Error(decision.reason ?? 'artifact-forbidden');
-        await this.ports.saveArtifact(artifact);
-        return structuredClone(artifact);
+        const next = { ...artifact, sessionId: connection.sessionId, createdAt: this.clock() };
+        await this.ports.saveArtifact(next);
+        return structuredClone(next);
     }
-    async submit(connection: AuthenticatedConnectionContext, submission: import('@classroom/contracts').Submission): Promise<import('@classroom/contracts').Submission> {
+    async createSubmissionDraft(connection: AuthenticatedConnectionContext, submission: import('@classroom/contracts').Submission): Promise<import('@classroom/contracts').Submission> {
+        this.assertSessionAndActivity(connection, submission.sessionId, submission.activityId);
         const decision = this.authorization.authorize(connection, 'submission.submit', { activityId: submission.activityId, submitterScope: submission.submitterScope });
         if (!decision.allowed) throw new Error(decision.reason ?? 'submission-forbidden');
-        if (submission.status !== 'submitted' && submission.status !== 'accepted') throw new Error('submission-must-be-submitted');
-        const next = { ...submission, submittedBy: connection.participantId, submittedAt: submission.submittedAt ?? new Date().toISOString() };
+        const existing = await this.ports.getSubmission?.(submission.submissionId);
+        if (existing && existing.submittedBy !== connection.participantId) throw new Error('submission-owner-immutable');
+        const next = { ...submission, sessionId: connection.sessionId, submittedBy: existing?.submittedBy ?? connection.participantId, status: 'draft' as const, submittedAt: null };
+        await this.ports.saveSubmission(next);
+        return structuredClone(next);
+    }
+    async submitSubmission(connection: AuthenticatedConnectionContext, submission: import('@classroom/contracts').Submission): Promise<import('@classroom/contracts').Submission> {
+        this.assertSessionAndActivity(connection, submission.sessionId, submission.activityId);
+        const decision = this.authorization.authorize(connection, 'submission.submit', { activityId: submission.activityId, submitterScope: submission.submitterScope });
+        if (!decision.allowed) throw new Error(decision.reason ?? 'submission-forbidden');
+        if (submission.status !== 'submitted') throw new Error('submission-must-be-submitted');
+        const existing = await this.ports.getSubmission?.(submission.submissionId);
+        if (existing?.status === 'accepted') throw new Error('submission-state-regression');
+        if (existing && existing.submittedBy !== connection.participantId) throw new Error('submission-owner-immutable');
+        const next = { ...submission, sessionId: connection.sessionId, submittedBy: existing?.submittedBy ?? connection.participantId, submittedAt: existing?.submittedAt ?? this.clock() };
+        await this.ports.saveSubmission(next);
+        return structuredClone(next);
+    }
+    /** Backward-compatible name for the explicit draft -> submitted transition. */
+    async submit(connection: AuthenticatedConnectionContext, submission: import('@classroom/contracts').Submission): Promise<import('@classroom/contracts').Submission> {
+        return this.submitSubmission(connection, submission);
+    }
+    async acceptSubmission(connection: AuthenticatedConnectionContext, submission: import('@classroom/contracts').Submission): Promise<import('@classroom/contracts').Submission> {
+        this.assertSessionAndActivity(connection, submission.sessionId, submission.activityId);
+        if (connection.role !== 'teacher') throw new Error('teacher-required');
+        const existing = await this.ports.getSubmission?.(submission.submissionId);
+        if (!existing) throw new Error('submission-not-found');
+        if (existing.sessionId !== connection.sessionId || existing.activityId !== submission.activityId) throw new Error('submission-session-mismatch');
+        if (existing.status === 'draft') throw new Error('submission-state-regression');
+        const next = { ...existing, status: 'accepted' as const };
         await this.ports.saveSubmission(next);
         return structuredClone(next);
     }
     async transfer(connection: AuthenticatedConnectionContext, transfer: import('@classroom/contracts').ArtifactTransfer, ownerScope: StateScopeRef): Promise<import('@classroom/contracts').ArtifactTransfer> {
+        this.assertSessionAndActivity(connection, transfer.sessionId, transfer.activityId);
         const decision = this.authorization.authorize(connection, 'artifact.transfer', { activityId: transfer.activityId, artifactOwnerScope: ownerScope, recipientScope: transfer.recipientScope });
         if (!decision.allowed) throw new Error(decision.reason ?? 'transfer-forbidden');
-        await this.ports.saveTransfer(transfer);
-        return structuredClone(transfer);
+        const artifact = await this.ports.getArtifact?.(transfer.artifact.artifactId, transfer.artifact.revision);
+        if (artifact) {
+            if (artifact.sessionId !== connection.sessionId || artifact.activityId !== transfer.activityId) throw new Error('artifact-session-mismatch');
+            if (JSON.stringify(artifact.ownerScope) !== JSON.stringify(ownerScope)) throw new Error('artifact-owner-scope-mismatch');
+        }
+        const next = { ...transfer, sessionId: connection.sessionId, senderId: connection.participantId, createdAt: transfer.createdAt || this.clock(), updatedAt: this.clock() };
+        await this.ports.saveTransfer(next);
+        return structuredClone(next);
+    }
+    private assertSessionAndActivity(connection: AuthenticatedConnectionContext, sessionId: string, activityId: string): void {
+        if (sessionId !== connection.sessionId) throw new Error('session-mismatch');
+        if (!this.authorization.isActivityInSession(connection.sessionId, activityId)) throw new Error('activity-session-mismatch');
     }
 }

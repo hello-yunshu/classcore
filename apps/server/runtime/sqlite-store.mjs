@@ -10,6 +10,31 @@ function canonicalJson(value) {
     }
     return JSON.stringify(value);
 }
+function comparableEvent(value) {
+    const { eventId: _eventId, serverSeq: _serverSeq, serverReceivedAt: _serverReceivedAt, ...input } = value;
+    return canonicalJson(input);
+}
+function comparableSnapshot(value) {
+    const { capturedAt: _capturedAt, ...payload } = value;
+    return canonicalJson(payload);
+}
+function artifactContext(value) {
+    return canonicalJson({ sessionId: value.sessionId, activityId: value.activityId, ownerScope: value.ownerScope });
+}
+function submissionContext(value) {
+    return canonicalJson({ sessionId: value.sessionId, activityId: value.activityId, submitterScope: value.submitterScope, submittedBy: value.submittedBy });
+}
+function submissionTransitionAllowed(from, to) {
+    const order = ['draft', 'submitted', 'accepted'];
+    return order.indexOf(to) >= order.indexOf(from);
+}
+function transferTransitionAllowed(from, to) {
+    if (from === to) return true;
+    if (from === 'failed') return false;
+    if (to === 'failed') return true;
+    const order = ['queued', 'sent', 'received', 'opened', 'completed'];
+    return order.indexOf(to) >= order.indexOf(from);
+}
 export class SqliteClassroomStateStore {
     constructor(filename) {
         fs.mkdirSync(path.dirname(filename), { recursive: true });
@@ -316,6 +341,8 @@ export class SqliteClassroomStateStore {
             const existing = this.classroomEventGetStmt.get(draft.sessionId, idempotencyKey);
             if (existing) {
                 const event = JSON.parse(existing.json);
+                if (comparableEvent(event) !== comparableEvent({ ...draft, eventId: event.eventId, serverSeq: event.serverSeq, serverReceivedAt: event.serverReceivedAt }))
+                    throw new Error('event-idempotency-payload-mismatch');
                 this.db.exec('COMMIT');
                 return { inserted: false, event };
             }
@@ -334,6 +361,10 @@ export class SqliteClassroomStateStore {
         const scopeKey = `${snapshot.scope.type}:${snapshot.scope.id}`;
         const existing = this.classroomSnapshotGetStmt.get(snapshot.sessionId, snapshot.activityId, snapshot.appletInstanceId, scopeKey);
         if (existing && JSON.parse(existing.json).revision > snapshot.revision) throw new Error('snapshot-revision-regression');
+        if (existing && JSON.parse(existing.json).revision === snapshot.revision) {
+            if (comparableSnapshot(JSON.parse(existing.json)) !== comparableSnapshot(snapshot)) throw new Error('snapshot-revision-payload-mismatch');
+            return;
+        }
         this.db.prepare(`INSERT INTO classroom_snapshots(session_id,activity_id,applet_instance_id,scope_key,revision,json,updated_at)
             VALUES(?,?,?,?,?,?,?)
             ON CONFLICT(session_id,activity_id,applet_instance_id,scope_key)
@@ -346,8 +377,10 @@ export class SqliteClassroomStateStore {
     saveArtifact(artifact) {
         const existing = this.classroomArtifactGetStmt.get(artifact.artifactId, artifact.revision);
         if (existing && canonicalJson(JSON.parse(existing.json)) !== canonicalJson(artifact)) throw new Error('artifact-revision-immutable');
+        if (existing) return;
         const latest = this.classroomArtifactLatestStmt.get(artifact.artifactId);
         if (latest && JSON.parse(latest.json).revision > artifact.revision) throw new Error('artifact-revision-regression');
+        if (latest && artifactContext(JSON.parse(latest.json)) !== artifactContext(artifact)) throw new Error('artifact-revision-context-mismatch');
         this.db.prepare('INSERT OR REPLACE INTO classroom_artifacts(artifact_id,revision,json,created_at) VALUES(?,?,?,?)').run(artifact.artifactId, artifact.revision, JSON.stringify(artifact), now());
     }
     getArtifact(artifactId, revision) {
@@ -356,10 +389,20 @@ export class SqliteClassroomStateStore {
     }
     saveSubmission(submission) {
         const existing = this.classroomSubmissionGetStmt.get(submission.submissionId);
-        if (existing && canonicalJson(JSON.parse(existing.json)) !== canonicalJson(submission)) throw new Error('submission-idempotency-payload-mismatch');
+        if (existing) {
+            const current = JSON.parse(existing.json);
+            if (canonicalJson(current) === canonicalJson(submission)) return;
+            if (submissionContext(current) !== submissionContext(submission)) throw new Error('submission-authority-immutable');
+            if (!submissionTransitionAllowed(current.status, submission.status)) throw new Error('submission-state-regression');
+            if (current.status !== 'draft' && current.status === submission.status) throw new Error('submission-state-immutable');
+        }
         this.db.prepare('INSERT OR REPLACE INTO classroom_submissions(submission_id,json,updated_at) VALUES(?,?,?)').run(submission.submissionId, JSON.stringify(submission), now());
     }
     getSubmission(submissionId) { const row = this.classroomSubmissionGetStmt.get(submissionId); return row ? JSON.parse(row.json) : null; }
-    saveTransfer(transfer) { this.db.prepare('INSERT OR REPLACE INTO classroom_transfers(transfer_id,json,updated_at) VALUES(?,?,?)').run(transfer.transferId, JSON.stringify(transfer), now()); }
+    saveTransfer(transfer) {
+        const existing = this.classroomTransferGetStmt.get(transfer.transferId);
+        if (existing && !transferTransitionAllowed(JSON.parse(existing.json).status, transfer.status)) throw new Error('transfer-state-regression');
+        this.db.prepare('INSERT OR REPLACE INTO classroom_transfers(transfer_id,json,updated_at) VALUES(?,?,?)').run(transfer.transferId, JSON.stringify(transfer), now());
+    }
     getTransfer(transferId) { const row = this.classroomTransferGetStmt.get(transferId); return row ? JSON.parse(row.json) : null; }
 }
