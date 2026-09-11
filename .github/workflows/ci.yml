@@ -27,10 +27,10 @@ jobs:
           python-version: '3.14.7'
       - name: Verify architecture
         run: node -e "const expected='${{ matrix.arch }}'; if(process.arch!==expected){throw new Error('arch '+process.arch+' != '+expected)}"
-      - name: Verify bundled npm
-        run: test "$(npm --version)" = "11.19.0"
       - name: Install Node dependencies
         run: npm ci --no-audit --no-fund
+      - name: Verify canonical toolchain
+        run: npm run toolchain
       - name: Prepare Python validation environment
         run: npm run python:setup
       - name: Full check

@@ -68,6 +68,24 @@ function teacherShell() {
     );
 }
 
+function displayShell() {
+    const style = `<style>
+      html,body{margin:0;min-width:320px;background:#101827;color:#f7f4ee;font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+      .display-runtime{min-height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:24px 32px;gap:18px}
+      .display-header{display:flex;align-items:center;gap:14px}.display-mark{display:grid;place-items:center;width:42px;height:42px;border:1px solid #efb37e;color:#efb37e;font:700 24px Georgia,serif}
+      .display-kicker{color:#efb37e;font-size:11px;letter-spacing:.18em}.display-header h1{margin:4px 0 0;font:500 30px Georgia,serif}.display-state{margin-left:auto;color:#b8c1d1;font-size:13px}
+      .display-stage{display:grid;place-items:center;min-height:0;background:#182338;border:1px solid #34435c;box-shadow:0 24px 60px #090e18;border-radius:14px;overflow:hidden}.display-stage>*{width:min(100%,1200px);aspect-ratio:16/9}
+      .display-empty{display:grid;place-items:center;align-content:center;gap:12px;color:#b8c1d1}.display-empty strong{font:500 40px Georgia,serif;color:#f7f4ee}.display-footer{color:#7e8ba1;font-size:12px;text-align:center}
+      @media(max-width:680px){.display-runtime{padding:18px 14px}.display-header h1{font-size:24px}}
+    </style>`;
+    return baseDocument(
+        '课堂大屏',
+        style,
+        '<div id="display-root"></div>',
+        "import { mountDisplayRuntime } from '/assets/apps/display-web/bundle.js'; mountDisplayRuntime(document.querySelector('#display-root'));"
+    );
+}
+
 async function buildPresentationBundle() {
     await bundle({
         entryPoints: [path.join(root, 'dist', 'apps', 'presentation-studio', 'src', 'entry.js')],
@@ -77,6 +95,19 @@ async function buildPresentationBundle() {
         target: 'es2022',
         sourcemap: false,
         outfile: path.join(assetsDir, 'apps', 'presentation-studio', 'bundle.js'),
+        logLevel: 'warning',
+    });
+}
+
+async function buildDisplayBundle() {
+    await bundle({
+        entryPoints: [path.join(root, 'dist', 'apps', 'display-web', 'src', 'entry.js')],
+        bundle: true,
+        format: 'esm',
+        platform: 'browser',
+        target: 'es2022',
+        sourcemap: false,
+        outfile: path.join(assetsDir, 'apps', 'display-web', 'bundle.js'),
         logLevel: 'warning',
     });
 }
@@ -118,6 +149,8 @@ function buildShell({ route, app, label }) {
         return studioShell();
     if (route === 'teacher')
         return teacherShell();
+    if (route === 'display')
+        return displayShell();
     return neutralShell({ app, label });
 }
 
@@ -136,6 +169,7 @@ for (const [, app] of surfaces) {
         copyCompiledAsset(`apps/${app}/src/entry.js`);
 }
 await buildPresentationBundle();
+await buildDisplayBundle();
 await buildBlankPresentationTemplate();
 for (const [route, app, label] of surfaces) {
     const directory = path.join(outputDir, route);

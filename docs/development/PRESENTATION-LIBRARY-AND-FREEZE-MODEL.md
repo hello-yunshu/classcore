@@ -39,11 +39,13 @@ Project 只保存 `ownerUserId`、标题、当前 Draft 指针和文档元数据
 
 Prepare 阶段会把 exact pinned asset 校验 hash 后写入有界 Runtime Cache，并按 `sessionId → assetId` 记录 strong pin。LRU 只清理没有任何 prepared/active Session 引用的条目。空间统计按 owner 的 unique referenced assets 计算。
 
-无引用 asset 先写入 GC candidate，经过 `gcGracePeriodMs` 后再次计算 Project/Checkpoint/Revision/Session Pin 引用，仍为零才删除 metadata 与 blob。Project 删除只写 `deletedAt`。
+无引用 asset 先写入 GC candidate，经过 `gcGracePeriodMs` 后再次计算 Project/Checkpoint/Revision/Session Pin 引用，仍为零才删除 metadata 与 blob。Raw staged claim 也计入 owner quota，并由 `PRESENTATION_STAGED_ASSET_RETENTION_HOURS` 过期；Project 删除先写 `deletedAt`，经过 `PRESENTATION_DELETED_PROJECT_RETENTION_DAYS` 后由 maintenance purge metadata/checkpoints/eligible rehearsal，再进入 GC。
+
+Runtime Cache 在启动时执行 `reconcileRuntimeCache()`，并在 prepare 时验证已有文件的 size 与 SHA-256；损坏条目会删除并重写。驱逐先生成计划，再执行文件操作和 metadata 删除，失败时重新 reconcile，避免把“DB 有、文件无”当作 prepared。
 
 ## API 与课堂接缝
 
-Reference server 暴露 raw `/api/presentation-assets`、`/api/presentations`、Draft、Rehearsal、Published、Session lifecycle、Session Pin、Prepare 和 revision switch 路径；owner 通过当前 reference adapter 提供，认证课堂 Server 尚未实现。Presentation WebSocket 控制使用 SQLite durable outcome dedup 与 playback store：Teacher 控制 exact pinned revision，Display/Observer 只接收 `presentation.sync`。
+Reference server 暴露 raw `/api/presentation-assets`、`/api/presentations`、Draft、Rehearsal、Published、Restore、Session lifecycle、Session Pin、Prepare、runtime snapshot/asset 和 revision switch 路径；owner 通过当前 reference adapter 提供，认证课堂 Server 尚未实现。Presentation WebSocket 控制使用 SQLite durable outcome dedup 与 playback store：首个 reference Teacher connection 建立 Controller Lease，之后 control 必须通过 lease，Teacher 控制 exact pinned revision，Display/Observer 只接收 `presentation.sync`；reconnect 统一经过 authoritative resolver，ended Session 不恢复旧 player。
 
 普通教师界面不显示 `assetId`、SHA、Runtime Index 或 OOXML。Teacher Library 已接入 reference API；Studio 仍以 IndexedDB 作为离线缓存，并在 reference 服务可用时同步 Server Draft，冲突显示为需重新加载，断网时显示等待同步。认证账号、Picker/课堂设计绑定、完整版本历史 UI 与正式离线课堂仍是下一阶段。
 
@@ -56,14 +58,14 @@ Reference server 暴露 raw `/api/presentation-assets`、`/api/presentations`、
 - 50 次同内容 Draft 保存不产生永久 Revision；
 - Draft conflict、有限 Recovery、Rehearsal TTL、Published immutable restore；
 - Session lifecycle、按 Session 的 cache pin/release、准备缓存、GC candidate/grace period、维护 runner；
-- Teacher Library reference UI 与 Studio generation-drained autosave/current-state thumbnail path；
+- Teacher Library reference UI（新建/导入/搜索/编辑/重命名/副本/导出/历史/删除）与 Studio generation-drained autosave/current-state thumbnail path；
 - Presentation control success/failure outcome replay，失败重试不会变成成功；
 - web-ppt 页面上下移、批量 Undo、动画 append/显式 clear、当前编辑态 Preview 的代码回归。
 
 未验证：
 
-- 正式认证账号服务器与真实身份授权；当前 reference owner header 只能作为开发适配层；
+- 正式认证账号服务器与真实身份授权；当前 reference owner header 和 reference lease 只能作为开发适配层；
 - Playwright 浏览器完整流程与双 context conflict/offline evidence；
 - macOS Docker `linux/arm64`/`linux/amd64` 运行 Gate；
-- 真实 LAN、断互联网课堂、Server restart + Display reconnect 端到端演练；
+- 真实 LAN、断互联网课堂、XP21A 设备演练；Server restart + Display reconnect 已有 reference integration regression，仍未完成真实 Docker/LAN evidence；
 - XP21A 真机。

@@ -174,6 +174,69 @@ test('account quota and server-derived revision fingerprint fail closed', () => 
     }
 });
 
+test('staged asset claims consume quota once and expire without a project', () => {
+    const { dataDir, store } = makeStore({ maxAccountPresentationBytes: 4, stagedAssetRetentionHours: 0 });
+    try {
+        const first = store.ingestAsset('teacher:1', { bytes: Buffer.from('same') });
+        const duplicate = store.ingestAsset('teacher:1', { bytes: Buffer.from('same') });
+        assert.equal(first.assetId, duplicate.assetId);
+        assert.equal(store.ownerClaimedBytes('teacher:1'), 4);
+        assert.throws(() => store.ingestAsset('teacher:1', { bytes: Buffer.from('more') }), /account-presentation-quota-exceeded/);
+        assert.equal(store.expireStagedAssetClaims(new Date(Date.now() + 1000)).length, 1);
+        assert.equal(store.ownerClaimedBytes('teacher:1'), 0);
+    } finally {
+        store.close();
+        fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+});
+
+test('soft-deleted projects purge after retention and release their asset claim for GC', () => {
+    const { dataDir, store } = makeStore({ deletedProjectRetentionDays: 1, gcGracePeriodMs: 0 });
+    try {
+        const project = store.createPresentation({ ownerUserId: 'teacher:1', title: '待删除', bytes: Buffer.from('trash'), document: { format: 'test' } });
+        const assetId = project.currentDraftAssetId;
+        store.softDeletePresentation(project.presentationId, 'teacher:1');
+        store.db.prepare('UPDATE presentation_projects SET deleted_at=? WHERE presentation_id=?').run('2026-09-01T00:00:00.000Z', project.presentationId);
+        assert.deepEqual(store.purgeDeletedProjects(new Date('2026-09-03T00:00:00.000Z')), [project.presentationId]);
+        assert.equal(store.uniqueReferencedBytes('teacher:1'), 0);
+        assert.deepEqual(store.collectGarbage(new Date('2026-09-03T00:00:00.000Z')), [{ assetId, action: 'marked' }]);
+        assert.deepEqual(store.collectGarbage(new Date('2026-09-03T00:00:01.000Z')), [{ assetId, action: 'deleted' }]);
+    } finally {
+        store.close();
+        fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+});
+
+test('prepared cache rewrites an existing file when size or hash is corrupt', () => {
+    const { dataDir, store } = makeStore();
+    try {
+        const project = store.createPresentation({ ownerUserId: 'teacher:1', title: '缓存', bytes: Buffer.from('cache'), document: { format: 'test' } });
+        const revision = store.createRevision(project.presentationId, 'teacher:1', { kind: 'published', runtimeIndex });
+        const prepared = store.prepareRuntimeCache('session:cache', 'teacher:1', { presentationId: project.presentationId, revisionId: revision.revisionId });
+        fs.writeFileSync(prepared.cachePath, 'corrupt');
+        const repaired = store.prepareRuntimeCache('session:cache', 'teacher:1', { presentationId: project.presentationId, revisionId: revision.revisionId });
+        assert.equal(fs.readFileSync(repaired.cachePath, 'utf8'), 'cache');
+        assert.equal(store.getPreparedRuntimeAsset(revision.assetId).assetId, revision.assetId);
+    } finally {
+        store.close();
+        fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+});
+
+test('web-ppt freeze rejects forged document identity and runtime index metadata', () => {
+    const { dataDir, store } = makeStore();
+    try {
+        const project = store.createPresentation({ ownerUserId: 'teacher:1', title: '严格冻结', bytes: Buffer.from('pptx'), document: { format: 'web-ppt-ooxml-v1', idPrefix: 'prefix-a', deckId: 'deck-a' } });
+        const engine = { engineId: 'web-ppt', engineVersion: '0.5.0-beta.1', documentFormatVersion: 'web-ppt-ooxml-v1' };
+        const index = { ...runtimeIndex, deckId: 'deck-a', documentFormatVersion: 'web-ppt-ooxml-v1' };
+        assert.throws(() => store.createRevision(project.presentationId, 'teacher:1', { kind: 'published', engine, document: { format: 'web-ppt-ooxml-v1', idPrefix: 'prefix-b', deckId: 'deck-a' }, runtimeIndex: index }), /freeze-document-id-prefix-mismatch/);
+        assert.throws(() => store.createRevision(project.presentationId, 'teacher:1', { kind: 'published', engine, document: project.currentDraftDocument, runtimeIndex: { ...index, scenes: [{ sceneId: 'scene:1', index: 2, maxStep: 0 }] } }), /freeze-runtime-index-invalid/);
+    } finally {
+        store.close();
+        fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+});
+
 test('active sessions require an explicit prepared revision switch', () => {
     const { dataDir, store } = makeStore();
     try {

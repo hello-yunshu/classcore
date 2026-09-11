@@ -6,7 +6,7 @@ Authoring Studio 通过 `@classroom/presentation-webppt-adapter` 接入 web-ppt�
 
 下一阶段只推进 web-ppt 的完整能力接入；工具栏、真实缩略图、三栏布局和响应式规则以 `PRESENTATION-WEBPPT-NEXT-PHASE.md` 为准。
 
-web-ppt 版本固定为 `0.5.0-beta.1`，四个包均写入 workspace lockfile。Studio 的生产 bundle 使用 esbuild 打包，空白模板由构建脚本生成并放在 `dist/public`，因此运行时不依赖 CDN、公网字体或远程 editor runtime。
+web-ppt 版本固定为 `0.5.0-beta.1`，四个包均写入 workspace lockfile。Studio 的生产 bundle 使用 esbuild 打包，空白模板由构建脚本生成并放在 `dist/public`，因此运行时不依赖 CDN、公网字体或远程 editor runtime。Display 也使用独立 bundle，只接收 `/api/sessions/:sessionId/presentation-runtime` 返回的 exact cached asset 与权威状态，不加载 Editor、Draft 或账号 Library。
 
 ## 稳定身份约束
 
@@ -37,7 +37,7 @@ Studio 使用 IndexedDB 保存二进制课件资源，localStorage 只保存小�
 
 - Node 核心 create/edit/save/reopen/index/playback：已自动验证。
 - 浏览器 mount/unmount/dispose、刷新恢复、全屏播放：需要真实浏览器证据。
-- Reference Server 的 metadata-only AssetStore、raw Asset API、Draft conflict、Recovery/Rehearsal/Published、Session lifecycle、Session-aware Cache/GC 和 Presentation playback transport 已有回归；Teacher Library/reference Server Draft autosave 已接入；认证账号 Server、Picker、Display reconnect、LAN/offline Docker：尚未闭环。
+- Reference Server 的 metadata-only AssetStore、raw Asset API、staged quota、soft-delete purge、Draft conflict、Recovery/Rehearsal/Published、Session lifecycle、Session-aware Cache/GC、cache reconcile 和 Presentation playback transport 已有回归；Teacher Library/reference Server Draft autosave、reference Controller Lease、Display exact-player/reconnect 接缝已接入；认证账号 Server、正式 Picker、LAN/offline Docker：尚未闭环。
 - `scripts/d7-verifiers/presentation-runtime.mjs` 已从 placeholder 改为 fail-closed verifier；没有完整 evidence JSON 时，`d7:product` 必须继续失败。
 
 Scene Studio 保留为 fallback 和 contract harness，不再继续投入复杂 Office-like 编辑功能。

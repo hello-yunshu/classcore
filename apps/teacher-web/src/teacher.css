@@ -19,7 +19,18 @@ h1 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp
 .preview-mark { display: grid; place-items: center; width: 50px; height: 50px; border: 2px solid #fffaf3; color: #fffaf3; font-family: Georgia, serif; font-size: 28px; }
 .preview-lines { position: absolute; right: 18px; bottom: 18px; width: 70px; height: 4px; background: #fffaf3; box-shadow: 0 -10px #fffaf3, 0 -20px #fffaf3; opacity: .8; }
 .card-details { padding: 18px 18px 6px; } .card-details h2 { overflow: hidden; margin: 0; font-size: 19px; text-overflow: ellipsis; white-space: nowrap; } .card-details p { margin: 8px 0 0; color: #798193; font-size: 13px; }
-.card-actions { display: flex; gap: 8px; padding: 12px 18px 18px; } .card-actions button { font-size: 13px; }
+.card-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 18px 18px; } .card-actions button { font-size: 13px; }
 .library-empty { display: grid; justify-items: start; gap: 10px; padding: 52px 24px; border: 1px dashed #bdb3a7; background: rgba(255,250,243,.45); } .library-empty strong { font-family: Georgia, serif; font-size: 28px; font-weight: 500; } .library-empty span { color: #718096; }
 @media (max-width: 680px) { .teacher-library { padding: 32px 18px 54px; } .library-header { display: block; } .library-actions { justify-content: start; margin-top: 28px; } .library-toolbar { justify-content: stretch; } .library-toolbar input { width: 100%; } }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+.teacher-control { max-width: 1180px; margin: 0 auto; padding: 54px 32px 80px; }
+.control-header { display: flex; justify-content: space-between; gap: 32px; align-items: end; padding-bottom: 32px; border-bottom: 1px solid #cfc7bb; }
+.control-header a { text-decoration: none; }
+.control-card { margin-top: 28px; padding: 26px; background: rgba(255,250,243,.84); border: 1px solid #d5cdc2; box-shadow: 0 18px 40px rgba(57,47,35,.08); }
+.control-meta { display: flex; gap: 12px; align-items: baseline; color: #718096; font-size: 13px; }
+.control-meta strong { color: #20314b; font-size: 17px; }
+.control-status { min-height: 24px; color: #6f7887; }
+.control-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.control-button { border: 0; border-radius: 999px; padding: 13px 20px; color: #fffaf3; background: #20314b; font-weight: 750; }
+.control-button:nth-child(3) { background: #d2664f; }
+@media (max-width: 680px) { .teacher-control { padding: 32px 18px 54px; } .control-header { display: block; } .control-header a { display: inline-block; margin-top: 24px; } }

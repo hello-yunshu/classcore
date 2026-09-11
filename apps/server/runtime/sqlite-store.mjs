@@ -124,10 +124,10 @@ export class SqliteClassroomStateStore {
     async loadMemberships(sessionId) {
         return this.list(sessionId, 'membership');
     }
-    async saveControllerLease(value) {
+    saveControllerLease(value) {
         this.put(value.sessionId, 'controller-lease', 'singleton', value);
     }
-    async loadControllerLease(sessionId) {
+    loadControllerLease(sessionId) {
         return this.get(sessionId, 'controller-lease');
     }
     async saveStageState(value) {

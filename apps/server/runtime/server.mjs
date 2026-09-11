@@ -1,4 +1,5 @@
 import http from 'node:http';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -59,13 +60,18 @@ const stats = {
     stageDrops: 0,
     presentationBroadcasts: 0,
 };
-function presentationStateForSession(sessionId) {
+function resolveAuthoritativePresentationState(sessionId) {
+    const lifecycle = presentationLibrary.getSessionLifecycle(sessionId);
+    if (lifecycle?.status === 'ended') return null;
     const pin = presentationLibrary.getSessionPin(sessionId);
     if (!pin) throw new Error('presentation-session-pin-required');
     const revision = presentationLibrary.getRevision(pin.revisionId);
     if (!revision) throw new Error('presentation-revision-not-found');
+    if (revision.assetId !== pin.assetId || revision.fingerprint !== presentationLibrary.getAsset(pin.assetId)?.sha256)
+        throw new Error('presentation-session-revision-mismatch');
+    presentationLibrary.getPreparedRuntimeAsset(pin.assetId);
     const current = store.loadPresentationPlayback(sessionId);
-    if (current && (current.presentationRevisionId !== revision.revisionId || current.assetId !== pin.assetId))
+    if (current && (current.presentationRevisionId !== revision.revisionId || current.assetId !== pin.assetId || current.deckId !== revision.runtimeIndex.deckId))
         throw new Error('presentation-session-revision-mismatch');
     if (current) return { pin, revision, state: current };
     const first = revision.runtimeIndex.scenes[0];
@@ -74,11 +80,19 @@ function presentationStateForSession(sessionId) {
     store.savePresentationPlayback(state);
     return { pin, revision, state };
 }
+const presentationStateForSession = resolveAuthoritativePresentationState;
 function applyPresentationTransportControl(sessionId, message) {
     const { revision, state: current } = presentationStateForSession(sessionId);
     const next = applyValidatedPresentationControl(current, message, revision.runtimeIndex);
     store.savePresentationPlayback(next);
     return next;
+}
+function controllerLeaseReason(meta) {
+    const lease = store.loadControllerLease(meta.sessionId);
+    if (!lease) return 'controller-lease-required';
+    if (lease.expiresAt === null || lease.expiresAt <= Date.now()) return 'controller-lease-expired';
+    if (lease.holderConnectionId !== meta.clientId || lease.holderParticipantId !== meta.participantId) return 'controller-lease-held-by-other';
+    return null;
 }
 function sendJson(res, status, value) {
     const body = JSON.stringify(value);
@@ -137,6 +151,18 @@ async function handlePresentationApi(req, res, url) {
             res.writeHead(200, { 'content-type': asset.mimeType, 'content-length': bytes.length, 'x-content-sha256': asset.sha256, 'cache-control': 'no-store' });
             return res.end(bytes);
         }
+        if (parts[1] === 'sessions' && parts.length >= 4 && parts[3] === 'presentation-runtime') {
+            const sessionId = parts[2];
+            const resolved = resolveAuthoritativePresentationState(sessionId);
+            if (parts[4] === 'asset') {
+                if (!resolved) return sendJson(res, 410, { error: 'session-ended' });
+                const cached = presentationLibrary.getPreparedRuntimeAsset(resolved.pin.assetId);
+                const bytes = fs.readFileSync(cached.cachePath);
+                res.writeHead(200, { 'content-type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'content-length': bytes.length, 'x-content-sha256': resolved.revision.fingerprint, 'cache-control': 'no-store' });
+                return res.end(bytes);
+            }
+            if (req.method === 'GET') return sendJson(res, 200, { runtime: resolved ? { pin: resolved.pin, revision: resolved.revision, state: resolved.state } : null });
+        }
         if (parts[1] === 'sessions' && parts.length >= 3) {
             const sessionId = parts[2];
             if (req.method === 'GET' && parts[3] === 'presentation-lifecycle') return sendJson(res, 200, { session: presentationLibrary.ensureSession(sessionId) });
@@ -155,13 +181,22 @@ async function handlePresentationApi(req, res, url) {
             }
             if (req.method === 'POST' && parts[3] === 'presentation-switch') {
                 const body = JSON.parse((await readRequestBody(req, 64 * 1024)).toString('utf8') || '{}');
-                const pin = presentationLibrary.switchSessionPresentationRevision(sessionId, ownerUserId, body);
-                const revision = presentationLibrary.getRevision(pin.revisionId, ownerUserId);
-                const first = revision?.runtimeIndex?.scenes?.[0];
-                if (!first) throw new PresentationLibraryError('presentation-runtime-index-empty');
-                const state = { sessionId, presentationRevisionId: pin.revisionId, assetId: pin.assetId, deckId: revision.runtimeIndex.deckId, sceneId: first.sceneId, step: 0, playState: 'idle', revision: 0 };
-                store.savePresentationPlayback(state);
-                return sendJson(res, 200, { pin, state });
+                const oldPin = presentationLibrary.getSessionPin(sessionId);
+                const oldPlayback = store.loadPresentationPlayback(sessionId);
+                try {
+                    const pin = presentationLibrary.switchSessionPresentationRevision(sessionId, ownerUserId, body);
+                    const revision = presentationLibrary.getRevision(pin.revisionId, ownerUserId);
+                    const first = revision?.runtimeIndex?.scenes?.[0];
+                    if (!first) throw new PresentationLibraryError('presentation-runtime-index-empty');
+                    const state = { sessionId, presentationRevisionId: pin.revisionId, assetId: pin.assetId, deckId: revision.runtimeIndex.deckId, sceneId: first.sceneId, step: 0, playState: 'idle', revision: 0 };
+                    store.savePresentationPlayback(state);
+                    return sendJson(res, 200, { pin, state });
+                } catch (error) {
+                    presentationLibrary.restoreSessionPin(sessionId, oldPin);
+                    if (oldPlayback) store.savePresentationPlayback(oldPlayback);
+                    else store.db.prepare('DELETE FROM state_json WHERE session_id=? AND kind=?').run(sessionId, 'presentation-playback');
+                    throw error;
+                }
             }
             return sendJson(res, 404, { error: 'not-found' });
         }
@@ -169,13 +204,20 @@ async function handlePresentationApi(req, res, url) {
             return sendJson(res, 200, { presentations: presentationLibrary.listPresentations(ownerUserId) });
         if (req.method === 'POST' && parts.length === 2 && parts[1] === 'presentations') {
             const body = JSON.parse((await readRequestBody(req, 2 * 1024 * 1024)).toString('utf8') || '{}');
-            const bytes = body.bytesBase64 ? Buffer.from(body.bytesBase64, 'base64') : null;
+            const template = path.join(publicDir, 'assets', 'presentation-webppt-blank.pptx');
+            const bytes = body.bytesBase64 ? Buffer.from(body.bytesBase64, 'base64') : (!body.assetId && fs.existsSync(template) ? fs.readFileSync(template) : null);
+            const idPrefix = body.document?.idPrefix ?? `classcore-${crypto.randomUUID()}`;
+            const document = body.document ?? { format: 'web-ppt-ooxml-v1', idPrefix, deckId: `deck-${idPrefix}` };
             if (!body.assetId && !bytes?.length) throw new PresentationLibraryError('presentation-bytes-required');
-            return sendJson(res, 201, { presentation: presentationLibrary.createPresentation({ ownerUserId, title: body.title, assetId: body.assetId, bytes, mimeType: body.mimeType, document: body.document }) });
+            return sendJson(res, 201, { presentation: presentationLibrary.createPresentation({ ownerUserId, title: body.title, assetId: body.assetId, bytes, mimeType: body.mimeType ?? 'application/vnd.openxmlformats-officedocument.presentationml.presentation', document }) });
         }
         if (parts[1] !== 'presentations' || parts.length < 3) return sendJson(res, 404, { error: 'not-found' });
         const presentationId = parts[2];
         if (req.method === 'GET' && parts.length === 3) return sendJson(res, 200, { presentation: presentationLibrary.getPresentation(presentationId, ownerUserId) });
+        if (req.method === 'POST' && parts[3] === 'duplicate') {
+            const body = JSON.parse((await readRequestBody(req, 64 * 1024)).toString('utf8') || '{}');
+            return sendJson(res, 201, { presentation: presentationLibrary.duplicatePresentation(presentationId, ownerUserId, body.title) });
+        }
         if (req.method === 'PATCH' && parts.length === 3) {
             const body = JSON.parse((await readRequestBody(req, 64 * 1024)).toString('utf8') || '{}');
             return sendJson(res, 200, { presentation: presentationLibrary.renamePresentation(presentationId, ownerUserId, body.title) });
@@ -375,7 +417,8 @@ classroomServer.on('upgrade', (req, socket, head) => {
                 ws.close(1008, 'identity-required');
                 return;
             }
-            meta = { role, sessionId, clientId, subscribed: role === 'display' };
+            const participantId = String(message.participantId ?? clientId).trim();
+            meta = { role, sessionId, clientId, participantId, subscribed: role === 'display' };
             if (role === 'student')
                 stats.students++;
             else if (role === 'observer')
@@ -384,11 +427,22 @@ classroomServer.on('upgrade', (req, socket, head) => {
                 stats.teachers++;
             else if (role === 'display')
                 stats.display++;
+            if (role === 'teacher' && !store.loadControllerLease(sessionId)) {
+                // The reference transport uses the first authenticated teacher
+                // connection as the lease acquisition boundary. Use the
+                // synchronous store primitive so the control immediately
+                // following hello observes the durable lease.
+                store.put(sessionId, 'controller-lease', 'singleton', { leaseId: `lease-${crypto.randomUUID()}`, sessionId, revision: 1, holderConnectionId: clientId, holderParticipantId: participantId, expiresAt: Date.now() + 60 * 60 * 1000 });
+            }
             helloAccepted = true;
             ws.send({ type: 'hello.ack', ok: true, clientId });
             if (role === 'display' || role === 'observer') {
-                const playback = store.loadPresentationPlayback(sessionId);
-                if (playback) ws.send({ type: 'presentation.sync', state: playback, reason: 'reconnect' });
+                try {
+                    const resolved = resolveAuthoritativePresentationState(sessionId);
+                    if (resolved) ws.send({ type: 'presentation.sync', state: resolved.state, reason: 'reconnect' });
+                } catch (error) {
+                    ws.send({ type: 'presentation.sync', state: null, reason: error instanceof Error ? error.message : String(error) });
+                }
             }
             return;
         }
@@ -464,6 +518,11 @@ classroomServer.on('upgrade', (req, socket, head) => {
             const controlId = String(message.controlId ?? '');
             if (!controlId) {
                 ws.send({ type: 'presentation.control.ack', ok: false, reason: 'control-id-required' });
+                return;
+            }
+            const leaseReason = controllerLeaseReason(meta);
+            if (leaseReason) {
+                ws.send({ type: 'presentation.control.ack', ok: false, controlId, duplicate: false, reason: leaseReason });
                 return;
             }
             try {

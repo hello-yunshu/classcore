@@ -33,6 +33,8 @@ LABEL org.classroom.runtime.targetplatform=$TARGETPLATFORM \
       org.classroom.runtime.mode=reference-transport \
       org.classroom.runtime.authentication=false
 COPY --from=build --chown=node:node /app/dist/public ./dist/public
+COPY --from=build --chown=node:node /app/dist/packages/presentation ./dist/packages/presentation
+COPY --from=build --chown=node:node /app/dist/packages/contracts ./node_modules/@classroom/contracts
 COPY --chown=node:node apps/server/runtime ./apps/server/runtime
 RUN mkdir -p /data && chown node:node /data
 USER node

@@ -2,7 +2,7 @@
 
 ## 结论
 
-web-ppt 通过了当前可执行的核心 Integration Gate，现已确定为 ClassCore 唯一继续推进的网页 Presentation 引擎；现有 Scene Studio 仅保留为 fallback、contract harness 和紧急降级，不再扩大为第二套 Office 编辑器。本轮已继续接入 reference Teacher Library、raw Asset API、Server Draft autosave 和 Presentation infrastructure hardening；认证账号、Picker 与正式课堂 UI 仍未闭环。
+web-ppt 通过了当前可执行的核心 Integration Gate，现已确定为 ClassCore 唯一继续推进的网页 Presentation 引擎；现有 Scene Studio 仅保留为 fallback、contract harness 和紧急降级，不再扩大为第二套 Office 编辑器。本轮继续收口了 reference Teacher Library、staged quota/purge、cache reconcile、server-side freeze trust boundary、Controller Lease、Teacher control 和 Display exact-player/reconnect；认证账号、正式 Picker、Docker/LAN/设备证据仍未闭环。
 
 ## 架构审计结果
 
@@ -13,9 +13,20 @@ web-ppt 通过了当前可执行的核心 Integration Gate，现已确定为 Cla
 | Studio 定位 | 已从 Scene Studio Alpha 转为 web-ppt authoring host；旧纯模型函数保留作 contract tests，旧 renderer 不再作为主编辑器。 |
 | Core 边界 | 未引入 web-ppt `EditDoc` 到 Foundation/Runtime。第三方类型只停留在 adapter/Studio bundle。 |
 | Build system | 原手写 import map 无法承载第三方 ESM graph；改为 esbuild bundle Presentation Studio，并构建本地 blank template。 |
-| Server/Storage | Reference Server 已有 metadata-only content-addressed AssetStore、raw upload、owner claim、quota、Draft conflict、有限 Recovery、Rehearsal/Published/Restore、Session lifecycle、按 Session cache pin/release、Runtime Cache/GC 和 HTTP API；认证账号 owner authorization 与正式服务解耦仍未完成。 |
+| Server/Storage | Reference Server 已有 metadata-only content-addressed AssetStore、raw/staged upload claim、quota、soft-delete purge、Draft conflict、有限 Recovery、Rehearsal/Published/Restore、Session lifecycle、按 Session cache pin/release/reconcile、Runtime Cache/GC 和 HTTP API；认证账号 owner authorization 与正式服务解耦仍未完成。 |
 | 权威状态 | `StageState` 只表达 `contentType`/deck 引用；`PresentationPlaybackState` 负责 scene/step/playState/revision。当前没有新增第二份 scene/step 状态。 |
 | D7 verifier | 已移除 placeholder，改为 fail-closed：它会实际运行 create/edit/save/reopen/index/headless playback，并要求浏览器/offline evidence；其它 D7 requirement 仍会继续阻断 `d7:product`。 |
+
+## 本轮证据状态
+
+| 能力 | 状态 |
+| --- | --- |
+| staged quota / soft-delete purge / GC / cache hash repair | `model-tested` |
+| server freeze metadata/runtimeIndex validation | `model-tested` |
+| Teacher Library / Server-first blank project | `browser-bundle-built` |
+| reference Controller Lease / Teacher control / authoritative resolver | `model-tested` + `loopback integration-tested` reference transport |
+| Display exact cached player and reconnect path | `browser-bundle-built` + `loopback integration-tested` reference transport |
+| authenticated owner / formal Picker / Playwright / Docker / LAN / XP21A | `NOT_EVALUATED` |
 
 ## web-ppt 核心 Gate 证据
 

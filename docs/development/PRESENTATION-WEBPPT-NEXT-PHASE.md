@@ -25,7 +25,7 @@
 
 Editor Foundation、Layout Shell 和第一批 Content & Style Tools 已完成。当前 Studio 已通过 controller façade 使用 web-ppt 的页面、对象、文字、图形、表格、图片、背景、变换、层级、对齐、动画、预览和 OOXML 保存能力；页带缩略图由独立 web-ppt Viewer 真实渲染。IndexedDB 保留离线 draft cache，reference 服务可用时通过 raw Asset API + `If-Match` 同步 Server Draft；发布正式走 Server fingerprint。
 
-Reference Server 已补齐 metadata-only AssetStore、raw upload/owner claim/quota、Draft expectedRevision conflict、Recovery/Rehearsal/Published/Restore、Session lifecycle、按 Session Runtime Cache pin/release、maintenance runner，以及 pinned revision 的 Presentation control/sync/restart vertical slice。Teacher Library 和 reference Studio Server Draft autosave 已接入；仍未完成的产品接缝是认证账号 owner authorization、完整 Picker、正式 Teacher lease、Display-only browser player reconnect 和真实 LAN/Docker/XP21A 演练；reference 实现不能替代这些 Gate。
+Reference Server 已补齐 metadata-only AssetStore、raw upload/staged claim/quota、soft-delete purge、Draft expectedRevision conflict、Recovery/Rehearsal/Published/Restore、Session lifecycle、按 Session Runtime Cache pin/release/reconcile、maintenance runner，以及 pinned revision 的 Presentation control/sync/restart vertical slice。Teacher Library、reference Studio Server Draft autosave、reference Controller Lease、Display exact-player/reconnect 接缝已接入；仍未完成的产品接缝是认证账号 owner authorization、完整 Picker、正式 Teacher lease、真实 LAN/Docker/XP21A 演练；reference 实现不能替代这些 Gate。
 
 完整接入的含义是“把 web-ppt 已有的编辑能力接入产品入口”，不是在 ClassCore 里重新实现编辑器内核。
 
@@ -39,7 +39,7 @@ Reference Server 已补齐 metadata-only AssetStore、raw upload/owner claim/quo
 - 样式：填充、描边、页面背景、对齐与等距分布；
 - 播放：页面切换、动画批次、上一动画/下一动画、完成当前页动画；
 - 文件：PPT/PPTX 导入、真实 OOXML 保存、重开、离线资源、内容指纹；
-- 课堂接缝：Runtime Index、绑定占位、Published Presentation 草稿→校验→冻结→发布。
+- 课堂接缝：Runtime Index、绑定占位、Published Presentation 草稿→校验→冻结→发布；reference Teacher/Display 通过 exact Session Pin 与 authoritative PlaybackState 同步。
 
 ### P1：同一阶段完成基础接入后再补
 

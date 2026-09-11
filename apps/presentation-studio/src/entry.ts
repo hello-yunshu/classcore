@@ -436,7 +436,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  }), 'tool-button')]);
  group('课堂动作', [button('下一动画', wrapAction(() => { if (preview) void preview.session.nextStep?.();
  else addAnimation();
- }), 'tool-button'), button('保存', wrapAction(() => persist()), 'tool-button'), button('发布冻结', wrapAction(() => publish()), 'signal-button')]);
+ }), 'tool-button'), button('保存', wrapAction(() => persist()), 'tool-button'), button('开始试课', wrapAction(() => rehearse()), 'tool-button'), button('发布冻结', wrapAction(() => publish()), 'signal-button')]);
  }
     function renderInspector(): void { inspector.replaceChildren();
  const tabs = document.createElement('div');
@@ -660,6 +660,23 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     void syncThumbnails();
    }).catch(() => { /* thumbnail refresh must not block editing */ });
   }, 120);
+ }
+    async function rehearse(): Promise<void> { if (!asset || busy) return;
+ busy = true;
+ setStatus('正在准备试课版本…');
+ try { const bytes = await controller.save();
+ const saved = await createWebPptAssetFromBytes(titleInput.value.trim() || asset.title, bytes, asset.document.idPrefix);
+ const validation = await engine.validate(saved);
+ if (!validation.valid) throw new Error(`试课阻断：${validation.errors.join('、')}`);
+ const runtimeIndex = await engine.buildRuntimeIndex(saved);
+ await persistWebPptDraft(saved);
+ await syncServerDraft(saved);
+ const response = await serverJson(`/api/presentations/${encodeURIComponent(serverProject!.presentationId)}/rehearsals`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ engine: saved.engine, document: { ...saved.document, deckId: saved.deckId }, runtimeIndex }) });
+ const revision = response.revision;
+ setStatus(`试课版本已准备 · ${runtimeIndex.scenes.length} 页 · ${revision.expiresAt ? `有效至 ${new Date(revision.expiresAt).toLocaleString()}` : '临时版本'}`);
+ asset = saved; thumbnailAsset = saved; renderAll(false);
+ } catch (error) { setStatus(error instanceof Error ? error.message : String(error), true); }
+ finally { busy = false; }
  }
     async function publish(): Promise<void> { if (!asset || busy) return;
  busy = true;

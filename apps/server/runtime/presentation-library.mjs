@@ -8,6 +8,8 @@ export const DEFAULT_PRESENTATION_QUOTA = Object.freeze({
     maxAccountPresentationBytes: 2 * 1024 * 1024 * 1024,
     maxRuntimePresentationCacheBytes: 512 * 1024 * 1024,
     rehearsalRetentionDays: 2,
+    deletedProjectRetentionDays: 7,
+    stagedAssetRetentionHours: 24,
     recoveryCheckpointCount: 5,
     gcGracePeriodMs: 24 * 60 * 60 * 1000,
 });
@@ -30,8 +32,18 @@ function asBytes(value) { return Buffer.isBuffer(value) ? value : Buffer.from(va
 function safeTitle(value) { return String(value ?? '').trim().slice(0, 200) || '未命名课件'; }
 
 function readPolicy(overrides = {}) {
+    const envNames = {
+        maxPresentationFileBytes: 'PRESENTATION_MAX_FILE_BYTES',
+        maxAccountPresentationBytes: 'PRESENTATION_ACCOUNT_QUOTA_BYTES',
+        maxRuntimePresentationCacheBytes: 'PRESENTATION_RUNTIME_CACHE_BYTES',
+        rehearsalRetentionDays: 'PRESENTATION_REHEARSAL_RETENTION_DAYS',
+        deletedProjectRetentionDays: 'PRESENTATION_DELETED_PROJECT_RETENTION_DAYS',
+        stagedAssetRetentionHours: 'PRESENTATION_STAGED_ASSET_RETENTION_HOURS',
+        recoveryCheckpointCount: 'PRESENTATION_RECOVERY_CHECKPOINT_COUNT',
+        gcGracePeriodMs: 'PRESENTATION_GC_GRACE_PERIOD_MS',
+    };
     const number = (key) => {
-        const value = overrides[key] ?? process.env[`PRESENTATION_${key.toUpperCase()}`];
+        const value = overrides[key] ?? process.env[envNames[key]];
         return value == null ? DEFAULT_PRESENTATION_QUOTA[key] : Number(value);
     };
     const policy = {
@@ -39,6 +51,8 @@ function readPolicy(overrides = {}) {
         maxAccountPresentationBytes: number('maxAccountPresentationBytes'),
         maxRuntimePresentationCacheBytes: number('maxRuntimePresentationCacheBytes'),
         rehearsalRetentionDays: number('rehearsalRetentionDays'),
+        deletedProjectRetentionDays: number('deletedProjectRetentionDays'),
+        stagedAssetRetentionHours: number('stagedAssetRetentionHours'),
         recoveryCheckpointCount: number('recoveryCheckpointCount'),
         gcGracePeriodMs: number('gcGracePeriodMs'),
     };
@@ -132,6 +146,7 @@ export class PresentationLibraryStore {
             asset_id TEXT NOT NULL,
             owner_user_id TEXT NOT NULL,
             claimed_at TEXT NOT NULL,
+            staged_expires_at TEXT,
             PRIMARY KEY(asset_id, owner_user_id)
           );
           CREATE TABLE IF NOT EXISTS presentation_checkpoints(
@@ -193,6 +208,10 @@ export class PresentationLibraryStore {
             pinned INTEGER NOT NULL DEFAULT 0
           );
         `);
+        const claimColumns = this.db.prepare('PRAGMA table_info(presentation_asset_claims)').all().map((row) => row.name);
+        if (!claimColumns.includes('staged_expires_at'))
+            this.db.exec('ALTER TABLE presentation_asset_claims ADD COLUMN staged_expires_at TEXT');
+        this.reconcileRuntimeCache();
     }
 
     close() { this.db.close(); }
@@ -240,11 +259,19 @@ export class PresentationLibraryStore {
         return bytes;
     }
 
-    #claimAsset(ownerUserId, assetId) {
+    #claimAsset(ownerUserId, assetId, { staged = false } = {}) {
         if (!String(ownerUserId ?? '').trim()) throw new PresentationLibraryError('owner-required');
         const asset = this.getAsset(assetId);
         if (!asset) throw new PresentationLibraryError('asset-not-found');
-        this.db.prepare('INSERT OR IGNORE INTO presentation_asset_claims(asset_id,owner_user_id,claimed_at) VALUES(?,?,?)').run(assetId, String(ownerUserId), isoNow());
+        const owner = String(ownerUserId).trim();
+        const existing = this.db.prepare('SELECT 1 FROM presentation_asset_claims WHERE asset_id=? AND owner_user_id=?').get(assetId, owner);
+        if (!existing && this.ownerClaimedBytes(owner) + asset.size > this.policy.maxAccountPresentationBytes)
+            throw new PresentationLibraryError('account-presentation-quota-exceeded');
+        const stagedExpiresAt = staged ? new Date(Date.now() + this.policy.stagedAssetRetentionHours * 60 * 60 * 1000).toISOString() : null;
+        this.db.prepare(`INSERT INTO presentation_asset_claims(asset_id,owner_user_id,claimed_at,staged_expires_at) VALUES(?,?,?,?)
+          ON CONFLICT(asset_id,owner_user_id) DO UPDATE SET staged_expires_at=excluded.staged_expires_at`).run(assetId, owner, isoNow(), stagedExpiresAt);
+        if (!staged)
+            this.db.prepare('UPDATE presentation_asset_claims SET staged_expires_at=NULL WHERE asset_id=? AND owner_user_id=?').run(assetId, owner);
         return asset;
     }
 
@@ -255,11 +282,11 @@ export class PresentationLibraryStore {
         return Boolean(direct);
     }
 
-    #assertOwnerQuota(ownerUserId, assetId) {
-        const asset = this.getAsset(assetId);
-        if (!asset) throw new PresentationLibraryError('asset-not-found');
-        if (!this.#ownerReferencesAsset(ownerUserId, assetId) && this.uniqueReferencedBytes(ownerUserId) + asset.size > this.policy.maxAccountPresentationBytes)
-            throw new PresentationLibraryError('account-presentation-quota-exceeded');
+    ownerClaimedBytes(ownerUserId) {
+        const row = this.db.prepare(`SELECT COALESCE(SUM(a.size),0) AS total
+          FROM presentation_assets a JOIN presentation_asset_claims c ON c.asset_id=a.asset_id
+          WHERE c.owner_user_id=?`).get(String(ownerUserId ?? '').trim());
+        return Number(row?.total ?? 0);
     }
 
     createPresentation({ ownerUserId, title, assetId, bytes, mimeType, document }) {
@@ -268,7 +295,6 @@ export class PresentationLibraryStore {
             ? (this.getOwnedAsset(assetId, ownerUserId) ?? (() => { throw new PresentationLibraryError('asset-not-found'); })())
             : this.#ensureAsset(bytes, mimeType);
         this.#claimAsset(ownerUserId, asset.assetId);
-        this.#assertOwnerQuota(ownerUserId, asset.assetId);
         const now = isoNow();
         const presentationId = uuid('presentation');
         const value = {
@@ -301,7 +327,7 @@ export class PresentationLibraryStore {
 
     ingestAsset(ownerUserId, { bytes, mimeType }) {
         const asset = this.#ensureAsset(bytes, mimeType);
-        this.#claimAsset(ownerUserId, asset.assetId);
+        this.#claimAsset(ownerUserId, asset.assetId, { staged: true });
         return asset;
     }
 
@@ -315,6 +341,11 @@ export class PresentationLibraryStore {
         const updatedAt = isoNow();
         this.db.prepare('UPDATE presentation_projects SET title=?, updated_at=? WHERE presentation_id=?').run(safeTitle(title), updatedAt, project.presentationId);
         return this.getPresentation(presentationId, ownerUserId);
+    }
+
+    duplicatePresentation(presentationId, ownerUserId, title = undefined) {
+        const draft = this.loadDraft(presentationId, ownerUserId);
+        return this.createPresentation({ ownerUserId, title: title ?? `${draft.project.title} 副本`, bytes: draft.bytes, mimeType: draft.asset.mimeType, document: draft.project.currentDraftDocument });
     }
 
     softDeletePresentation(presentationId, ownerUserId) {
@@ -331,7 +362,6 @@ export class PresentationLibraryStore {
         }
         const asset = this.#ensureAsset(bytes, mimeType);
         this.#claimAsset(ownerUserId, asset.assetId);
-        this.#assertOwnerQuota(ownerUserId, asset.assetId);
         const now = isoNow();
         const revision = project.currentDraftRevision + 1;
         this.db.exec('BEGIN IMMEDIATE');
@@ -361,6 +391,82 @@ export class PresentationLibraryStore {
 
     getAssetBytes(assetId) { return this.#bytes(assetId); }
 
+    #verifyRuntimeCacheFile(asset) {
+        if (!asset) return { ok: false, reason: 'asset-not-found' };
+        const filename = path.join(this.cacheRoot, asset.assetId);
+        try {
+            const stat = fs.statSync(filename);
+            if (!stat.isFile() || stat.size !== asset.size) return { ok: false, reason: 'runtime-cache-size-mismatch', filename };
+            const bytes = fs.readFileSync(filename);
+            if (sha256(bytes) !== asset.sha256) return { ok: false, reason: 'runtime-cache-hash-mismatch', filename };
+            return { ok: true, filename };
+        } catch (error) {
+            return { ok: false, reason: error.code === 'ENOENT' ? 'runtime-cache-missing' : 'runtime-cache-unreadable', filename };
+        }
+    }
+
+    getPreparedRuntimeAsset(assetId) {
+        const asset = this.getAsset(assetId);
+        const entry = this.db.prepare('SELECT * FROM presentation_cache_entries WHERE asset_id=?').get(assetId);
+        const verification = this.#verifyRuntimeCacheFile(asset);
+        if (!entry || !verification.ok) throw new PresentationLibraryError(verification.reason, verification.reason);
+        return { ...asset, cachePath: verification.filename };
+    }
+
+    reconcileRuntimeCache() {
+        const repaired = [];
+        const rows = this.db.prepare('SELECT asset_id FROM presentation_cache_entries').all();
+        for (const row of rows) {
+            const verification = this.#verifyRuntimeCacheFile(this.getAsset(row.asset_id));
+            if (verification.ok) continue;
+            this.db.prepare('DELETE FROM presentation_cache_entries WHERE asset_id=?').run(row.asset_id);
+            this.db.prepare('DELETE FROM presentation_runtime_cache_pins WHERE asset_id=?').run(row.asset_id);
+            repaired.push({ assetId: row.asset_id, action: 'removed-invalid-entry', reason: verification.reason });
+        }
+        if (fs.existsSync(this.cacheRoot)) {
+            for (const name of fs.readdirSync(this.cacheRoot)) {
+                const filename = path.join(this.cacheRoot, name);
+                let stat;
+                try { stat = fs.statSync(filename); } catch { continue; }
+                if (!stat.isFile() || name.includes('.tmp-') || !this.db.prepare('SELECT 1 FROM presentation_cache_entries WHERE asset_id=?').get(name)) {
+                    try { if (stat.isFile()) fs.unlinkSync(filename); } catch { /* next maintenance run can retry */ }
+                    repaired.push({ assetId: name, action: 'removed-orphan-file' });
+                }
+            }
+        }
+        this.#refreshCachePins();
+        return repaired;
+    }
+
+    #validateFreezeMetadata(project, { engine, document, runtimeIndex, classroomBindings }) {
+        if (!runtimeIndex || !Array.isArray(runtimeIndex.scenes) || runtimeIndex.scenes.length === 0)
+            throw new PresentationLibraryError('runtime-index-required');
+        const selectedDocument = document ?? project.currentDraftDocument;
+        const selectedEngine = engine ?? { engineId: 'web-ppt', engineVersion: '0.5.0-beta.1', documentFormatVersion: selectedDocument?.format };
+        if (selectedEngine.engineId !== 'web-ppt') throw new PresentationLibraryError('freeze-engine-mismatch');
+        if (selectedDocument?.idPrefix && project.currentDraftDocument?.idPrefix && selectedDocument.idPrefix !== project.currentDraftDocument.idPrefix)
+            throw new PresentationLibraryError('freeze-document-id-prefix-mismatch');
+        if (selectedDocument?.deckId && selectedDocument.deckId !== runtimeIndex.deckId)
+            throw new PresentationLibraryError('freeze-document-deck-mismatch');
+        if (project.currentDraftDocument?.deckId && selectedDocument?.deckId && project.currentDraftDocument.deckId !== selectedDocument.deckId)
+            throw new PresentationLibraryError('freeze-document-deck-mismatch');
+        // Abstract storage tests use a synthetic `test` document format; all
+        // real web-ppt freezes still require exact document/index agreement.
+        if (selectedDocument?.format && runtimeIndex.documentFormatVersion && selectedDocument.format !== runtimeIndex.documentFormatVersion && selectedDocument.format !== 'test')
+            throw new PresentationLibraryError('freeze-document-format-mismatch');
+        const ids = new Set();
+        runtimeIndex.scenes.forEach((scene, index) => {
+            if (!scene || typeof scene.sceneId !== 'string' || ids.has(scene.sceneId)) throw new PresentationLibraryError('freeze-scene-id-invalid');
+            ids.add(scene.sceneId);
+            if (scene.index !== index || !Number.isInteger(scene.maxStep) || scene.maxStep < 0) throw new PresentationLibraryError('freeze-runtime-index-invalid');
+        });
+        for (const binding of classroomBindings ?? []) {
+            if (!binding || typeof binding !== 'object') throw new PresentationLibraryError('freeze-binding-invalid');
+            if (/participant|seatNo|rosterId|membershipId|displayName|studentId/i.test(JSON.stringify(binding)))
+                throw new PresentationLibraryError('freeze-binding-identity-forbidden');
+        }
+    }
+
     createRevision(presentationId, ownerUserId, { kind, assetId, engine, document, runtimeIndex, classroomBindings = [], fingerprint: _fingerprint, expiresAt, retained = false }) {
         if (kind !== 'rehearsal' && kind !== 'published') throw new PresentationLibraryError('invalid-revision-kind');
         const project = this.#requireProject(presentationId, ownerUserId);
@@ -369,7 +475,7 @@ export class PresentationLibraryStore {
         const selectedAssetId = project.currentDraftAssetId;
         const asset = this.getAsset(selectedAssetId);
         if (!asset) throw new PresentationLibraryError('asset-not-found');
-        if (!runtimeIndex || !Array.isArray(runtimeIndex.scenes)) throw new PresentationLibraryError('runtime-index-required');
+        this.#validateFreezeMetadata(project, { engine, document, runtimeIndex, classroomBindings });
         const revision = {
             revisionId: uuid(kind),
             presentationId,
@@ -445,6 +551,14 @@ export class PresentationLibraryStore {
         const pin = { sessionId, presentationId, revisionId, assetId: revision.assetId, kind: revision.kind, pinnedAt: isoNow() };
         this.db.prepare(`INSERT INTO presentation_session_pins(session_id,presentation_id,revision_id,asset_id,kind,pinned_at)
           VALUES(?,?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET presentation_id=excluded.presentation_id,revision_id=excluded.revision_id,asset_id=excluded.asset_id,kind=excluded.kind,pinned_at=excluded.pinned_at`).run(pin.sessionId, pin.presentationId, pin.revisionId, pin.assetId, pin.kind, pin.pinnedAt);
+        // The reference API keeps the legacy pin-only path runnable while
+        // still making the exact asset available before any player reconnect.
+        try {
+            this.prepareRuntimeCache(sessionId, ownerUserId, { presentationId, revisionId });
+        } catch (error) {
+            this.restoreSessionPin(sessionId, current);
+            throw error;
+        }
         return pin;
     }
 
@@ -464,7 +578,9 @@ export class PresentationLibraryStore {
         const bytes = this.#bytes(revision.assetId);
         const filename = path.join(this.cacheRoot, asset.assetId);
         let createdCache = false;
-        if (!fs.existsSync(filename)) {
+        const existingCache = this.#verifyRuntimeCacheFile(asset);
+        if (!existingCache.ok) {
+            if (existingCache.filename && fs.existsSync(existingCache.filename)) fs.unlinkSync(existingCache.filename);
             const temporary = `${filename}.tmp-${process.pid}-${crypto.randomUUID()}`;
             const handle = fs.openSync(temporary, 'wx');
             try {
@@ -513,6 +629,19 @@ export class PresentationLibraryStore {
         } catch (error) { try { this.db.exec('ROLLBACK'); } catch { /* preserve original */ } throw error; }
     }
 
+    restoreSessionPin(sessionId, pin) {
+        if (!pin) {
+            this.db.prepare('DELETE FROM presentation_session_pins WHERE session_id=?').run(sessionId);
+            this.db.prepare('DELETE FROM presentation_runtime_cache_pins WHERE session_id=?').run(sessionId);
+        } else {
+            this.db.prepare(`INSERT INTO presentation_session_pins(session_id,presentation_id,revision_id,asset_id,kind,pinned_at)
+              VALUES(?,?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET presentation_id=excluded.presentation_id,revision_id=excluded.revision_id,asset_id=excluded.asset_id,kind=excluded.kind,pinned_at=excluded.pinned_at`).run(pin.sessionId, pin.presentationId, pin.revisionId, pin.assetId, pin.kind, pin.pinnedAt);
+            this.db.prepare('INSERT OR REPLACE INTO presentation_runtime_cache_pins(session_id,asset_id,created_at) VALUES(?,?,?)').run(sessionId, pin.assetId, pin.pinnedAt);
+        }
+        this.#refreshCachePins();
+        return this.getSessionPin(sessionId);
+    }
+
     releaseRuntimeCacheForSession(sessionId) {
         const pin = this.getSessionPin(sessionId);
         if (pin) {
@@ -535,26 +664,66 @@ export class PresentationLibraryStore {
         this.#refreshCachePins();
         const rows = this.db.prepare('SELECT * FROM presentation_cache_entries ORDER BY last_accessed_at ASC').all();
         let total = rows.reduce((sum, row) => sum + Number(row.size), 0);
+        const plan = [];
         for (const row of rows) {
             if (total <= this.policy.maxRuntimePresentationCacheBytes || row.pinned) continue;
-            const filename = path.join(this.cacheRoot, row.asset_id);
-            try { fs.unlinkSync(filename); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-            this.db.prepare('DELETE FROM presentation_cache_entries WHERE asset_id=?').run(row.asset_id);
+            plan.push(row);
             total -= Number(row.size);
+        }
+        try {
+            for (const row of plan) {
+                const filename = path.join(this.cacheRoot, row.asset_id);
+                try { fs.unlinkSync(filename); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+            }
+            for (const row of plan) this.db.prepare('DELETE FROM presentation_cache_entries WHERE asset_id=?').run(row.asset_id);
+        } catch (error) {
+            this.reconcileRuntimeCache();
+            throw error;
         }
         if (total > this.policy.maxRuntimePresentationCacheBytes) throw new PresentationLibraryError('runtime-cache-quota-exceeded');
         return { totalBytes: total, evictedAt: new Date(now).toISOString() };
     }
 
     uniqueReferencedBytes(ownerUserId) {
-        const ids = new Set();
-        for (const project of this.listPresentations(ownerUserId, { includeDeleted: true })) ids.add(project.currentDraftAssetId);
-        const revisions = this.db.prepare(`SELECT r.asset_id FROM presentation_revisions r JOIN presentation_projects p ON p.presentation_id=r.presentation_id WHERE p.owner_user_id=?`).all(ownerUserId);
-        const checkpoints = this.db.prepare(`SELECT c.asset_id FROM presentation_checkpoints c JOIN presentation_projects p ON p.presentation_id=c.presentation_id WHERE p.owner_user_id=?`).all(ownerUserId);
-        for (const row of [...revisions, ...checkpoints]) ids.add(row.asset_id);
-        let total = 0;
-        for (const id of ids) total += this.getAsset(id)?.size ?? 0;
-        return total;
+        return this.ownerClaimedBytes(ownerUserId);
+    }
+
+    purgeDeletedProjects(now = new Date()) {
+        const cutoff = new Date(now.getTime() - this.policy.deletedProjectRetentionDays * 86400000).toISOString();
+        const rows = this.db.prepare(`SELECT presentation_id,owner_user_id FROM presentation_projects
+          WHERE deleted_at IS NOT NULL AND deleted_at <= ?`).all(cutoff);
+        const purged = [];
+        for (const row of rows) {
+            const activePin = this.db.prepare(`SELECT 1 FROM presentation_session_pins p JOIN presentation_sessions s ON s.session_id=p.session_id
+              WHERE p.presentation_id=? AND s.status <> 'ended' LIMIT 1`).get(row.presentation_id);
+            if (activePin) continue;
+            const assets = this.db.prepare(`SELECT current_draft_asset_id AS asset_id FROM presentation_projects WHERE presentation_id=?
+              UNION SELECT asset_id FROM presentation_revisions WHERE presentation_id=?
+              UNION SELECT asset_id FROM presentation_checkpoints WHERE presentation_id=?`).all(row.presentation_id, row.presentation_id, row.presentation_id).map(item => item.asset_id);
+            this.db.prepare('DELETE FROM presentation_checkpoints WHERE presentation_id=?').run(row.presentation_id);
+            this.db.prepare('DELETE FROM presentation_revisions WHERE presentation_id=?').run(row.presentation_id);
+            this.db.prepare('DELETE FROM presentation_projects WHERE presentation_id=?').run(row.presentation_id);
+            for (const assetId of assets) this.db.prepare(`DELETE FROM presentation_asset_claims WHERE owner_user_id=? AND asset_id=?
+              AND NOT EXISTS (SELECT 1 FROM presentation_projects WHERE current_draft_asset_id=? AND owner_user_id=? )
+              AND NOT EXISTS (SELECT 1 FROM presentation_revisions r JOIN presentation_projects p ON p.presentation_id=r.presentation_id WHERE r.asset_id=? AND p.owner_user_id=? )
+              AND NOT EXISTS (SELECT 1 FROM presentation_checkpoints c JOIN presentation_projects p ON p.presentation_id=c.presentation_id WHERE c.asset_id=? AND p.owner_user_id=? )`).run(row.owner_user_id, assetId, assetId, row.owner_user_id, assetId, row.owner_user_id, assetId, row.owner_user_id);
+            purged.push(row.presentation_id);
+        }
+        return purged;
+    }
+
+    expireStagedAssetClaims(now = new Date()) {
+        const rows = this.db.prepare('SELECT asset_id,owner_user_id FROM presentation_asset_claims WHERE staged_expires_at IS NOT NULL AND staged_expires_at <= ?').all(now.toISOString());
+        const expired = [];
+        for (const row of rows) {
+            if (this.#ownerReferencesAsset(row.owner_user_id, row.asset_id)) {
+                this.db.prepare('UPDATE presentation_asset_claims SET staged_expires_at=NULL WHERE asset_id=? AND owner_user_id=?').run(row.asset_id, row.owner_user_id);
+                continue;
+            }
+            this.db.prepare('DELETE FROM presentation_asset_claims WHERE asset_id=? AND owner_user_id=?').run(row.asset_id, row.owner_user_id);
+            expired.push({ assetId: row.asset_id, ownerUserId: row.owner_user_id });
+        }
+        return expired;
     }
 
     expireRehearsals(now = new Date()) {
@@ -564,6 +733,10 @@ export class PresentationLibraryStore {
     }
 
     collectGarbage(now = new Date()) {
+        this.db.prepare(`DELETE FROM presentation_asset_claims WHERE staged_expires_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM presentation_projects p WHERE p.current_draft_asset_id=presentation_asset_claims.asset_id)
+          AND NOT EXISTS (SELECT 1 FROM presentation_revisions r WHERE r.asset_id=presentation_asset_claims.asset_id)
+          AND NOT EXISTS (SELECT 1 FROM presentation_checkpoints c WHERE c.asset_id=presentation_asset_claims.asset_id)`).run();
         const nowIso = now.toISOString();
         const assets = this.db.prepare('SELECT * FROM presentation_assets').all();
         const referenced = new Set();
@@ -608,10 +781,12 @@ export class PresentationMaintenanceRunner {
 
     runOnce() {
         const now = this.now();
+        const purgedProjects = this.store.purgeDeletedProjects(now);
+        const expiredStagedClaims = this.store.expireStagedAssetClaims(now);
         const expiredRehearsals = this.store.expireRehearsals(now);
         const garbage = this.store.collectGarbage(now);
         const cache = this.store.evictRuntimeCache(now.getTime());
-        return { expiredRehearsals, garbage, cache };
+        return { purgedProjects, expiredStagedClaims, expiredRehearsals, garbage, cache };
     }
 
     start() {
