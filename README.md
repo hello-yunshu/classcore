@@ -1,21 +1,39 @@
-# 云云科（ClassCore）— Classroom Runtime Foundation v0.1.2 / R3.10 / CR11
+# ClassCore
 
-这是后续正式开发母版，重点是：**下载 ZIP 后交给 Codex，也能在不依赖此前聊天上下文的情况下继续开发。** Foundation Architecture v0.1.2 保持稳定；R3.10 不增加新的 Core 层，而是对 R3.8 的独立攻击性审计做Release-Assurance Closure：在保留既有 Lesson/Authorization/Docker Gate 的基础上，补齐身份隐私递归语义、跨 TS/JS/Python mutation corpus、名单重复 participantId、Student Claim 标准化与公共 pseudonym 存在性校验。
+ClassCore 是面向小学公开课的局域网课堂运行平台。它把课程内容、课堂活动、学生练习、教师控制、投屏展示、观察与服务端恢复能力组织在同一套运行时中。
 
-## 工程优先级
+当前首个示例课程为苏教版五年级上册《图案的还原》。项目仍处于公开课研发阶段：参考运行时和自动化检查已可运行，但正式 D7 课堂发布仍需要认证课堂 Server、真实浏览器流程、局域网演练和 XP21A 真机证据。
+
+## 项目定位
+
+ClassCore 的工程优先级是：
 
 **稳定性 > 流畅性 > 可恢复性 > 可维护性 > 基础安全。**
 
-这是局域网课堂系统，不追求理论上的“无法攻破”。基础安全只服务于课堂正确性与隐私边界，不引入重型零信任/复杂 RBAC 来消耗公开课周期。
+核心模型保持为：
 
-## 接手前置条件
+```text
+Lesson -> Activity -> Applet Type/Instance -> Command/Event/State/Artifact
+```
 
-- Node.js 26.8.2 Current（`.nvmrc` / `.node-version` 已固定）；
-- Node 官方发行包自带 npm 11.19.1；
-- Python 3.14.7，仅用于开发/CI 的正式 JSON Schema 校验；
-- Docker Desktop 仅在需要运行本次公开课容器 Gate 时必须，日常源码开发可先不安装。
+这是一个局域网课堂系统，不把课程专属逻辑塞进通用 Core，也不以“理论上无法攻破”为目标。基础安全主要用于保证课堂正确性、权限边界和学生身份隐私。
 
-## 接手后只做三步
+## 当前能力
+
+- HTTP + WebSocket 参考课堂 Server；
+- SQLite/WAL 存储、幂等事件、跨重启 `serverSeq` 恢复；
+- Student、Teacher、Display、Observer、Backstage、Authoring Studio 六个产品 Surface；
+- Simulation / Rehearsal 工程 Surface；
+- Student Claim、reconnect、公共 pseudonym 与 RecoveryCoordinator；
+- Presentation Library、web-ppt 运行时、教师控制、Display 精确播放与重连；
+- Lesson Package 脚手架、正式 Draft 2020-12 Schema 与跨文件引用校验；
+- Foundation v0.1.2 exact-set freeze 和 Private Identity Policy 校验；
+- Apple Silicon `linux/arm64` Docker 主目标，同时保留 `linux/amd64`；
+- 50 名学生 + 40 名 Observer 的 WebSocket/SQLite 参考负载模拟。
+
+## 快速开始
+
+正式工具链固定为 Node.js 26.8.2、npm 11.19.1、TypeScript 7.0.2、Python 3.14.7 和 `jsonschema` 4.26.0。
 
 ```bash
 npm run doctor
@@ -23,104 +41,102 @@ npm run bootstrap
 npm run server:dev
 ```
 
-`doctor` 检查干净 checkout 的基础环境；若缺 Python 3，会明确报错而不是在后续 Schema 校验阶段才失败。`bootstrap` 使用 `package-lock.json` 执行 `npm ci`、创建 `.venv`、安装正式 JSON Schema 校验依赖，并执行完整 `npm run check`。
+默认地址：
 
-Codex/代码代理请先阅读：
+- 课堂 Server：`http://127.0.0.1:8787`
+- 教师本机工具：`http://127.0.0.1:8788/backstage`
+- Authoring Studio：`http://127.0.0.1:8788/authoring`
 
-1. `AGENTS.md` — 永久工程规则、禁止误改的边界；
-2. `CODEX-HANDOFF.md` — 当前做到哪里、下一步做什么；
-3. `docs/development/MASTER-DEVELOPMENT-PLAN.md` — 唯一权威长期计划。
-
-## 核心架构
-
-`Lesson -> Activity -> Applet Type/Instance -> Command/Event/State/Artifact`
-
-产品结构：**6 个正式 Product Surface + 1 个 Engineering Surface + Service Plane**：
-
-- Student
-- Teacher Runtime
-- Display
-- Observer
-- Backstage
-- Authoring Studio
-- Simulation / Rehearsal（工程 Surface）
-- Server / Realtime / Storage / Identity / Projection / Presentation / Analytics / Intelligence（Service Plane）
-
-前端视觉样式与 Design System **尚未冻结**。当前 Web Shell 只是可运行开发入口，不是正式 UI。
-
-## 当前可运行能力
-
-- HTTP + WebSocket reference server；
-- SQLite/WAL reference storage；
-- session-scoped Event/Control 幂等、`serverSeq` 跨重启恢复；
-- Session 广播隔离与 Observer 背压降级；
-- StudentClaim / reconnect、Session pseudonym、RecoveryCoordinator 契约与参考实现；
-- Presentation Runtime Index / validated control；
-- 7 个 Surface 中性 Web Shell；
-- 新公开课完整 Lesson Package 脚手架；
-- `lesson:validate` 同时执行正式 Draft 2020-12 Schema、跨文件引用与通用语义验证（asset/capability/event authority/presentation cross-ref/path containment）；
-- Foundation exact-set freeze 防漂移：修改、删除或新增未登记契约文件都会失败；
-- Private Identity Policy 由单一配置源生成 TypeScript，并通过同一 mutation corpus 校验 Runtime TS、Lesson JS 与 Python validator；数组元素、对象 key、`roster:`/`class:` 等稳定身份引用均 fail closed；
-- clean checkout 的 `npm test` 会先 build，不再依赖旧 `dist`；
-- `release:d7` 前置 `d7:product`：Authenticated Server、TransformBoard、Presentation、Join/Submission、Teacher/Display/Observer 与 XP21A/LAN rehearsal 未完成时发布命令必定 fail closed；
-- reference transport 对重复 Event/Control ID 会校验 canonical payload：完全相同重试保持幂等，同 ID 不同 payload 明确拒绝，避免客户端 ID 重用被静默吞掉；
-- `workspace:check` 固化 19 个 workspace 的内部依赖声明/存在性/无环与源码 import 边界，避免 Codex 只靠 TypeScript path alias 形成隐式依赖；
-- Apple Silicon + Docker `linux/arm64` 是本次公开课 P0，同时保留 `linux/amd64`。
+参考 Server 和参考 Docker Compose 默认只监听 loopback。只有在明确进行局域网开发时，才通过 `.env` 配置 `HOST=0.0.0.0`；这不代表已具备正式认证课堂能力。
 
 ## 常用命令
 
 ```bash
+# 环境、构建和完整检查
 npm run doctor
 npm run bootstrap
-npm test
 npm run check
+npm test
+
+# 开发服务与负载模拟
 npm run server:dev
 npm run simulate:ws
+npm run simulate:load
+
+# 新建和验证公开课
 npm run lesson:new -- lesson-slug "课程标题"
 npm run lesson:validate -- lessons/lesson-slug
-npm run integrity:check
-npm run workspace:check
-# 当前母包会因已知产品 P0 blocker 而主动失败：
+
+# Docker 与发布 Gate
+npm run docker:gate
 npm run d7:product
-# 只有产品 readiness 全部有证据后，教师 Apple Silicon Mac 才运行：
 npm run release:d7
 ```
 
-为避免尚未认证的 reference transport 被误暴露到学生 LAN，源码直接启动时课堂端口**默认只监听 `127.0.0.1:8787`**。需要明确做 LAN 开发时，复制 `.env.example` 启用 `HOST=0.0.0.0`；正式 D7 RC 还必须先让 `npm run d7:product` 的所有产品 readiness blocker 有证据地转为 ready。reference Docker Compose 同样保持 8787/8788 loopback-only；`deploy/docker/docker-compose.d7.yml` 明确声明认证课堂运行时并发布 8787，但当前 reference Server 会对该未实现模式 fail closed，不能启动或伪报 D7 就绪。
+`npm run d7:product` 会在正式产品证据不足时主动失败；不要通过修改 readiness 配置中的布尔值绕过 Gate。`release:d7` 必须先通过产品 Gate。
 
-教师本机工具端口默认：`http://127.0.0.1:8788`，提供 Backstage `/backstage` 与 Authoring Studio `/authoring`。`npm run server:dev` 会自动读取存在的 `.env`；可从 `.env.example` 复制后按需修改。Docker 中容器监听 8788，但 Compose 只发布到宿主 `127.0.0.1:8788`，不与课堂 LAN 端口混用。
+## 产品结构
 
-## 正式工具链
+| Surface | 用途 |
+| --- | --- |
+| Student | 学生练习与课堂交互 |
+| Teacher Runtime | 教师控制课堂和 Presentation 播放 |
+| Display | 只读投屏展示 |
+| Observer | 只读观察与公共投影 |
+| Backstage | 教师本机运维工具 |
+| Authoring Studio | 课程与 Presentation 编辑 |
+| Simulation / Rehearsal | 压测、演练和回归验证 |
 
-- Node.js **26.8.2 Current**；
-- npm **11.19.1**（随 Node 26.8.2 官方发行包）；
-- TypeScript **7.0.2 stable**；
-- Python **3.14.7**；`jsonschema` **4.26.0 stable**，连同其验证链直接/传递依赖在 `requirements-dev.txt` 中精确锁定，只用于开发/CI。
+课堂 Participant Role 只有 `student`、`teacher`、`observer`、`display`；`system` 仅是 Server 内部 actor，不是课堂用户角色。
 
-版本统一由 `config/toolchain.json` 管理；未来升级优先新的 LTS/stable，不长期维护旧兼容分支。`.npmrc` 已启用 `engine-strict=true`，旧 Node 线不属于正式支持范围。
+## 代码结构
 
-## 三个硬节点
+```text
+apps/                  前端 Surface 与 Server
+packages/              Runtime、Storage、Realtime、Presentation 等共享包
+lessons/               课程包与课程专属内容
+docs/contracts/        Foundation v0.1.2 稳定契约
+deploy/docker/         Docker 与 Compose
+scripts/               检查、构建、模拟和发布工具
+tests/                 自动化回归测试
+```
 
-- **D2 / 2026-09-11**：Student Practice Alpha + Authoring Studio Web Presentation Alpha；下一阶段继续完成 web-ppt 完整接入；
-- **D7 / 2026-09-16**：完整公开课 RC；
-- **D21 / 2026-09-30**：完整架构实现基线 + 第二节公开课扩展证明。
+新增公开课应优先沿用以下路径：
+
+```text
+Lesson Package -> 复用或新增 Applet -> Lesson-specific Analytics -> Presentation -> Fixture / Simulation
+```
+
+不要为了单节课需求修改 Foundation，也不要让 Applet 直接访问数据库、原始 WebSocket 或 Identity Directory。
 
 ## 文档入口
 
-- `AGENTS.md`：Codex/代码代理永久工程规则；
-- `CODEX-HANDOFF.md`：当前开发交接；
-- `docs/README.md`：中文文档总入口；
-- `docs/development/MASTER-DEVELOPMENT-PLAN.md`：唯一权威长期计划；
-- `docs/development/FRONTEND-DESIGN-BOUNDARY.md`：前端 Design 尚未冻结的边界；
-- `docs/development/PRESENTATION-WEBPPT-NEXT-PHASE.md`：web-ppt 完整接入、Studio 能力与布局计划；
-- `docs/development/NEW-PUBLIC-LESSON-GUIDE.md`：下一节公开课扩展方法；
-- `docs/deployment/PLATFORM-ARCHITECTURE-MATRIX.md`：跨架构/Docker支持矩阵；
-- `CR11-RELEASE-ASSURANCE-CLOSURE-REPORT.md` 与 `R3.10-COMPLETE-AUDIT.md`：本版 Release-Assurance 收口与完整审计。
+- [`AGENTS.md`](AGENTS.md)：工程边界与代码代理规则；
+- [`CODEX-HANDOFF.md`](CODEX-HANDOFF.md)：当前实现状态与下一步；
+- [`docs/README.md`](docs/README.md)：中文文档总入口；
+- [`docs/development/MASTER-DEVELOPMENT-PLAN.md`](docs/development/MASTER-DEVELOPMENT-PLAN.md)：长期计划；
+- [`docs/development/PRESENTATION-MAINLINE-VERTICAL-SLICE.md`](docs/development/PRESENTATION-MAINLINE-VERTICAL-SLICE.md)：Presentation 主线垂直切片；
+- [`docs/deployment/PLATFORM-ARCHITECTURE-MATRIX.md`](docs/deployment/PLATFORM-ARCHITECTURE-MATRIX.md)：平台与 Docker 架构矩阵；
+- [`docs/deployment/CLASSROOM-LAN-REHEARSAL.md`](docs/deployment/CLASSROOM-LAN-REHEARSAL.md)：真实路由器与 XP21A 局域网演练要求。
 
-## 当前验证证据
+## 开发与贡献
 
-本轮历史验证曾执行自动测试 **105/105 PASS**，并再次通过正式 Lesson Schema/semantic gate、Foundation exact-set freeze、SQLite recovery、Server smoke 与 50 Student + 40 Observer WebSocket/SQLite reference load。升级到 Node 26.8.2 / npm 11.19.1 / Python 3.14.7 后，必须重新执行完整 bootstrap 与 Release Gate；XP21A 真机演练仍是外部硬 Gate，不伪报通过。
+提交改动前至少执行：
 
-## 仍未完成
+```bash
+npm run check:fast
+```
 
-R3.10 仍是**可执行开发母版**，不是课堂成品。web-ppt 已完成核心接入，但完整编辑工具栏/布局、Published Presentation、完整 Join/Presence/Outbox/Submission、正式 Teacher/Observer UI、lesson-specific Analytics/Rule Intelligence，以及 Apple Silicon Docker 实机 build/run/restart 与真实路由器 + XP21A LAN rehearsal 仍属于后续真实开发工作。自动 Docker Gate 不等价于真实路由器 + XP21A 真机演练；reference Gate 也不会把未认证 Server 暴露到 LAN。
+涉及 Runtime、Storage、Realtime、Presentation、Lesson Schema、Docker 或 Surface 时执行：
+
+```bash
+npm run check
+```
+
+请保持代码标识符、协议字段、事件名和错误码使用英文；面向使用者的说明优先使用中文。提交问题时请附上复现步骤、运行环境和相关命令输出，并明确区分本地代码、Docker、真实设备、局域网和 CI 证据。
+
+## 许可证
+
+ClassCore 以 **GNU Affero General Public License v3.0（AGPL-3.0-only）** 发布。该许可证要求分发修改版时提供对应源代码；如果修改版作为网络服务运行，也必须向与其交互的用户提供对应源代码。
+
+完整许可证文本见 [`LICENSE`](LICENSE)。第三方依赖不自动继承本项目许可证，具体以各依赖自身许可证和 [`docs/development/PRESENTATION-DEPENDENCY-LICENSES.md`](docs/development/PRESENTATION-DEPENDENCY-LICENSES.md) 为准。
