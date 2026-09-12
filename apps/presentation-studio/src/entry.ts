@@ -1,6 +1,6 @@
 import { getSurfaceDescriptor, CLIENT_RUNTIME_BUDGETS } from '@classroom/surfaces';
 import type { PresentationEngineAdapter } from '@classroom/presentation';
-import type { ElementId, ElementRecord, SlideId } from '@web-ppt/edit-core';
+import type { EditAnimationStep, ElementId, ElementRecord, SlideId } from '@web-ppt/edit-core';
 import type { VectorFill } from '@web-ppt/edit-core';
 import { textBodyEditText } from '@web-ppt/edit-core';
 import {
@@ -247,6 +247,15 @@ function input(label: string, value: string, onChange: (value: string) => void, 
  control.addEventListener('change', () => onChange(control.value));
  return control;
  }
+function selectControl(label: string, value: string, options: readonly [string, string][], onChange: (value: string) => void): HTMLSelectElement {
+ const control = document.createElement('select');
+ control.className = 'toolbar-select';
+ control.setAttribute('aria-label', label);
+ options.forEach(([optionValue, optionLabel]) => { const option = document.createElement('option'); option.value = optionValue; option.textContent = optionLabel; control.append(option); });
+ control.value = value;
+ control.addEventListener('change', () => onChange(control.value));
+ return control;
+ }
 function escapeText(value: string): string {
     return value
         .replaceAll('&', '&' + 'amp;')
@@ -298,6 +307,9 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  let savedGeneration = 0;
  let autosaveSuspended = true;
  let inspectorTab: 'object' | 'page' | 'animation' = 'object';
+ let notesExpanded = false;
+ let animationTrigger: 'click' | 'withPrev' | 'afterPrev' = 'click';
+ let animationDurationMs = 300;
  let ribbonTab = 'start';
  let thumbnailGeneration = 0;
  let thumbnailAsset: WebPptPresentationAsset | null = null;
@@ -368,11 +380,66 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const stageFooter = document.createElement('div');
  stageFooter.className = 'stage-footer';
  stagePanel.append(stageTitle, editorHost, stageFooter);
+ const notesPane = document.createElement('section');
+ notesPane.className = 'notes-pane';
+ const notesHeader = document.createElement('div');
+ notesHeader.className = 'notes-header';
+ const notesTitle = document.createElement('strong');
+ notesTitle.textContent = '备注';
+ const notesToggle = document.createElement('button');
+ notesToggle.type = 'button';
+ notesToggle.className = 'notes-toggle';
+ notesToggle.setAttribute('aria-label', '展开或收起备注');
+ notesToggle.addEventListener('click', () => { notesExpanded = !notesExpanded; renderAll(false); });
+ notesHeader.append(notesTitle, notesToggle);
+ const notesEditor = document.createElement('textarea');
+ notesEditor.className = 'notes-editor';
+ notesEditor.setAttribute('aria-label', '当前页面备注');
+ notesEditor.placeholder = '教师备注不会出现在大屏放映中';
+ notesEditor.addEventListener('change', () => { const id = currentSlide(); if (id) controller.setNotes(id, notesEditor.value); renderAll(false); });
+ notesPane.append(notesHeader, notesEditor);
+ stagePanel.append(notesPane);
+ const floatingToolbar = document.createElement('div');
+ floatingToolbar.className = 'floating-toolbar';
+ floatingToolbar.setAttribute('aria-label', '对象快捷工具栏');
+ stagePanel.append(floatingToolbar);
+ const contextMenu = document.createElement('div');
+ contextMenu.className = 'stage-context-menu';
+ contextMenu.setAttribute('role', 'menu');
+ contextMenu.hidden = true;
+ document.body.append(contextMenu);
+ const dismissContextMenu = () => { contextMenu.hidden = true; };
+ document.addEventListener('pointerdown', event => { if (!contextMenu.contains(event.target as Node)) dismissContextMenu(); });
+ editorHost.addEventListener('contextmenu', event => {
+  event.preventDefault();
+  contextMenu.replaceChildren();
+  const ids = selectedIds();
+  const selectedRecord = ids.length === 1 ? controller.element(ids[0]) : null;
+  const menuItems: Array<[string, IconId, () => void]> = ids.length ? [
+   ['复制', 'copy', () => controller.copy()],
+   ['删除', 'delete', () => controller.removeSelected()],
+   ['置于顶层', 'arrange', () => controller.setLayerMany(ids, 'front')],
+   ['组合', 'group', () => controller.group(ids)],
+   ...(selectedRecord?.src.kind === 'image' ? [['裁剪图片', 'crop', () => controller.startImageCrop(ids[0])] as [string, IconId, () => void]] : []),
+   ...(selectedRecord?.src.kind === 'table' ? [['插入行', 'table', () => controller.execute({ type: 'InsertRow', id: ids[0] })] as [string, IconId, () => void]] : []),
+  ] : [
+   ['新建幻灯片', 'new-slide', () => { const id = controller.addSlide(); if (id) webPpt.setView({ slideId: id, mode: 'edit' }); }],
+   ['复制页面', 'duplicate', () => { const id = currentSlide(); if (id) { const copy = controller.duplicateSlide(id); if (copy) webPpt.setView({ slideId: copy, mode: 'edit' }); } }],
+   ['删除页面', 'delete', () => { const id = currentSlide(); if (id) controller.removeSlide(id); }],
+   ['备注', 'notes', () => { notesExpanded = true; notesEditor.focus(); }],
+  ];
+  menuItems.forEach(([label, icon, action]) => { const item = createCommandButton({ id: `context:${label}`, label, icon, execute: () => { action(); dismissContextMenu(); renderAll(); } }, 'compact'); item.setAttribute('role', 'menuitem'); contextMenu.append(item); });
+  contextMenu.hidden = false;
+  const target = event as MouseEvent;
+  contextMenu.style.left = `${Math.max(8, Math.min(target.clientX, window.innerWidth - 210))}px`;
+  contextMenu.style.top = `${Math.max(8, Math.min(target.clientY, window.innerHeight - 260))}px`;
+ });
  const stageResizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => { applyStageZoom(); });
  stageResizeObserver?.observe(editorHost);
     function currentSession() { return controller.session;
  } function currentSlide(): SlideId | null { return controller.slideId ?? currentSession()?.editor.doc.slideOrder[0] ?? null;
  } function selectedIds() { return controller.selectedIds();
+ } function selectedId(): ElementId | undefined { return selectedIds()[0];
  } function setStatus(message: string, error = false): void { saveState.textContent = message;
  saveState.className = `save-state${error ? ' status-error' : ''}`;
  }
@@ -421,7 +488,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   const reload = button('重新加载服务器版本', async () => {
    const remote = await loadRemotePresentation(serverProject!.presentationId);
    await openAsset(remote); serverSyncPending = false; setStatus('已加载服务器版本'); dialog.close();
-  }, 'card-secondary');
+  }, 'card-secondary', '重新加载服务器版本', 'replace');
   const duplicate = button('另存为副本', async () => {
    const localAsset = asset;
    if (!localAsset?.source) throw new Error('本地冲突内容不可用');
@@ -432,7 +499,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    });
    clearPendingSyncMetadata(serverProject?.presentationId);
    dialog.close(); window.location.href = `/authoring?presentationId=${encodeURIComponent(result.presentation.presentationId)}`;
-  }, 'primary-button');
+  }, 'primary-button', '另存为副本', 'duplicate');
   actions.append(reload, duplicate); dialog.append(heading, note, actions); document.body.append(dialog);
   dialog.addEventListener('close', () => { conflictOpen = false; dialog.remove(); }); dialog.showModal();
  } function wrapAction(action: () => void | Promise<void>): () => void { return () => { try { const result = action();
@@ -476,8 +543,19 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   if (response.status === 409) throw new Error('draft-conflict');
   if (!response.ok) throw new Error(`presentation-server-http-${response.status}`);
   const result = await response.json();
-  serverProject.currentDraftRevision = result.presentation.currentDraftRevision;
-  saveServerProjectMetadata(serverProject);
+ serverProject.currentDraftRevision = result.presentation.currentDraftRevision;
+ saveServerProjectMetadata(serverProject);
+ }
+ function downloadCurrentPresentation(): void {
+  if (!asset?.source) { setStatus('当前没有可导出的课件', true); return; }
+  const bytes = new Uint8Array(asset.source.bytes);
+  const url = URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer], { type: asset.source.mimeType }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${(titleInput.value.trim() || asset.title || '课件').replace(/[\\/:*?"<>|]/g, '_')}.pptx`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+  setStatus('已导出 PPTX');
  }
     async function syncThumbnails(): Promise<void> { const generation = ++thumbnailGeneration;
  for (const session of thumbnailSessions.values()) session.dispose();
@@ -600,12 +678,14 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    command('new', '新建', 'new-slide', () => newDeck()),
    command('open', '打开 PPTX', 'image', () => fileInput.click()),
    command('save', '保存', 'save', () => persist(), '⌘/Ctrl+S'),
+   command('save-copy', '另存为副本', 'duplicate', () => downloadCurrentPresentation()),
+   command('export-pptx', '导出 PPTX', 'publish', () => downloadCurrentPresentation()),
    command('rehearse', '试课', 'rehearse', () => rehearse()),
    command('publish', '发布课堂版本', 'publish', () => publish()),
   ])]);
   if (ribbonTab === 'start') {
    group('剪贴板', [
-    createSplitButton(command('paste', '粘贴', 'paste', () => { controller.paste(); renderAll(); }, '⌘/Ctrl+V'), [command('paste-text', '仅保留文本', 'paste', () => { controller.paste(); renderAll(); })]),
+    commandSurface!.createCommandButton({ id: 'paste', label: '粘贴', icon: 'paste', shortcut: '⌘/Ctrl+V', execute: () => { controller.paste(); renderAll(); } }, 'compact', 'tool-button'),
     button('剪切', wrapAction(() => { controller.cut(); }), 'tool-button', '剪切', 'cut'),
     button('复制', wrapAction(() => { controller.copy(); }), 'tool-button', '复制', 'copy'),
     button('格式刷', wrapAction(() => { controller.startFormatPainter(); }), 'tool-button', '格式刷', 'format-painter'),
@@ -642,31 +722,64 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     { ...command('shape-pentagon', '五边形', 'shape', () => addShape('pentagon')), preview: 'preview-pentagon' },
     { ...command('shape-hexagon', '六边形', 'shape', () => addShape('hexagon')), preview: 'preview-hexagon' },
     { ...command('shape-heart', '心形', 'shape', () => addShape('heart')), preview: 'preview-heart' },
+    { ...command('shape-cloud', '云形', 'shape', () => addShape('cloud')), preview: 'preview-cloud' },
+    { ...command('shape-arrow', '下箭头', 'shape', () => addShape('downArrow')), preview: 'preview-arrow' },
+    { ...command('shape-line', '直线', 'shape', () => addShape('line')), preview: 'preview-line' },
    ], 4), createGallery('table-picker', '插入表格', Array.from({ length: 16 }, (_unused, index) => {
     const rows = Math.floor(index / 4) + 1;
     const cols = index % 4 + 1;
     return { ...command(`table:${rows}x${cols}`, `${rows} × ${cols}`, 'table', () => { controller.addTable(rows, cols); renderAll(); }), preview: `preview-table-${rows}-${cols}` };
-   }), 4), button('插入表格…', wrapAction(() => {
+   }), 4), button('插入表格', wrapAction(() => {
     const rows = Number.parseInt(globalThis.prompt?.('行数', '3') ?? '3', 10);
     const cols = Number.parseInt(globalThis.prompt?.('列数', '3') ?? '3', 10);
     if (Number.isFinite(rows) && Number.isFinite(cols)) controller.addTable(Math.max(1, Math.min(10, rows)), Math.max(1, Math.min(10, cols)));
     renderAll();
-   }), 'tool-button', '插入表格…', 'table')]);
+   }), 'tool-button', '插入表格', 'table')]);
   }
   if (ribbonTab === 'design') group('设计', [
    button('页面背景', wrapAction(() => backgroundInput.click()), 'tool-button', '页面背景', 'background'),
-   button('开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button', '开启吸附', 'snapping'),
-   button('缩小', wrapAction(() => { changeStageZoom(-.1); }), 'tool-button', '缩小', 'zoom-out'),
-   button('放大', wrapAction(() => { changeStageZoom(.1); }), 'tool-button', '放大', 'zoom-in'),
+   button('背景图片', wrapAction(() => backgroundInput.click()), 'tool-button', '背景图片', 'image'),
   ]);
-  if (ribbonTab === 'transition') group('切换', [createGallery('transition-gallery', '常用切换', [
+  if (ribbonTab === 'transition') {
+   const transitionState = controller.queryTransition();
+   const currentTransition = transitionState?.value;
+   const transitionType = currentTransition?.type ?? 'fade';
+   const transitionAdvance = input('自动换页毫秒', currentTransition?.advanceAfterMs === undefined ? '' : String(currentTransition.advanceAfterMs), value => {
+    const advanceAfterMs = value.trim() === '' ? undefined : Number(value);
+    if (advanceAfterMs === undefined || (Number.isFinite(advanceAfterMs) && advanceAfterMs >= 0)) {
+     controller.setTransition({ type: transitionType, durationMs: currentTransition?.durationMs ?? 750, dir: currentTransition?.dir, advanceAfterMs });
+     renderAll(false);
+    }
+   }, 'number');
+   transitionAdvance.placeholder = '手动换页';
+   transitionAdvance.className = 'toolbar-select';
+   const transitionDuration = input('切换时长毫秒', String(currentTransition?.durationMs ?? 750), value => {
+    const durationMs = Number(value);
+    if (Number.isFinite(durationMs) && durationMs >= 0) {
+     controller.setTransition({ type: transitionType, durationMs, dir: currentTransition?.dir });
+     renderAll(false);
+    }
+   }, 'number');
+   transitionDuration.className = 'toolbar-select';
+   const transitionGallery = createGallery('transition-gallery', '常用切换', [
    { ...command('transition-none', '无', 'transition', () => { controller.setTransition(null); renderAll(false); }), preview: 'preview-none' },
    { ...command('transition-fade', '淡化', 'transition', () => { controller.setTransition({ type: 'fade' }); renderAll(false); }), preview: 'preview-fade' },
    { ...command('transition-push', '推进', 'transition', () => { controller.setTransition({ type: 'push', dir: 'r' }); renderAll(false); }), preview: 'preview-push' },
    { ...command('transition-wipe', '擦除', 'transition', () => { controller.setTransition({ type: 'wipe', dir: 'r' }); renderAll(false); }), preview: 'preview-wipe' },
    { ...command('transition-split', '分割', 'transition', () => { controller.setTransition({ type: 'split', dir: 'horz' }); renderAll(false); }), preview: 'preview-split' },
    { ...command('transition-zoom', '缩放', 'transition', () => { controller.setTransition({ type: 'zoom' }); renderAll(false); }), preview: 'preview-zoom' },
-  ], 6), button('预览切换', wrapAction(() => controller.previewTransition()), 'tool-button', '预览切换', 'preview')]);
+   ], 6);
+   const transitionDirection = createDropdown(command('transition-direction', '方向', 'arrange', () => undefined), ['l', 'r', 'u', 'd'].map(dir => command(`transition-dir:${dir}`, dir === 'l' ? '向左' : dir === 'r' ? '向右' : dir === 'u' ? '向上' : '向下', 'arrange', () => {
+    controller.setTransition({ type: transitionType, dir, durationMs: currentTransition?.durationMs ?? 750 });
+    renderAll(false);
+   })));
+   const applyAllTransitions = button('应用到全部页面', wrapAction(() => {
+    const slides = currentSession()?.editor.doc.slideOrder ?? [];
+    controller.setTransitionForSlides(slides, { type: transitionType, dir: currentTransition?.dir, durationMs: currentTransition?.durationMs ?? 750 });
+    renderAll(false);
+   }), 'tool-button', '应用到全部页面', 'duplicate');
+   group('切换', [transitionGallery, transitionDirection, transitionDuration, transitionAdvance, applyAllTransitions, button('预览切换', wrapAction(() => controller.previewTransition()), 'tool-button', '预览切换', 'preview')]);
+  }
   if (ribbonTab === 'animation') group('动画', [createGallery('animation-gallery', '动画库', [
    { ...command('animation-appear', '出现', 'animation', () => addAnimation('appear')), preview: 'preview-appear' },
    { ...command('animation-fade', '淡入', 'animation', () => addAnimation('fade')), preview: 'preview-fade' },
@@ -680,7 +793,9 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    button('选择窗格', wrapAction(() => { inspectorTab = 'object'; renderAll(); }), 'tool-button', '选择窗格', 'selection-pane'),
    button(controller.snapshot.snapping ? '关闭吸附' : '开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button', '吸附', 'snapping'),
    button('适应窗口', wrapAction(() => { applyStageZoom(true); renderAll(false); }), 'tool-button', '适应窗口', 'fit'),
-   button('备注', wrapAction(() => { inspectorTab = 'page'; renderAll(); }), 'tool-button', '备注', 'notes'),
+   button('备注', wrapAction(() => { notesExpanded = true; renderAll(false); notesEditor.focus(); }), 'tool-button', '备注', 'notes'),
+   button('缩小', wrapAction(() => { changeStageZoom(-.1); }), 'tool-button', '缩小', 'zoom-out'),
+   button('放大', wrapAction(() => { changeStageZoom(.1); }), 'tool-button', '放大', 'zoom-in'),
   ]);
   if (ribbonTab === 'image-format') group('图片格式', [
    button('替换图片', wrapAction(() => chooseImage('replace')), 'tool-button', '替换图片', 'replace-image'),
@@ -689,8 +804,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    createDropdown(command('image-arrange', '排列', 'arrange', () => undefined), arrange),
   ]);
   if (ribbonTab === 'shape-format') group('形状格式', [
-   button('形状填充', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.setFill(id, solid(rgb('#5375B8'))); renderAll(); }), 'tool-button', '形状填充', 'background'),
-   button('形状轮廓', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.setStroke(id, { color: rgb('#24324B'), width: 1.5, dash: null, cap: 'butt', join: 'miter', compound: 'sng' }); renderAll(); }), 'tool-button', '形状轮廓', 'shape-outline'),
+   button('形状填充', wrapAction(() => { const id = selectedId(); if (id) controller.setFill(id, solid(rgb('#5375B8'))); renderAll(); }), 'tool-button', '形状填充', 'background'),
+   button('形状轮廓', wrapAction(() => { const id = selectedId(); if (id) controller.setStroke(id, { color: rgb('#24324B'), width: 1.5, dash: null, cap: 'butt', join: 'miter', compound: 'sng' }); renderAll(); }), 'tool-button', '形状轮廓', 'shape-outline'),
    createDropdown(command('shape-arrange', '排列', 'arrange', () => undefined), arrange),
   ]);
   if (ribbonTab === 'text-format') {
@@ -698,9 +813,16 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    const textState = controller.queryRunProps();
    const textDisabled = !view || !textState;
    group('字体', [
-    commandSurface!.createCommandButton({ id: 'text-bold', label: '加粗', icon: 'font', checked: textState?.b.value === true, disabled: textDisabled, execute: () => { controller.toggleBold(); renderAll(false); } }, 'compact'),
-    commandSurface!.createCommandButton({ id: 'text-italic', label: '斜体', icon: 'font', checked: textState?.i.value === true, disabled: textDisabled, execute: () => { controller.toggleItalic(); renderAll(false); } }, 'compact'),
-    commandSurface!.createCommandButton({ id: 'text-underline', label: '下划线', icon: 'font', checked: textState?.u.value === true, disabled: textDisabled, execute: () => { controller.toggleUnderline(); renderAll(false); } }, 'compact'),
+    selectControl('字体', textState?.font.value ?? '', [['', '字体'], ['Aptos', 'Aptos'], ['Arial', 'Arial'], ['Calibri', 'Calibri'], ['Times New Roman', 'Times New Roman'], ['Microsoft YaHei', '微软雅黑']], value => { controller.setFont(value || null); renderAll(false); }),
+    selectControl('字号', String(textState?.size.value ?? 18), [['12', '12'], ['14', '14'], ['16', '16'], ['18', '18'], ['20', '20'], ['24', '24'], ['28', '28'], ['32', '32'], ['40', '40'], ['48', '48']], value => { controller.setFontSize(Number(value)); renderAll(false); }),
+    commandSurface!.createCommandButton({ id: 'text-bold', label: '加粗', icon: 'bold', checked: textState?.b.value === true, disabled: textDisabled, execute: () => { controller.toggleBold(); renderAll(false); } }, 'compact'),
+    commandSurface!.createCommandButton({ id: 'text-italic', label: '斜体', icon: 'italic', checked: textState?.i.value === true, disabled: textDisabled, execute: () => { controller.toggleItalic(); renderAll(false); } }, 'compact'),
+    commandSurface!.createCommandButton({ id: 'text-underline', label: '下划线', icon: 'underline', checked: textState?.u.value === true, disabled: textDisabled, execute: () => { controller.toggleUnderline(); renderAll(false); } }, 'compact'),
+    commandSurface!.createCommandButton({ id: 'text-strike', label: '删除线', icon: 'strike', checked: textState?.strike.value === true, disabled: textDisabled, execute: () => { controller.setTextStyle(selectedRecord ? selectedRecord.id : '', { strike: textState?.strike.mixed || textState?.strike.value !== true }); renderAll(false); } }, 'compact'),
+    createDropdown({ id: 'text-color', label: '文字颜色', icon: 'font', disabled: textDisabled, execute: () => undefined }, [
+     ...[['墨色', '#24324B'], ['蓝色', '#5375B8'], ['珊瑚', '#D66B52'], ['金色', '#C48722'], ['白色', '#FFFFFF']].map(([label, color]) => command(`text-color:${color}`, label, 'font', () => { controller.setTextColor(rgb(color)); renderAll(false); })),
+     command('text-color-reset', '恢复来源颜色', 'font', () => { controller.setTextColor(null); renderAll(false); }),
+    ]),
     commandSurface!.createCommandButton({ id: 'text-smaller', label: '减小字号', icon: 'zoom-out', disabled: textDisabled, execute: () => { controller.adjustFontSize(-2); renderAll(false); } }, 'compact'),
     commandSurface!.createCommandButton({ id: 'text-larger', label: '增大字号', icon: 'zoom-in', disabled: textDisabled, execute: () => { controller.adjustFontSize(2); renderAll(false); } }, 'compact'),
     commandSurface!.createCommandButton({ id: 'text-clear', label: '清除格式', icon: 'font', disabled: textDisabled, execute: () => { controller.clearTextFormat(); renderAll(false); } }, 'compact'),
@@ -711,6 +833,17 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     commandSurface!.createCommandButton({ id: 'para-left', label: '左对齐', icon: 'align', checked: paraState?.align.value === 'left', disabled: textDisabled, execute: () => { controller.setParagraph({ align: 'left' }); renderAll(false); } }, 'compact'),
     commandSurface!.createCommandButton({ id: 'para-center', label: '居中', icon: 'align', checked: paraState?.align.value === 'center', disabled: textDisabled, execute: () => { controller.setParagraph({ align: 'center' }); renderAll(false); } }, 'compact'),
     commandSurface!.createCommandButton({ id: 'para-right', label: '右对齐', icon: 'align', checked: paraState?.align.value === 'right', disabled: textDisabled, execute: () => { controller.setParagraph({ align: 'right' }); renderAll(false); } }, 'compact'),
+    createDropdown({ id: 'para-list', label: '列表', icon: 'bullet-list', disabled: textDisabled, execute: () => undefined }, [
+     command('para-bullet', '项目符号层级 1', 'bullet-list', () => { controller.setParagraph({ level: 1 }); renderAll(false); }),
+     command('para-number', '编号层级 1', 'number-list', () => { controller.setParagraph({ level: 1 }); renderAll(false); }),
+     command('para-reset-list', '清除列表层级', 'paragraph', () => { controller.setParagraph({ level: 0 }); renderAll(false); }),
+    ]),
+    createDropdown({ id: 'para-spacing', label: '段落间距', icon: 'line-spacing', disabled: textDisabled, execute: () => undefined }, [
+     command('para-spacing-tight', '紧凑 1.0', 'line-spacing', () => { controller.setParagraph({ lineHeight: 1 }); renderAll(false); }),
+     command('para-spacing-normal', '标准 1.15', 'line-spacing', () => { controller.setParagraph({ lineHeight: 1.15 }); renderAll(false); }),
+     command('para-spacing-loose', '宽松 1.5', 'line-spacing', () => { controller.setParagraph({ lineHeight: 1.5 }); renderAll(false); }),
+    ]),
+    commandSurface!.createCommandButton({ id: 'para-indent', label: '增加缩进', icon: 'indent', disabled: textDisabled, execute: () => { controller.setParagraph({ marginLeft: (paraState?.marginLeft.value ?? 0) + 18 }); renderAll(false); } }, 'compact'),
    ]);
    group('文本框', [
     createDropdown({ id: 'text-anchor', label: '垂直对齐', icon: 'text', checked: bodyState?.anchor === 'middle', disabled: textDisabled, execute: () => undefined }, [
@@ -723,70 +856,29 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
      command('text-fit-shrink', '溢出时缩小文字', 'text', () => { controller.setBodyProps({ autoFit: 'normal' }); renderAll(false); }),
      command('text-fit-shape', '根据文字调整形状', 'text', () => { controller.setBodyProps({ autoFit: 'shape' }); renderAll(false); }),
     ]),
+    createDropdown({ id: 'text-direction', label: '文字方向', icon: 'text', disabled: textDisabled, execute: () => undefined }, [
+     command('text-horizontal', '横排', 'text', () => { controller.setBodyProps({ vert: 'horz' }); renderAll(false); }),
+     command('text-vertical', '竖排', 'text', () => { controller.setBodyProps({ vert: 'vert' }); renderAll(false); }),
+    ]),
+    createDropdown({ id: 'text-insets', label: '文本边距', icon: 'text', disabled: textDisabled, execute: () => undefined }, [
+     command('text-insets-normal', '标准边距', 'text', () => { controller.setBodyProps({ insets: [9, 9, 9, 9] }); renderAll(false); }),
+     command('text-insets-none', '无边距', 'text', () => { controller.setBodyProps({ insets: [0, 0, 0, 0] }); renderAll(false); }),
+    ]),
+    commandSurface!.createCommandButton({ id: 'text-wrap', label: '自动换行', icon: 'text', checked: bodyState?.wrap === true, disabled: textDisabled, execute: () => { controller.setBodyProps({ wrap: bodyState?.wrap !== true }); renderAll(false); } }, 'compact'),
+    selectControl('文本列数', String(bodyState?.columns ?? 1), [['1', '单列'], ['2', '两列'], ['3', '三列']], value => { controller.setBodyProps({ columns: Number(value) }); renderAll(false); }),
    ]);
   }
   if (ribbonTab === 'table-design') group('表格设计', [
-   button('表格底纹', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.setFill(id, solid(rgb('#E7ECF7'))); renderAll(false); }), 'tool-button', '表格底纹', 'background'),
-   button('无底纹', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.setFill(id, { type: 'none' }); renderAll(false); }), 'tool-button', '无底纹', 'background'),
-   button('边框', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.setStroke(id, { color: rgb('#24324B'), width: 1, dash: null, cap: 'butt', join: 'miter', compound: 'sng' }); renderAll(false); }), 'tool-button', '边框', 'shape-outline' as IconId),
+   button('表格底纹', wrapAction(() => { const id = selectedId(); if (id) controller.setFill(id, solid(rgb('#E7ECF7'))); renderAll(false); }), 'tool-button', '表格底纹', 'background'),
+   button('无底纹', wrapAction(() => { const id = selectedId(); if (id) controller.setFill(id, { type: 'none' }); renderAll(false); }), 'tool-button', '无底纹', 'background'),
+   button('边框', wrapAction(() => { const id = selectedId(); if (id) controller.setStroke(id, { color: rgb('#24324B'), width: 1, dash: null, cap: 'butt', join: 'miter', compound: 'sng' }); renderAll(false); }), 'tool-button', '边框', 'shape-outline' as IconId),
   ]);
   if (ribbonTab === 'table-layout') group('表格布局', [
-   button('插入行', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.execute({ type: 'InsertRow', id }); renderAll(false); }), 'tool-button', '在末尾插入一行', 'table'),
+   button('插入行', wrapAction(() => { const id = selectedId(); if (id) controller.execute({ type: 'InsertRow', id }); renderAll(false); }), 'tool-button', '在末尾插入一行', 'table'),
   ]);
  };
  renderOfficeToolbar();
  return;
- const group = (label: string, controls: HTMLElement[]): void => { const section = document.createElement('div');
- section.className = 'toolbar-group';
- const name = document.createElement('span');
- name.className = 'toolbar-label';
- name.textContent = label;
- section.append(name, ...controls);
- toolbar.append(section);
- };
- if (ribbonTab === 'start' || ribbonTab === 'file') group('编辑', [button('撤销', wrapAction(() => { controller.undo();
- renderAll();
- }), 'tool-button'), button('重做', wrapAction(() => { controller.redo();
- renderAll();
- }), 'tool-button'), button('复制', wrapAction(() => { controller.copy();
- }), 'tool-button'), button('粘贴', wrapAction(() => { controller.paste();
- renderAll();
- }), 'tool-button'), button('删除', wrapAction(() => { controller.removeSelected();
- renderAll();
- }), 'tool-button')]);
- if (ribbonTab === 'start' || ribbonTab === 'insert') group('插入', [button('文字', wrapAction(() => { const id = controller.addShape('rect');
- if (id) { controller.editText(id, '输入文字');
- controller.select({ kind: 'elements', ids: [id], enteredGroup: null });
- } renderAll();
- }), 'tool-button'), button('图形', wrapAction(() => { controller.addShape('roundRect');
- renderAll();
- }), 'tool-button'), button('表格', wrapAction(() => { const rows = Number.parseInt(globalThis.prompt?.('行数', '3') ?? '3', 10);
- const cols = Number.parseInt(globalThis.prompt?.('列数', '3') ?? '3', 10);
- if (Number.isFinite(rows) && Number.isFinite(cols)) controller.addTable(Math.max(1, Math.min(10, rows)), Math.max(1, Math.min(10, cols)));
- renderAll();
- }), 'tool-button'), button('图片', wrapAction(() => imageInput.click()), 'tool-button'), button('页面背景', wrapAction(() => backgroundInput.click()), 'tool-button')]);
- if (ribbonTab === 'start') group('排列', [button('左对齐', wrapAction(() => { controller.align(selectedIds(), 'left');
- renderAll();
- }), 'tool-button'), button('水平居中', wrapAction(() => { controller.align(selectedIds(), 'center');
- renderAll();
- }), 'tool-button'), button('置顶', wrapAction(() => { controller.setLayerMany(selectedIds(), 'front');
- renderAll();
- }), 'tool-button'), button('等距分布', wrapAction(() => { controller.distributeHorizontal(selectedIds()); renderAll(); }), 'tool-button'), button('置底', wrapAction(() => { controller.setLayerMany(selectedIds(), 'back');
- renderAll();
- }), 'tool-button')]);
- if (ribbonTab === 'start' || ribbonTab === 'file') group('课堂动作', [button('下一动画', wrapAction(() => { if (preview) void preview.session.nextStep?.();
- else addAnimation();
- }), 'tool-button'), button('保存', wrapAction(() => persist()), 'tool-button'), button('开始试课', wrapAction(() => rehearse()), 'tool-button'), button('发布冻结', wrapAction(() => publish()), 'signal-button')]);
- if (ribbonTab === 'design') group('设计', [
-  button('页面背景', wrapAction(() => backgroundInput.click()), 'tool-button'),
-  button(controller.snapshot.snapping ? '关闭吸附' : '开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'),
-  button('缩小', wrapAction(() => { changeStageZoom(-.1); }), 'tool-button'),
-  button('放大', wrapAction(() => { changeStageZoom(.1); }), 'tool-button'),
- ]);
- if (ribbonTab === 'transition') group('切换', [button('淡化', wrapAction(() => { controller.setTransition({ type: 'fade' }); renderAll(false); }), 'tool-button'), button('无', wrapAction(() => { controller.setTransition(null); renderAll(false); }), 'tool-button'), button('预览切换', wrapAction(() => controller.previewTransition()), 'tool-button')]);
- if (ribbonTab === 'animation') group('动画', [button('给选中对象加入淡入', wrapAction(() => addAnimation()), 'tool-button'), button('下一动画', wrapAction(() => { if (preview) void preview.session.nextStep?.(); }), 'tool-button')]);
- if (ribbonTab === 'show') group('放映', [button('预览', wrapAction(() => togglePreview()), 'preview-button')]);
- if (ribbonTab === 'view') group('视图', [button(controller.snapshot.snapping ? '关闭吸附' : '开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'), button('适应窗口', wrapAction(() => { applyStageZoom(true); renderAll(false); }), 'tool-button')]);
  }
     function renderInspector(): void { inspectorBody.replaceChildren();
  selectionPaneHost.hidden = inspectorTab !== 'object';
@@ -809,6 +901,22 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  if (!ids.length) { inspectorBody.append(emptyInspector('在画布或选择窗格中选择对象'));
  return;
  } const id = ids[0];
+ if (ids.length > 1) {
+  const heading = document.createElement('div');
+  heading.className = 'inspector-heading';
+  heading.textContent = `已选择 ${ids.length} 个对象`;
+  inspectorBody.append(heading, emptyInspector('批量操作会在一次撤销事务中完成'));
+  const multi = document.createElement('div');
+  multi.className = 'layer-actions';
+  multi.append(
+   button('左对齐', wrapAction(() => { controller.align(ids, 'left'); renderAll(false); }), 'small-button', '左对齐', 'align'),
+   button('水平居中', wrapAction(() => { controller.align(ids, 'center'); renderAll(false); }), 'small-button', '水平居中', 'align'),
+   button('组合', wrapAction(() => { controller.group(ids); renderAll(false); }), 'small-button', '组合', 'group'),
+   button('置顶', wrapAction(() => { controller.setLayerMany(ids, 'front'); renderAll(false); }), 'small-button', '置顶', 'arrange'),
+  );
+  inspectorBody.append(multi);
+  return;
+ }
  const record = controller.element(id);
  const element = editor.effectiveElement(id);
  if (!record || !element) { inspectorBody.append(emptyInspector('对象已失效'));
@@ -817,6 +925,9 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  heading.className = 'inspector-heading';
  heading.textContent = `${kindLabel(record)} · ${id.slice(-8)}`;
  inspectorBody.append(heading);
+ const nameInput = input('对象名称', element.name ?? '', value => { controller.setName(id, value.trim()); renderAll(false); });
+ nameInput.placeholder = '对象名称';
+ inspectorBody.append(labelBlock('名称', nameInput));
  const grid = document.createElement('div');
  grid.className = 'property-grid';
  for (const [label, key, value] of [['X', 'x', element.x], ['Y', 'y', element.y], ['宽', 'w', element.w], ['高', 'h', element.h], ['旋转', 'rot', element.rot]] as const) { const field = document.createElement('label');
@@ -830,6 +941,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  if (record.src.kind === 'shape') inspectorBody.append(shapeStyleControls(id));
  if (record.src.kind === 'image') inspectorBody.append(imageStyleControls(id));
  if (record.src.kind === 'table') inspectorBody.append(tableStyleControls(id));
+ inspectorBody.append(effectStyleControls(id), linkControls(id));
  if (record.src.kind === 'shape' || record.src.kind === 'table') { const textArea = document.createElement('textarea');
  textArea.value = textOfEffective(element);
  textArea.placeholder = '输入对象文字';
@@ -845,7 +957,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const underline = button('下划线', wrapAction(() => { controller.setTextStyle(id, { u: true }); renderAll(false); }), 'small-button', '下划线', 'font');
  textTools.append(bold, italic, underline);
  inspectorBody.append(textTools);
- } if (record.src.kind === 'shape' || record.src.kind === 'image') inspectorBody.append(layerControls(id));
+ } inspectorBody.append(layerControls(id));
  }
     function renderPageInspector(): void { const slideId = currentSlide();
  if (!slideId) { inspectorBody.append(emptyInspector('没有可编辑的页面'));
@@ -874,9 +986,11 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  renderAll();
  }), 'small-button', '隐藏此页', 'hide'));
  }
-    function renderAnimationInspector(slideId: SlideId): void { const animations = (webPpt.snapshot.view?.queryAnimations().value ?? []) as readonly { effect?: string;
+    function renderAnimationInspector(slideId: SlideId): void { const animationState = webPpt.snapshot.view?.queryAnimations(); const animations = (animationState?.value ?? []) as readonly { effect?: string;
  kind: string;
- trigger: string }[];
+ trigger: 'click' | 'withPrev' | 'afterPrev';
+ delayMs?: number;
+ durationMs?: number }[];
  const heading = document.createElement('div');
  heading.className = 'inspector-heading';
  heading.textContent = `第 ${(currentSession()?.editor.doc.slideOrder.indexOf(slideId) ?? 0) + 1} 页动画`;
@@ -886,10 +1000,43 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  if (!animations.length) list.append(emptyInspector('当前页面暂无动画'));
  animations.forEach((step, index) => { const row = document.createElement('div');
  row.className = 'animation-row';
- row.textContent = `${index + 1}. ${step.effect ?? step.kind} · ${step.trigger}`;
+ const title = document.createElement('strong'); title.textContent = `${index + 1}. ${step.effect ?? step.kind}`;
+ const controls = document.createElement('div'); controls.className = 'animation-controls';
+ const trigger = selectControl('动画触发', step.trigger, [['click', '单击时'], ['withPrev', '与上一动画同时'], ['afterPrev', '上一动画之后']], value => {
+  if (animationState?.sourceReadonly) { setStatus('来源动画只读，请先另存为可编辑版本', true); return; }
+  const next = animations.map((item, itemIndex) => itemIndex === index ? { ...item, trigger: value as typeof step.trigger } : item);
+  controller.setAnimations(slideId, next as readonly EditAnimationStep[]);
+  renderAll(false);
+ });
+ const duration = input('动画时长', String(step.durationMs ?? animationDurationMs), value => {
+  const ms = Number(value);
+  if (!Number.isFinite(ms) || ms < 0 || animationState?.sourceReadonly) return;
+  const next = animations.map((item, itemIndex) => itemIndex === index ? { ...item, durationMs: ms } : item);
+  controller.setAnimations(slideId, next as readonly EditAnimationStep[]);
+  renderAll(false);
+ }, 'number');
+ duration.min = '0'; duration.step = '50'; duration.className = 'animation-duration';
+ const up = button('上移', wrapAction(() => { if (index === 0 || animationState?.sourceReadonly) return; const next = [...animations]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; controller.setAnimations(slideId, next as readonly EditAnimationStep[]); renderAll(false); }), 'small-button', '动画上移', 'arrange');
+ const down = button('下移', wrapAction(() => {
+  if (index >= animations.length - 1 || animationState?.sourceReadonly) return;
+  const next = [...animations];
+  [next[index], next[index + 1]] = [next[index + 1], next[index]];
+  controller.setAnimations(slideId, next as readonly EditAnimationStep[]);
+  renderAll(false);
+ }), 'small-button', '动画下移', 'arrange');
+ const remove = button('删除', wrapAction(() => { if (animationState?.sourceReadonly) return; controller.setAnimations(slideId, animations.filter((_item, itemIndex) => itemIndex !== index) as readonly EditAnimationStep[]); renderAll(false); }), 'danger-button', '删除动画', 'delete');
+ controls.append(trigger, duration, up, down, remove);
+ row.append(title, controls);
  list.append(row);
  });
- inspectorBody.append(list, button('给选中对象加入淡入', wrapAction(() => addAnimation()), 'primary-button', '给选中对象加入淡入', 'animation'), button('清除本页动画', wrapAction(() => { controller.setAnimations(slideId, []);
+ const defaultTrigger = selectControl('默认触发方式', animationTrigger, [['click', '单击时'], ['withPrev', '与上一动画同时'], ['afterPrev', '上一动画之后']], value => {
+  animationTrigger = value as typeof animationTrigger;
+ });
+ const defaultDuration = input('默认动画时长', String(animationDurationMs), value => {
+  const ms = Number(value);
+  if (Number.isFinite(ms) && ms >= 0) animationDurationMs = ms;
+ }, 'number');
+ inspectorBody.append(list, defaultTrigger, defaultDuration, button('给选中对象加入动画', wrapAction(() => addAnimation()), 'primary-button', '给选中对象加入动画', 'animation'), button('清除本页动画', wrapAction(() => { controller.setAnimations(slideId, []);
  renderAll();
  }), 'danger-button', '清除本页动画', 'delete'));
  }
@@ -898,8 +1045,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  if (!slideId || !id) { setStatus('先选择一个对象再添加动画', true);
  return;
  } const step = kind === 'emphasis'
-  ? { target: id, kind: 'emphasis' as const, effect: (effect === 'spin' ? 'spin' : 'grow') as 'spin' | 'grow', trigger: 'click' as const, delayMs: 0, durationMs: 300 }
-  : { target: id, kind: 'entrance' as const, effect: effect === 'spin' ? 'fade' as const : effect, trigger: 'click' as const, delayMs: 0, durationMs: 300 };
+  ? { target: id, kind: 'emphasis' as const, effect: (effect === 'spin' ? 'spin' : 'grow') as 'spin' | 'grow', trigger: animationTrigger, delayMs: 0, durationMs: animationDurationMs }
+  : { target: id, kind: 'entrance' as const, effect: effect === 'spin' ? 'fade' as const : effect, trigger: animationTrigger, delayMs: 0, durationMs: animationDurationMs };
  controller.appendAnimations(slideId, [step]);
  renderAll();
  }
@@ -927,6 +1074,36 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  group.append(button('替换图片', wrapAction(() => chooseImage('replace')), 'small-button', '替换图片', 'replace-image'), button('裁剪', wrapAction(() => { controller.startImageCrop(id); }), 'small-button', '裁剪', 'crop'), button('恢复裁剪', wrapAction(() => controller.clearImageCrop()), 'small-button', '恢复裁剪', 'crop'));
  return group;
  }
+    function effectStyleControls(id: ElementId): HTMLElement { const group = document.createElement('div');
+ group.className = 'inspector-section';
+ const label = document.createElement('span');
+ label.className = 'section-label';
+ label.textContent = '效果';
+ const state = controller.queryEffects([id]);
+ const shadow = button('柔和阴影', wrapAction(() => { controller.setEffects(id, { ...state?.value, shadow: { dx: 3, dy: 4, blur: 8, color: 'rgba(36,50,75,.28)' } }); renderAll(false); }), 'small-button', '添加柔和阴影', 'effects');
+ const glow = button('外发光', wrapAction(() => { controller.setEffects(id, { ...state?.value, glow: { radius: 6, color: 'rgba(83,117,184,.45)' } }); renderAll(false); }), 'small-button', '添加外发光', 'effects');
+ const reset = button('清除效果', wrapAction(() => { controller.setEffects(id, null); renderAll(false); }), 'small-button', '恢复来源效果', 'delete');
+ group.append(label, shadow, glow, reset);
+ return group;
+ }
+    function linkControls(id: ElementId): HTMLElement { const group = document.createElement('div');
+ group.className = 'inspector-section';
+ const label = document.createElement('span');
+ label.className = 'section-label';
+ label.textContent = '链接';
+ const state = controller.queryLink([id]);
+ const href = state?.value?.kind === 'external' ? state.value.href : '';
+ const link = input('超链接地址', href, value => {
+  const next = value.trim();
+  try {
+   controller.setLink(id, next ? { kind: 'external', href: next } : { kind: 'none' });
+   renderAll(false);
+  } catch (error) { setStatus(error instanceof Error ? error.message : '链接地址无效', true); }
+ }, 'url');
+ link.placeholder = 'https://example.com';
+ group.append(label, link, button('恢复来源链接', wrapAction(() => { controller.setLink(id, null); renderAll(false); }), 'small-button', '恢复来源链接', 'link'));
+ return group;
+ }
     function tableStyleControls(id: ElementId): HTMLElement { const group = document.createElement('div');
  group.className = 'inspector-section';
  const label = document.createElement('span');
@@ -949,6 +1126,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  }), 'small-button', '水平翻转', 'rotate'), button('垂直翻转', wrapAction(() => { controller.setFlip(id, undefined, true);
  renderAll();
  }), 'small-button', '垂直翻转', 'rotate'));
+ group.append(button('锁定', wrapAction(() => { controller.setLocked(id, true); renderAll(false); }), 'small-button', '锁定对象', 'lock'), button('隐藏', wrapAction(() => { controller.setHidden(id, true); renderAll(false); }), 'small-button', '隐藏对象', 'hide'));
  return group;
  }
     function labelBlock(label: string, child: HTMLElement): HTMLElement { const block = document.createElement('label');
@@ -963,15 +1141,32 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  note.textContent = message;
  return note;
  }
-    function kindLabel(record: ElementRecord | null): string { const kind = record?.src.kind;
+ function kindLabel(record: ElementRecord | null): string { const kind = record?.src.kind;
  return kind === 'shape' ? '图形' : kind === 'image' ? '图片' : kind === 'table' ? '表格' : kind === 'group' ? '组合' : '对象';
  }
-    function renderAll(thumbnails = true): void { renderRibbonTabs(); renderScenePanel(thumbnails);
+ function renderFloatingToolbar(): void {
+  floatingToolbar.replaceChildren();
+  const ids = selectedIds();
+  if (!ids.length) { floatingToolbar.hidden = true; return; }
+  floatingToolbar.hidden = false;
+  floatingToolbar.append(
+   button('复制', wrapAction(() => { controller.copy(); renderAll(false); }), 'small-button', '复制', 'copy'),
+   button('删除', wrapAction(() => { controller.removeSelected(); renderAll(false); }), 'small-button', '删除', 'delete'),
+   button('左对齐', wrapAction(() => { controller.align(ids, 'left'); renderAll(false); }), 'small-button', '左对齐', 'align'),
+   button('格式刷', wrapAction(() => { controller.startFormatPainter(); }), 'small-button', '格式刷', 'format-painter'),
+  );
+ }
+ function renderAll(thumbnails = true): void { renderRibbonTabs(); renderScenePanel(thumbnails);
  renderToolbar();
  renderInspector();
+ renderFloatingToolbar();
  const slideId = currentSlide();
  const documentMeta = currentSession()?.editor.doc.meta;
  editorHost.style.aspectRatio = documentMeta ? `${documentMeta.width} / ${documentMeta.height}` : '16 / 9';
+ notesPane.classList.toggle('is-expanded', notesExpanded);
+ notesToggle.textContent = notesExpanded ? '收起' : '展开';
+ const activeNotes = currentSlide() ? controller.session?.editor.toSlide(currentSlide()!).notes ?? '' : '';
+ if (document.activeElement !== notesEditor) notesEditor.value = activeNotes;
  const index = currentSession()?.editor.doc.slideOrder.indexOf(slideId ?? '') ?? 0;
  stageTitle.replaceChildren();
  const title = document.createElement('div');
@@ -982,7 +1177,15 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  stageTitle.append(title, meta);
  stageFooter.textContent = `${controller.snapshot.status} · ${controller.snapshot.zoom.toFixed(2)}× · ${currentSession()?.editor.history.undoCount ?? 0} 个可撤销操作${published ? ` · 已发布 ${published.fingerprint.slice(0, 12)}` : ''}`;
  const pageNumber = (currentSession()?.editor.doc.slideOrder.indexOf(currentSlide() ?? '') ?? -1) + 1;
- statusBar.textContent = `${pageNumber} / ${currentSession()?.editor.doc.slideOrder.length ?? 0} 页 · ${controller.snapshot.snapping ? '吸附开启' : '吸附关闭'} · ${Math.round(controller.snapshot.zoom * 100)}%`;
+ statusBar.replaceChildren();
+ const statusText = document.createElement('span');
+ statusText.textContent = `${pageNumber} / ${currentSession()?.editor.doc.slideOrder.length ?? 0} 页 · ${controller.snapshot.snapping ? '吸附开启' : '吸附关闭'}`;
+ const zoomLabel = document.createElement('span');
+ zoomLabel.textContent = `${Math.round(controller.snapshot.zoom * 100)}%`;
+ const zoomSlider = document.createElement('input');
+ zoomSlider.type = 'range'; zoomSlider.min = '10'; zoomSlider.max = '200'; zoomSlider.step = '5'; zoomSlider.value = String(Math.round(controller.snapshot.zoom * 100)); zoomSlider.setAttribute('aria-label', '缩放');
+ zoomSlider.addEventListener('input', () => { stageZoomFactor = Math.max(.25, Math.min(4, Number(zoomSlider.value) / Math.max(.01, fitZoom * 100))); controller.setZoom(Number(zoomSlider.value) / 100); zoomLabel.textContent = `${zoomSlider.value}%`; });
+ statusBar.append(statusText, zoomSlider, zoomLabel);
  if (!thumbnails) thumbnailGeneration += 1;
  }
     async function persist(): Promise<void> {
@@ -993,7 +1196,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   do {
    const generation = editGeneration;
    const sourceAsset: WebPptPresentationAsset = asset!;
-   setStatus('正在保存…');
+   setStatus('正在保存');
    const bytes = await controller.save();
    const saved = await createWebPptAssetFromBytes(sourceAsset.title, bytes, sourceAsset.document.idPrefix);
    const next: WebPptPresentationAsset = { ...sourceAsset, source: saved.source, updatedAt: new Date().toISOString() };
@@ -1012,7 +1215,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    }
    savedGeneration = generation;
    renderAll(false);
-   if (editGeneration > generation) setStatus('正在保存…');
+   if (editGeneration > generation) setStatus('正在保存');
   } while (editGeneration > savedGeneration);
   if (!serverSyncPending) setStatus(`已保存 ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
  })().finally(() => {
@@ -1041,7 +1244,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  }
     async function rehearse(): Promise<void> { if (!asset || busy) return;
  busy = true;
- setStatus('正在准备试课版本…');
+ setStatus('正在准备试课版本');
  try { const bytes = await controller.save();
  const saved = await createWebPptAssetFromBytes(titleInput.value.trim() || asset.title, bytes, asset.document.idPrefix);
  const validation = await engine.validate(saved);
@@ -1058,7 +1261,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  }
     async function publish(): Promise<void> { if (!asset || busy) return;
  busy = true;
- setStatus('正在校验并冻结…');
+ setStatus('正在校验并冻结');
  try { const bytes = await controller.save();
  const saved = await createWebPptAssetFromBytes(titleInput.value.trim() || asset.title, bytes, asset.document.idPrefix);
  const validation = await engine.validate(saved);
@@ -1078,7 +1281,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  } finally { busy = false;
  } }
     async function openAsset(next: WebPptPresentationAsset): Promise<void> { busy = true;
- setStatus('正在打开课件…');
+ setStatus('正在打开课件');
  try { thumbnailGeneration += 1;
  for (const session of thumbnailSessions.values()) session.dispose();
  thumbnailSessions.clear();
@@ -1176,7 +1379,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  function scheduleAutosave(): void {
   if (autosaveSuspended || !asset) return;
   if (autosaveTimer) clearTimeout(autosaveTimer);
-  setStatus('正在保存…');
+  setStatus('正在保存');
   autosaveTimer = setTimeout(() => { autosaveTimer = null; void persist(); }, 1500);
  }
  webPpt.subscribe(() => { editGeneration += 1; renderAll(false); scheduleThumbnailRefresh(); scheduleAutosave(); });

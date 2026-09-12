@@ -12,7 +12,8 @@ export type IconId =
     | 'alt-text' | 'background' | 'transition' | 'animation' | 'preview' | 'search'
     | 'replace' | 'selection-pane' | 'zoom-in' | 'zoom-out' | 'fit' | 'snapping'
     | 'guides' | 'notes' | 'publish' | 'rehearse' | 'more' | 'chevron-down'
-    | 'chevron-right' | 'format-painter' | 'font' | 'paragraph' | 'lock' | 'hide';
+    | 'chevron-right' | 'format-painter' | 'font' | 'font-family' | 'font-size' | 'bold' | 'italic' | 'underline' | 'strike'
+    | 'paragraph' | 'bullet-list' | 'number-list' | 'indent' | 'line-spacing' | 'lock' | 'hide' | 'effects' | 'link';
 
 const PATHS: Record<IconId, string> = {
     save: '<path d="M4 3h13l3 3v15H4z"/><path d="M7 3v6h9V3M7 21v-7h10v7"/>',
@@ -59,9 +60,21 @@ const PATHS: Record<IconId, string> = {
     'chevron-right': '<path d="m9 5 7 7-7 7"/>',
     'format-painter': '<path d="M4 4h12v6H4zM8 10v10M5 20h6M16 7h4v4h-4"/>',
     font: '<path d="M4 19 10 5h4l6 14M7 14h10"/>',
+    'font-family': '<path d="M4 19 10 5h4l6 14M7 14h10"/><path d="M4 22h16"/>',
+    'font-size': '<path d="M4 19 10 5h4l6 14M7 14h10"/><path d="M4 22h7M17 22h3"/>',
+    bold: '<path d="M7 4h6a4 4 0 0 1 1 7.9A4.5 4.5 0 0 1 13 20H7zM7 12h5.5a4 4 0 0 0 0-8H7M7 12h6a4 4 0 0 1 0 8H7"/>',
+    italic: '<path d="M10 4h8M6 20h8M14 4 10 20"/>',
+    underline: '<path d="M7 4v7a5 5 0 0 0 10 0V4M5 20h14"/>',
+    strike: '<path d="M5 9a5 5 0 0 1 9-3M19 15a5 5 0 0 1-9 3M4 12h16"/>',
     paragraph: '<path d="M5 5h14M5 10h14M5 15h10M5 20h14"/>',
+    'bullet-list': '<circle cx="5" cy="6" r="1" fill="currentColor"/><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="5" cy="18" r="1" fill="currentColor"/><path d="M9 6h10M9 12h10M9 18h10"/>',
+    'number-list': '<path d="M4 5h2v4M4 9h3M4 12h3l-3 6h3M9 6h11M9 12h11M9 18h11"/>',
+    indent: '<path d="M4 6h16M4 12h12M4 18h16M7 9l-3 3 3 3"/>',
+    'line-spacing': '<path d="M6 5v14M3 8l3-3 3 3M3 16l3 3 3-3M13 6h7M13 12h7M13 18h7"/>',
     lock: '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
     hide: '<path d="M3 12s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2"/><path d="M4 4l16 16"/>',
+    effects: '<path d="m12 3 2.2 5.1L20 10.3l-5.8 2.2L12 18l-2.2-5.5L4 10.3l5.8-2.2z"/><path d="m19 16 .8 1.8L22 18.6l-2.2.8 0 2.4-.8-1.6-2.2-.8 2.2-.8z"/>',
+    link: '<path d="M10 13.5 14 9.5M7.5 16.5l-1 1a3.5 3.5 0 0 1-5-5l3-3a3.5 3.5 0 0 1 5 0M16.5 7.5l1-1a3.5 3.5 0 0 1 5 5l-3 3a3.5 3.5 0 0 1-5 0"/>',
 };
 
 export function createIcon(id: IconId, label = ''): SVGSVGElement {

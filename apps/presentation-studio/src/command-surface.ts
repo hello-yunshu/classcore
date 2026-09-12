@@ -1,5 +1,14 @@
 import { createIcon, type IconId } from './icons/index.js';
 
+/** Shared state passed by a product surface to command renderers. */
+export interface CommandContext {
+    readonly surface: 'authoring-studio';
+    readonly mode: 'edit' | 'view';
+    readonly activeSlideId: string | null;
+    readonly selectionIds: readonly string[];
+    readonly canExecute?: (commandId: string) => boolean;
+}
+
 export interface StudioCommand {
     id: string;
     label: string;
@@ -11,7 +20,7 @@ export interface StudioCommand {
     disabled?: boolean;
     checked?: boolean;
     danger?: boolean;
-    execute(): void | Promise<void>;
+    execute(context?: CommandContext): void | Promise<void>;
 }
 
 export interface StudioMenuItem extends StudioCommand {
@@ -32,6 +41,7 @@ export function createCommandButton(command: StudioCommand, density: CommandDens
     item.disabled = Boolean(command.disabled);
     item.title = commandTitle(command);
     item.setAttribute('aria-label', commandTitle(command));
+    if (command.shortcut) item.setAttribute('aria-keyshortcuts', command.shortcut.replaceAll('⌘/Ctrl+', 'Control+'));
     if (command.checked !== undefined) item.setAttribute('aria-pressed', String(command.checked));
     if (command.icon) item.append(createIcon(command.icon, command.label));
     if (density !== 'icon-only') {
@@ -183,10 +193,9 @@ export function createGallery(id: string, label: string, items: readonly Gallery
     grid.setAttribute('role', 'listbox');
     grid.setAttribute('aria-label', label);
     items.forEach(item => {
-        // The preview is the gallery icon. Do not stack a second generic
-        // command icon above it; that duplicate row makes the ribbon taller
-        // without adding information.
-        const button = createCommandButton({ ...item, icon: undefined }, 'compact', 'gallery-item');
+        // Keep both the semantic local command glyph and the visual preview;
+        // the glyph remains useful when a preview is visually ambiguous.
+        const button = createCommandButton(item, 'compact', 'gallery-item');
         button.setAttribute('role', 'option');
         button.setAttribute('aria-selected', String(Boolean(item.checked)));
         if (item.preview) { const preview = document.createElement('span'); preview.className = `gallery-preview ${item.preview}`; button.prepend(preview); }

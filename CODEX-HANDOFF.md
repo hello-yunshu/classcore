@@ -6,7 +6,7 @@ R3.10 是 **Release-Assurance Closure & Codex Mother Package**：Foundation v0.1
 
 2026-09-11 Presentation closure progress：reference vertical slice 已补齐 quota preflight、staged GC strong-ref、cache eviction plan/reconcile、bytes-derived web-ppt freeze、Picker/`presentationId` block、Published Prepare、Rehearsal Session、Controller Lease reconnect、Display playback-only/remount 和 Studio conflict/thumbnail/批量 Undo；认证 owner、Playwright、Docker/LAN/XP21A 仍未验证。
 
-2026-09-12 Presentation capability integration：Studio 已接入 Office-like command surface、local SVG icons、split/dropdown/gallery、contextual tabs、真实 upstream Selection Pane host、beta.2 text/paragraph/image/crop/animation/transition adapters 与 presentation-scoped pending metadata；静态 Studio Browser E2E 3/3 已通过。Full reference-server readiness、Docker/LAN、save/reopen/offline/Display/XP21A 仍未闭合，状态继续保持 `CAPABILITY-INTEGRATION / NOT-FROZEN`。
+2026-09-12 Presentation capability integration：Studio 已接入 Office-like command surface、local SVG icons、split/dropdown/gallery、contextual tabs、真实 upstream Selection Pane host、beta.2 text/paragraph/image/crop/effects/hyperlink/animation/transition adapters 与 presentation-scoped pending metadata；本地真实服务上的 Studio Browser E2E 7/7 已通过。Full reference-server readiness、Docker/LAN、save/reopen/offline/Display/XP21A 仍未闭合，状态继续保持 `CAPABILITY-INTEGRATION / NOT-FROZEN`。
 
 ## 接手后的第一步
 

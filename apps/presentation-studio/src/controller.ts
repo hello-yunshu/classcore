@@ -6,6 +6,7 @@ import type {
     ElementId,
     ElementLayerTarget,
     ElementRecord,
+    LinkTarget,
     RunPropertyOverrides,
     ParagraphPropertyOverrides,
     Selection,
@@ -13,9 +14,11 @@ import type {
     TextPosition,
     VectorFill,
 } from '@web-ppt/edit-core';
-import { copyElements, textBodyEditText, textPositionAtIndex } from '@web-ppt/edit-core';
+import { copyElements, queryElementEffects, queryElementLink, textBodyEditText, textPositionAtIndex } from '@web-ppt/edit-core';
 import type { WebPptAdapter } from '@web-ppt/editor';
 import type { WebPptPresentationAsset } from '@classroom/presentation-webppt-adapter';
+
+type Effects = NonNullable<Extract<Command, { type: 'SetEffects' }>['effects']>;
 
 export type ControllerListener = (change: EditorChange | null) => void;
 
@@ -152,6 +155,10 @@ export class PresentationStudioController {
     align(ids: readonly ElementId[], edge: AlignEdge): void { if (ids.length) this.execute({ type: 'AlignElements', ids, edge }); }
     setFill(id: ElementId, fill: VectorFill | null): void { this.execute({ type: 'SetFill', id, fill }); }
     setStroke(id: ElementId, stroke: { type: 'none' } | { color: string; width: number; dash: null; cap: 'butt'; join: 'miter'; compound: 'sng' } | null): void { this.execute({ type: 'SetStroke', id, stroke }); }
+    setEffects(id: ElementId, effects: Effects | null): void { this.execute({ type: 'SetEffects', id, effects }); }
+    queryEffects(ids = this.selectedIds()): ReturnType<typeof queryElementEffects> | null { return this.editor && ids.length ? queryElementEffects(this.editor.doc, ids) : null; }
+    setLink(id: ElementId, target: LinkTarget | { kind: 'none' } | null): void { this.execute({ type: 'SetLink', id, target }); }
+    queryLink(ids = this.selectedIds()): ReturnType<typeof queryElementLink> | null { return this.editor && ids.length ? queryElementLink(this.editor.doc, ids) : null; }
     setSlideBackground(id: SlideId, fill: VectorFill | null): void { this.execute({ type: 'SetBackground', id, fill }); }
     setAnimations(slideId: SlideId, steps: readonly EditAnimationStep[] | null): void { this.execute({ type: 'SetAnimations', slideId, steps }); }
     appendAnimations(slideId: SlideId, steps: readonly EditAnimationStep[]): void {
@@ -215,6 +222,8 @@ export class PresentationStudioController {
         if (ids.length) this.execute(...ids.map(id => ({ type: 'SetFlip', id, h, v }) as const));
     }
     setRunProps(id: ElementId, range: { from: TextPosition; to: TextPosition }, props: RunPropertyOverrides): void { this.execute({ type: 'SetRunProps', id, range, props }); }
+    setFont(font: string | null): void { this.adapter.snapshot.view?.setRunProps({ font }); }
+    setFontSize(size: number | null): void { this.adapter.snapshot.view?.setRunProps({ size }); }
     toggleBold(): void { this.toggleRunProperty('b'); }
     toggleItalic(): void { this.toggleRunProperty('i'); }
     toggleUnderline(): void { this.toggleRunProperty('u'); }
@@ -254,6 +263,9 @@ export class PresentationStudioController {
     replaceAllText(): number { return this.adapter.replaceAllText(); }
     queryTransition(): ReturnType<WebPptAdapter['queryTransition']> { return this.adapter.queryTransition(); }
     setTransition(value: Parameters<WebPptAdapter['setTransition']>[0]): boolean { return this.adapter.setTransition(value); }
+    setTransitionForSlides(slideIds: readonly SlideId[], value: Parameters<WebPptAdapter['setTransition']>[0]): void {
+        if (slideIds.length) this.execute(...slideIds.map(id => ({ type: 'SetTransition', id, t: value }) as const));
+    }
     previewTransition(value?: Parameters<WebPptAdapter['previewTransition']>[0]): ReturnType<WebPptAdapter['previewTransition']> { return this.adapter.previewTransition(value); }
     previewAnimations(value?: Parameters<WebPptAdapter['previewAnimations']>[0]): ReturnType<WebPptAdapter['previewAnimations']> { return this.adapter.previewAnimations(value); }
     startImageCrop(id?: ElementId): boolean { return this.adapter.snapshot.view?.startImageCrop(id) ?? false; }
