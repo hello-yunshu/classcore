@@ -57,18 +57,21 @@ test.describe('Presentation Studio command surface', () => {
     test('inserts a neutral text box and opens native text editing', async ({ page }) => {
         await page.getByRole('tab', { name: '插入' }).click();
         await page.getByRole('button', { name: '文本框', exact: true }).click();
-        const editor = page.locator('[contenteditable="true"]');
+        const editor = page.getByRole('textbox', { name: '编辑文本框内容' });
         await expect(editor).toBeVisible();
-        await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute('contenteditable'))).toBe('true');
-        // Text input replaces the editor's internal DOM view as it commits.
-        // The Studio shell must not compete for focus while that native input
-        // target is active, otherwise IME composition is cancelled mid-entry.
-        await page.keyboard.type('连续输入');
-        await expect(page.locator('[data-ppt-text-editor]')).toContainText('连续输入');
-        await editor.fill('课堂标题');
-        await expect(editor).toHaveText('课堂标题');
-        await expect(page.locator('[data-ppt-text-editor]')).toContainText('课堂标题');
-        await page.keyboard.press('Escape');
+        await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute('aria-label'))).toBe('编辑文本框内容');
+        // Keep one native input node throughout CJK/IME entry, then commit the
+        // final string to web-ppt when canvas text editing ends.
+        await editor.pressSequentially('连续输入课堂标题');
+        await expect(editor).toHaveValue('连续输入课堂标题');
+        await editor.press('Escape');
+        await expect(editor).toHaveCount(0);
+        const committedTextBox = page.locator('[data-edit-id]').filter({ hasText: '连续输入课堂标题' });
+        await expect(committedTextBox).toHaveCount(1);
+        await committedTextBox.locator('text').first().dblclick();
+        await expect(editor).toBeVisible();
+        await expect(editor).toHaveValue('连续输入课堂标题');
+        await editor.press('Escape');
         await page.getByRole('button', { name: '形状', exact: true }).click();
         await page.getByRole('menuitem', { name: '矩形', exact: true }).click();
         const insertedShape = page.locator('[data-edit-id]').last().locator('path').first();

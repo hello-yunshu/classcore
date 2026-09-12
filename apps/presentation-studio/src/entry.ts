@@ -317,6 +317,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  let imageInputMode: 'insert' | 'replace' = 'insert';
  let fitZoom = 1;
  let stageZoomFactor = 1;
+ let canvasTextInput: { id: ElementId; element: HTMLTextAreaElement; reposition: () => void } | null = null;
+ let canvasTextCommitPending = false;
     const thumbnailSessions = new Map<string, Awaited<ReturnType<typeof engine.mountPlayer>>>();
     root.replaceChildren();
  const app = document.createElement('div');
@@ -448,12 +450,83 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   contextMenu.style.left = `${Math.max(8, Math.min(target.clientX, window.innerWidth - 210))}px`;
   contextMenu.style.top = `${Math.max(8, Math.min(target.clientY, window.innerHeight - 260))}px`;
  });
+ editorHost.addEventListener('dblclick', event => {
+  const directTarget = (event.target as Element | null)?.closest<SVGGraphicsElement>('[data-edit-id]');
+  const target = directTarget ?? document.elementsFromPoint(event.clientX, event.clientY)
+   .map(element => element.closest<SVGGraphicsElement>('[data-edit-id]'))
+   .find((element): element is SVGGraphicsElement => Boolean(element));
+  const id = target?.dataset.editId;
+  const effective = id ? currentSession()?.editor.effectiveElement(id) : null;
+  if (!id || effective?.kind !== 'shape' || !effective.text) return;
+  event.preventDefault();
+  event.stopPropagation();
+  controller.select({ kind: 'elements', ids: [id], enteredGroup: null });
+  renderAll(false);
+  beginCanvasTextInput(id);
+ }, true);
  const stageResizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => { applyStageZoom(); });
  stageResizeObserver?.observe(editorHost);
     function currentSession() { return controller.session;
  } function currentSlide(): SlideId | null { return controller.slideId ?? currentSession()?.editor.doc.slideOrder[0] ?? null;
  } function selectedIds() { return controller.selectedIds();
  } function selectedId(): ElementId | undefined { return selectedIds()[0];
+ } function closeCanvasTextInput(commit = true): void {
+  const active = canvasTextInput;
+  if (!active) return;
+  canvasTextInput = null;
+  window.removeEventListener('resize', active.reposition);
+  const value = active.element.value;
+  active.element.remove();
+  if (!commit || !currentSession()?.editor.doc.elements[active.id]) return;
+  canvasTextCommitPending = true;
+  controller.editText(active.id, value);
+  setTimeout(() => {
+   canvasTextCommitPending = false;
+   renderAll(false);
+  }, 0);
+ } function beginCanvasTextInput(id: ElementId): boolean {
+  closeCanvasTextInput();
+  webPpt.snapshot.view?.releaseTextEditing();
+  const editor = currentSession()?.editor;
+  const target = webPpt.snapshot.view?.element.querySelector<SVGGraphicsElement>(`[data-edit-id="${CSS.escape(id)}"]`);
+  const effective = editor?.effectiveElement(id);
+  if (!target || !effective || effective.kind !== 'shape' || !effective.text) return false;
+  const textInput = document.createElement('textarea');
+  textInput.className = 'studio-canvas-text-input';
+  textInput.value = textOfEffective(effective);
+  textInput.setAttribute('aria-label', '编辑文本框内容');
+  textInput.setAttribute('autocomplete', 'off');
+  textInput.spellcheck = false;
+  const reposition = (): void => {
+   if (!textInput.isConnected || !target.isConnected) return;
+   const hostRect = editorHost.getBoundingClientRect();
+   const targetRect = target.getBoundingClientRect();
+   textInput.style.left = `${targetRect.left - hostRect.left}px`;
+   textInput.style.top = `${targetRect.top - hostRect.top}px`;
+   textInput.style.width = `${Math.max(80, targetRect.width)}px`;
+   textInput.style.height = `${Math.max(36, targetRect.height)}px`;
+   textInput.style.fontSize = `${Math.max(16, 32 * controller.snapshot.zoom)}px`;
+  };
+  canvasTextInput = { id, element: textInput, reposition };
+  textInput.addEventListener('keydown', event => {
+   event.stopPropagation();
+   if (event.isComposing) return;
+   if (event.key === 'Escape') {
+    event.preventDefault();
+    closeCanvasTextInput();
+   } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+    event.preventDefault();
+    closeCanvasTextInput();
+    setTimeout(() => { void persist(); }, 0);
+   }
+  });
+  textInput.addEventListener('blur', () => closeCanvasTextInput());
+  editorHost.append(textInput);
+  reposition();
+  window.addEventListener('resize', reposition);
+  textInput.focus({ preventScroll: true });
+  textInput.select();
+  return true;
  } function setStatus(message: string, error = false): void { saveState.textContent = message;
  saveState.className = `save-state${error ? ' status-error' : ''}`;
  }
@@ -727,7 +800,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    ]);
   }
   if (ribbonTab === 'insert') {
-   group('文本', [button('文本框', wrapAction(() => { const id = controller.addTextBox(); if (!id) { setStatus('当前课件没有可用的文本样式', true); return; } controller.select({ kind: 'elements', ids: [id], enteredGroup: null }); renderAll(); controller.enterTextEdit(id); renderAll(false); }), 'tool-button', '文本框', 'text')]);
+   group('文本', [button('文本框', wrapAction(() => { const id = controller.addTextBox(); if (!id) { setStatus('无法创建文本框', true); return; } controller.select({ kind: 'elements', ids: [id], enteredGroup: null }); renderAll(); if (!beginCanvasTextInput(id)) setStatus('文本框编辑器暂时不可用，请重新选择文本框', true); }), 'tool-button', '文本框', 'text')]);
    group('图片', [createSplitButton(command('image', '图片', 'image', () => chooseImage('insert')), [
     command('replace-image', '替换图片', 'replace-image', () => chooseImage('replace')),
     command('image-options', '图片选项', 'image', () => { inspectorTab = 'object'; renderAll(); }),
@@ -1408,7 +1481,9 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  }
  const nativeTextInputActive = (): boolean => {
   const active = document.activeElement as HTMLElement | null;
-  return active?.isContentEditable === true && active.closest('.web-ppt-stage') === editorHost;
+  return canvasTextCommitPending
+   || active?.closest('.studio-canvas-text-input') === canvasTextInput?.element
+   || active?.isContentEditable === true && active.closest('.web-ppt-stage') === editorHost;
  };
  const refreshAfterEditorChange = (): void => {
   // web-ppt owns the native contenteditable during text input. Rebuilding the
