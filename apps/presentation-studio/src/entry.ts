@@ -237,7 +237,7 @@ async function persistPublished(record: PublishedPresentationRecord): Promise<vo
  db.close();
  }
 
-function button(label: string, action: () => void | Promise<void>, className = '', title = label, icon: IconId = 'more'): HTMLButtonElement {
+function button(label: string, action: () => void | Promise<void>, className = '', title = label, icon?: IconId): HTMLButtonElement {
  return commandSurface!.createCommandButton({ id: `command:${label}`, label, icon, tooltip: title, execute: action }, 'compact', className) as HTMLButtonElement;
  }
 function input(label: string, value: string, onChange: (value: string) => void, type = 'text'): HTMLInputElement { const control = document.createElement('input');
@@ -733,21 +733,6 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   if (ribbonTab === 'table-layout') group('表格布局', [
    button('插入行', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.execute({ type: 'InsertRow', id }); renderAll(false); }), 'tool-button', '在末尾插入一行', 'table'),
   ]);
-  const overflowItems: StudioMenuItem[] = [
-   command('overflow-save', '保存', 'save', () => persist(), '⌘/Ctrl+S'),
-   command('overflow-undo', '撤销', 'undo', () => { controller.undo(); renderAll(); }),
-   command('overflow-redo', '重做', 'redo', () => { controller.redo(); renderAll(); }),
-   command('overflow-textbox', '文本框', 'text', () => { const id = controller.addShape('rect'); if (id) controller.select({ kind: 'elements', ids: [id], enteredGroup: null }); renderAll(); }),
-   command('overflow-shape', '形状', 'shape', () => addShape('roundRect')),
-   command('overflow-table', '表格', 'table', () => { controller.addTable(3, 4); renderAll(); }),
-   command('overflow-image', '图片', 'image', () => chooseImage('insert')),
-   command('overflow-pane', '选择窗格', 'selection-pane', () => { inspectorTab = 'object'; renderAll(); }),
-   command('overflow-notes', '备注', 'notes', () => { inspectorTab = 'page'; renderAll(); }),
-   command('overflow-preview', '预览', 'preview', () => togglePreview()),
-  ];
-  const overflow = createDropdown(command('toolbar-overflow', '更多', 'more', () => undefined), overflowItems);
-  overflow.classList.add('toolbar-overflow');
-  toolbar.append(overflow);
  };
  renderOfficeToolbar();
  return;
