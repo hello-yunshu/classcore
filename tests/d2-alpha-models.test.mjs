@@ -8,6 +8,7 @@ import {
   addElement,
   addScene,
   cloneScene,
+  computeStageFitZoom,
   createBlankStudioDocument,
   moveElementLayer,
   moveScene,
@@ -52,4 +53,10 @@ test('Authoring Studio Alpha supports scene CRUD, element editing and layer orde
   assert.equal(movedScene.scenes[0].id, secondId);
   assert.equal(removeScene(movedScene, secondId).scenes.length, 1);
   assert.equal(removeScene(blank, blank.scenes[0].id).scenes.length, 1);
+});
+
+test('Authoring Studio stage derives zoom from its responsive viewport', () => {
+  assert.equal(computeStageFitZoom(640, 360, 1280, 720), 0.5);
+  assert.equal(computeStageFitZoom(800, 360, 1280, 720), 0.5);
+  assert.equal(computeStageFitZoom(0, 360, 1280, 720), 1);
 });

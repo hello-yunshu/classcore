@@ -99,7 +99,9 @@ export function createDropdown(command: StudioCommand, items: readonly StudioMen
     const trigger = createCommandButton(command, 'compact', 'command-dropdown-trigger');
     trigger.setAttribute('aria-haspopup', 'menu');
     trigger.setAttribute('aria-expanded', 'false');
-    trigger.append(createIcon('chevron-down', '展开'));
+    const chevron = createIcon('chevron-down', '展开');
+    chevron.classList.add('dropdown-chevron');
+    trigger.append(chevron);
     const menu = document.createElement('div');
     menu.className = 'command-menu';
     menu.setAttribute('role', 'menu');
@@ -108,7 +110,12 @@ export function createDropdown(command: StudioCommand, items: readonly StudioMen
         const open = !menu.classList.contains('is-open');
         menu.classList.toggle('is-open', open);
         trigger.setAttribute('aria-expanded', String(open));
-        if (open) menu.querySelector<HTMLButtonElement>('.command-menu-item')?.focus();
+        if (open) {
+            const rect = trigger.getBoundingClientRect();
+            menu.style.top = `${Math.round(rect.bottom + 5)}px`;
+            menu.style.left = `${Math.round(rect.left)}px`;
+            menu.querySelector<HTMLButtonElement>('.command-menu-item')?.focus();
+        }
     };
     trigger.addEventListener('click', event => { event.stopPropagation(); toggle(); });
     trigger.addEventListener('keydown', event => { if (event.key === 'ArrowDown' || event.key === 'Enter') { event.preventDefault(); toggle(); } if (event.key === 'Escape') closeMenu(menu, trigger); });
@@ -132,22 +139,21 @@ export function createGallery(id: string, label: string, items: readonly Gallery
     const section = document.createElement('div');
     section.className = 'command-gallery';
     section.dataset.galleryId = id;
-    const heading = document.createElement('span');
-    heading.className = 'gallery-label';
-    heading.textContent = label;
     const grid = document.createElement('div');
     grid.className = 'gallery-grid';
     grid.style.setProperty('--gallery-columns', String(columns));
     grid.setAttribute('role', 'listbox');
     grid.setAttribute('aria-label', label);
     items.forEach(item => {
-        const button = createCommandButton(item, 'compact', 'gallery-item');
+        // The preview is the gallery icon. Do not stack a second generic
+        // command icon above it; that duplicate row makes the ribbon taller
+        // without adding information.
+        const button = createCommandButton({ ...item, icon: undefined }, 'compact', 'gallery-item');
         button.setAttribute('role', 'option');
         button.setAttribute('aria-selected', String(Boolean(item.checked)));
         if (item.preview) { const preview = document.createElement('span'); preview.className = `gallery-preview ${item.preview}`; button.prepend(preview); }
         grid.append(button);
     });
-    section.append(heading, grid);
+    section.append(grid);
     return section;
 }
-

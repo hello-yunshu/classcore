@@ -15,6 +15,7 @@ import type {
     PresentationRuntimeIndex,
     PresentationSceneDescriptor,
 } from '@classroom/presentation';
+import { sha256Hex } from './sha256.js';
 
 const MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 const ENGINE_VERSION = '0.5.0-beta.2';
@@ -54,11 +55,6 @@ function cloneBytes(bytes: Uint8Array): Uint8Array {
 function randomIdPrefix(): string {
     const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     return `classcore-${suffix.replace(/[^a-zA-Z0-9-]/g, '')}`;
-}
-
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
-    const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource);
-    return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
 }
 
 function assetDocument(asset: WebPptPresentationAsset): WebPptDocumentMetadata {

@@ -204,12 +204,12 @@ async function persistPublished(record: PublishedPresentationRecord): Promise<vo
  }
 
 const ICON_BY_LABEL: Array<[string, IconId]> = [
- ['保存', 'save'], ['撤销', 'undo'], ['重做', 'redo'], ['复制', 'copy'], ['粘贴', 'paste'], ['删除', 'delete'],
+ ['保存', 'save'], ['撤销', 'undo'], ['重做', 'redo'], ['复制', 'copy'], ['粘贴', 'paste'], ['剪切', 'cut'], ['删除', 'delete'],
  ['新页面', 'new-slide'], ['文字', 'text'], ['图形', 'shape'], ['表格', 'table'], ['图片', 'image'], ['页面背景', 'background'],
  ['排列', 'arrange'], ['左对齐', 'align'], ['水平居中', 'align'], ['等距分布', 'distribute'], ['置顶', 'arrange'], ['置底', 'arrange'],
- ['缩小', 'zoom-out'], ['放大', 'zoom-in'], ['适应窗口', 'fit'], ['吸附', 'snapping'], ['淡化', 'transition'], ['无', 'transition'],
- ['预览切换', 'preview'], ['动画', 'animation'], ['下一动画', 'animation'], ['查找', 'search'], ['替换', 'replace'], ['试课', 'rehearse'], ['发布冻结', 'publish'],
- ['对象', 'selection-pane'], ['页面', 'background'], ['备注', 'notes'], ['格式刷', 'format-painter'], ['加粗', 'font'], ['斜体', 'font'], ['下划线', 'font'],
+ ['缩小', 'zoom-out'], ['放大', 'zoom-in'], ['适应窗口', 'fit'], ['开启吸附', 'snapping'], ['关闭吸附', 'snapping'], ['吸附', 'snapping'], ['淡化', 'transition'], ['无', 'transition'],
+ ['预览切换', 'preview'], ['预览', 'preview'], ['动画', 'animation'], ['下一动画', 'animation'], ['查找', 'search'], ['替换', 'replace'], ['替代文字', 'alt-text'], ['试课', 'rehearse'], ['发布冻结', 'publish'],
+ ['对象', 'selection-pane'], ['选择窗格', 'selection-pane'], ['页面', 'background'], ['备注', 'notes'], ['格式刷', 'format-painter'], ['加粗', 'font'], ['斜体', 'font'], ['下划线', 'font'],
  ['上移一层', 'arrange'], ['下移一层', 'arrange'], ['水平翻转', 'rotate'], ['垂直翻转', 'rotate'], ['隐藏此页', 'hide'],
 ];
 function iconForLabel(label: string): IconId | undefined { return ICON_BY_LABEL.find(([name]) => label.startsWith(name))?.[1]; }
@@ -244,6 +244,13 @@ export function mountPresentationStudio(root: HTMLElement): void {
     void mountPresentationStudioAsync(root);
 }
 
+/** Derive the editor's presentation-pixel zoom from the responsive stage host. */
+export function computeStageFitZoom(viewportWidth: number, viewportHeight: number, presentationWidth: number, presentationHeight: number): number {
+    if (![viewportWidth, viewportHeight, presentationWidth, presentationHeight].every(Number.isFinite)
+        || viewportWidth <= 0 || viewportHeight <= 0 || presentationWidth <= 0 || presentationHeight <= 0) return 1;
+    return Math.min(viewportWidth / presentationWidth, viewportHeight / presentationHeight);
+}
+
 async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  commandSurface = await import('./command-surface.js');
  const { createCommandButton, createDropdown, createGallery, createSplitButton } = commandSurface;
@@ -274,6 +281,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  let thumbnailAsset: WebPptPresentationAsset | null = null;
  let conflictOpen = false;
  let imageInputMode: 'insert' | 'replace' = 'insert';
+ let fitZoom = 1;
+ let stageZoomFactor = 1;
     const thumbnailSessions = new Map<string, Awaited<ReturnType<typeof engine.mountPlayer>>>();
     root.replaceChildren();
  const app = document.createElement('div');
@@ -337,11 +346,30 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const stageFooter = document.createElement('div');
  stageFooter.className = 'stage-footer';
  stagePanel.append(stageTitle, editorHost, stageFooter);
+ const stageResizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => { applyStageZoom(); });
+ stageResizeObserver?.observe(editorHost);
     function currentSession() { return controller.session;
  } function currentSlide(): SlideId | null { return controller.slideId ?? currentSession()?.editor.doc.slideOrder[0] ?? null;
  } function selectedIds() { return controller.selectedIds();
  } function setStatus(message: string, error = false): void { saveState.textContent = message;
  saveState.className = `save-state${error ? ' status-error' : ''}`;
+ }
+ function readStageFitZoom(): number {
+  const meta = currentSession()?.editor.doc.meta;
+  return meta ? computeStageFitZoom(editorHost.clientWidth, editorHost.clientHeight, meta.width, meta.height) : 1;
+ }
+ function applyStageZoom(resetFactor = false): void {
+  if (resetFactor) stageZoomFactor = 1;
+  fitZoom = readStageFitZoom();
+  const nextZoom = Math.min(2, Math.max(.1, fitZoom * stageZoomFactor));
+  if (!webPpt.snapshot.view || Math.abs(webPpt.snapshot.zoom - nextZoom) < .001) return;
+  controller.setZoom(nextZoom);
+  renderAll(false);
+ }
+ function changeStageZoom(delta: number): void {
+  fitZoom = readStageFitZoom();
+  stageZoomFactor = Math.max(.25, Math.min(4, stageZoomFactor + delta));
+  applyStageZoom();
  }
  function renderRibbonTabs(): void {
   ribbonTabs.replaceChildren();
@@ -500,7 +528,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  }
     function renderToolbar(): void { toolbar.replaceChildren();
  const renderOfficeToolbar = (): void => {
-  const group = (label: string, controls: HTMLElement[]): void => { const section = document.createElement('div'); section.className = 'toolbar-group'; const name = document.createElement('span'); name.className = 'toolbar-label'; name.textContent = label; section.append(name, ...controls); toolbar.append(section); };
+  const group = (_label: string, controls: HTMLElement[], extraClass = ''): void => { const section = document.createElement('div'); section.className = `toolbar-group${extraClass ? ` ${extraClass}` : ''}`; section.append(...controls); toolbar.append(section); };
   const command = (id: string, label: string, icon: IconId, execute: () => void | Promise<void>, shortcut?: string, disabled = false): StudioCommand => ({ id, label, icon, shortcut, disabled, execute: wrapAction(execute) });
   const arrange: StudioMenuItem[] = [
    command('layer-front', '置于顶层', 'arrange', () => { controller.setLayerMany(selectedIds(), 'front'); renderAll(); }),
@@ -566,7 +594,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    group('文本', [button('文字', wrapAction(() => { const id = controller.addShape('rect'); if (id) { controller.editText(id, '输入文字'); controller.select({ kind: 'elements', ids: [id], enteredGroup: null }); } renderAll(); }), 'tool-button')]);
    group('图片', [createSplitButton(command('image', '图片', 'image', () => chooseImage('insert')), [
     command('replace-image', '替换图片', 'replace-image', () => chooseImage('replace')),
-    command('image-options', '图片选项…', 'image', () => { inspectorTab = 'object'; renderAll(); }),
+    command('image-options', '图片选项', 'image', () => { inspectorTab = 'object'; renderAll(); }),
    ])]);
    group('形状', [createGallery('shape-gallery', '形状库', [
     { ...command('shape-rect', '矩形', 'shape', () => addShape('rect')), preview: 'preview-rect' },
@@ -583,8 +611,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   if (ribbonTab === 'design') group('设计', [
    button('页面背景', wrapAction(() => backgroundInput.click()), 'tool-button'),
    button('开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'),
-   button('缩小', wrapAction(() => { controller.setZoom(Math.max(.5, controller.snapshot.zoom - .1)); renderAll(false); }), 'tool-button'),
-   button('放大', wrapAction(() => { controller.setZoom(Math.min(2, controller.snapshot.zoom + .1)); renderAll(false); }), 'tool-button'),
+   button('缩小', wrapAction(() => { changeStageZoom(-.1); }), 'tool-button'),
+   button('放大', wrapAction(() => { changeStageZoom(.1); }), 'tool-button'),
   ]);
   if (ribbonTab === 'transition') group('切换', [createGallery('transition-gallery', '常用切换', [
    { ...command('transition-none', '无', 'transition', () => { controller.setTransition(null); renderAll(false); }), preview: 'preview-none' },
@@ -602,12 +630,12 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    { ...command('animation-zoom', '缩放', 'animation', () => addAnimation('zoom')), preview: 'preview-zoom' },
    { ...command('animation-spin', '旋转', 'animation', () => addAnimation('spin', 'emphasis')), preview: 'preview-spin' },
   ], 6), button('动画窗格', wrapAction(() => { inspectorTab = 'animation'; renderAll(); }), 'tool-button'), button('预览', wrapAction(() => { void controller.previewAnimations(); }), 'tool-button')]);
-  if (ribbonTab === 'show') group('放映', [button('预览', wrapAction(() => togglePreview()), 'preview-button'), button('试课', wrapAction(() => rehearse()), 'signal-button'), button('发布冻结', wrapAction(() => publish()), 'signal-button')]);
+  if (ribbonTab === 'show') group('放映', [button('预览', wrapAction(() => togglePreview()), 'preview-button'), button('试课', wrapAction(() => rehearse()), 'show-rehearse-button'), button('发布冻结', wrapAction(() => publish()), 'show-publish-button')], 'show-toolbar-group');
   if (ribbonTab === 'review') group('审阅', [button('查找', wrapAction(() => controller.openTextSearch({ mode: 'find' })), 'tool-button'), button('替换', wrapAction(() => controller.openTextSearch({ mode: 'replace' })), 'tool-button'), button('替代文字', wrapAction(() => setStatus('当前 beta.2 未提供独立 Alt Text seam，先使用选择窗格重命名对象', true)), 'tool-button')]);
   if (ribbonTab === 'view') group('视图', [
    button('选择窗格', wrapAction(() => { inspectorTab = 'object'; renderAll(); }), 'tool-button'),
    button(controller.snapshot.snapping ? '关闭吸附' : '开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'),
-   button('适应窗口', wrapAction(() => { controller.setZoom(1); renderAll(false); }), 'tool-button'),
+   button('适应窗口', wrapAction(() => { applyStageZoom(true); renderAll(false); }), 'tool-button'),
    button('备注', wrapAction(() => { inspectorTab = 'page'; renderAll(); }), 'tool-button'),
   ]);
   if (ribbonTab === 'image-format') group('图片格式', [
@@ -668,14 +696,14 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  if (ribbonTab === 'design') group('设计', [
   button('页面背景', wrapAction(() => backgroundInput.click()), 'tool-button'),
   button(controller.snapshot.snapping ? '关闭吸附' : '开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'),
-  button('缩小', wrapAction(() => { controller.setZoom(Math.max(.5, controller.snapshot.zoom - .1)); renderAll(false); }), 'tool-button'),
-  button('放大', wrapAction(() => { controller.setZoom(Math.min(2, controller.snapshot.zoom + .1)); renderAll(false); }), 'tool-button'),
+  button('缩小', wrapAction(() => { changeStageZoom(-.1); }), 'tool-button'),
+  button('放大', wrapAction(() => { changeStageZoom(.1); }), 'tool-button'),
  ]);
  if (ribbonTab === 'transition') group('切换', [button('淡化', wrapAction(() => { controller.setTransition({ type: 'fade' }); renderAll(false); }), 'tool-button'), button('无', wrapAction(() => { controller.setTransition(null); renderAll(false); }), 'tool-button'), button('预览切换', wrapAction(() => controller.previewTransition()), 'tool-button')]);
  if (ribbonTab === 'animation') group('动画', [button('给选中对象加入淡入', wrapAction(() => addAnimation()), 'tool-button'), button('下一动画', wrapAction(() => { if (preview) void preview.session.nextStep?.(); }), 'tool-button')]);
  if (ribbonTab === 'show') group('放映', [button('预览', wrapAction(() => togglePreview()), 'preview-button')]);
  if (ribbonTab === 'review') group('审阅', [button('查找', wrapAction(() => { controller.openTextSearch({ mode: 'find' }); }), 'tool-button'), button('替换', wrapAction(() => { controller.openTextSearch({ mode: 'replace' }); }), 'tool-button')]);
- if (ribbonTab === 'view') group('视图', [button(controller.snapshot.snapping ? '关闭吸附' : '开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'), button('适应窗口', wrapAction(() => { controller.setZoom(1); renderAll(false); }), 'tool-button')]);
+ if (ribbonTab === 'view') group('视图', [button(controller.snapshot.snapping ? '关闭吸附' : '开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'), button('适应窗口', wrapAction(() => { applyStageZoom(true); renderAll(false); }), 'tool-button')]);
  }
     function renderInspector(): void { inspectorBody.replaceChildren();
  selectionPaneHost.hidden = inspectorTab !== 'object';
@@ -947,6 +975,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  thumbnailSessions.clear();
  asset = next;
  thumbnailAsset = next;
+ stageZoomFactor = 1;
+ fitZoom = 1;
  editGeneration = 0;
  savedGeneration = 0;
  titleInput.value = next.title;
@@ -955,6 +985,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  webPpt.attach(editorHost);
  webPpt.attachSelectionPane(selectionPaneHost);
  webPpt.snapshot.view?.registerTextUi(toolbar);
+ applyStageZoom(true);
  controller.attachEditorSubscription();
  renderAll();
  setStatus('已打开 · 编辑状态');

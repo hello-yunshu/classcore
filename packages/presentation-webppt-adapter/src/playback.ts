@@ -8,6 +8,7 @@ import type {
     PresentationPlayerMountOptions,
     PresentationPlayerSession,
 } from '@classroom/presentation';
+import { sha256Hex } from './sha256.js';
 
 const FORMAT = 'web-ppt-ooxml-v1';
 const MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
@@ -44,8 +45,7 @@ function animationBatches(steps: readonly { trigger?: string }[]): number {
 }
 
 export async function createWebPptPlaybackAssetFromBytes(title: string, bytes: Uint8Array, idPrefix: string, deckId: string): Promise<WebPptPlaybackAsset> {
-    const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource);
-    const sha256 = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
+    const sha256 = await sha256Hex(bytes);
     return {
         presentationSchemaVersion: 1,
         deckId,
