@@ -100,17 +100,74 @@ export class PresentationStudioController {
         const slideId = this.requireSlide();
         const editor = this.requireEditor();
         editor.exec({ type: 'AddShape', slideId, preset, rect: { x: 320, y: 220, w: 240, h: 128 } });
-        return editor.selection.kind === 'elements' ? editor.selection.ids[0] ?? null : null;
+        const id = editor.selection.kind === 'elements' ? editor.selection.ids[0] ?? null : null;
+        if (id) {
+            // The headless package's generic preset defaults are intentionally
+            // blue. Studio insertion starts with a neutral outline and lets
+            // users choose a fill or stronger visual treatment themselves.
+            this.setFill(id, { type: 'none' });
+            this.setStroke(id, { color: 'rgb(107,114,128)', width: 1, dash: null, cap: 'butt', join: 'miter', compound: 'sng' });
+        }
+        return id;
+    }
+
+    addTextBox(): ElementId | null {
+        const slideId = this.requireSlide();
+        const editor = this.requireEditor();
+        const sourceId = editor.doc.slides[slideId]?.children.find((id: ElementId) => {
+            const element = editor.effectiveElement(id);
+            return element.kind === 'shape' && Boolean(element.text);
+        });
+        if (!sourceId) return null;
+        const payload = copyElements(editor.doc, [sourceId]);
+        this.execute({ type: 'PasteElements', payload, at: { parentId: slideId, x: 320, y: 220 } });
+        const id = editor.selection.kind === 'elements' ? editor.selection.ids[0] ?? null : null;
+        if (!id) return null;
+        this.setTransform(id, { x: 320, y: 220, w: 320, h: 128 });
+        this.editText(id, '');
+        return id;
+    }
+
+    enterTextEdit(id: ElementId): boolean {
+        const view = this.adapter.snapshot.view;
+        const target = view?.element.querySelector<SVGGraphicsElement>(`[data-edit-id="${id}"]`);
+        if (!target) return false;
+        const rect = target.getBoundingClientRect();
+        target.dispatchEvent(new MouseEvent('dblclick', {
+            bubbles: true,
+            cancelable: true,
+            detail: 2,
+            clientX: rect.left + rect.width / 2,
+            clientY: rect.top + rect.height / 2,
+        }));
+        const textEditor = view.element.querySelector<HTMLElement>('[contenteditable="true"]');
+        textEditor?.focus();
+        return Boolean(textEditor);
     }
 
     addTable(rows: number, cols: number): ElementId {
+        const slideId = this.requireSlide();
+        this.neutralizeTableDefaults(slideId);
         const view = this.adapter.snapshot.view;
         if (view?.insertTable) return view.insertTable(rows, cols, { rect: { x: 180, y: 180, w: 600, h: 300 } });
         const editor = this.requireEditor();
-        editor.exec({ type: 'AddTable', slideId: this.requireSlide(), rows, cols, rect: { x: 180, y: 180, w: 600, h: 300 } });
+        editor.exec({ type: 'AddTable', slideId, rows, cols, rect: { x: 180, y: 180, w: 600, h: 300 } });
         const id = editor.selection.kind === 'elements' ? editor.selection.ids[0] : null;
         if (!id) throw new Error('web-ppt-table-id-missing');
         return id;
+    }
+
+    private neutralizeTableDefaults(slideId: SlideId): void {
+        const slide = this.requireEditor().doc.slides[slideId];
+        const defaults = slide?.defaultTable;
+        if (!defaults) return;
+        const neutralCell = (cell: typeof defaults.firstRow) => ({ ...cell, fill: { type: 'none' as const } });
+        slide.defaultTable = {
+            ...defaults,
+            styleId: undefined,
+            firstRow: neutralCell(defaults.firstRow),
+            bandRows: [neutralCell(defaults.bandRows[0]), neutralCell(defaults.bandRows[1])],
+        };
     }
 
     async addImage(file: Blob): Promise<ElementId> {

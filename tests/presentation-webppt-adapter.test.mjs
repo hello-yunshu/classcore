@@ -90,6 +90,26 @@ test('Studio controller uses correct MoveSlide anchors and one transaction per b
   controller.dispose();
 });
 
+test('Studio insertion keeps new shapes and tables neutral until styled explicitly', async () => {
+  const bytes = await templateBytes();
+  const adapter = new WebPptPresentationEngineAdapter(async () => bytes);
+  const asset = await adapter.createBlank('Neutral insertion gate');
+  const webPpt = createWebPptAdapter();
+  await webPpt.applyBinding({ source: asset.source.bytes, openOptions: { idPrefix: asset.document.idPrefix }, mode: 'edit' });
+  const controller = new PresentationStudioController(webPpt);
+  const shapeId = controller.addShape('roundRect');
+  assert.ok(shapeId);
+  assert.deepEqual(controller.editor.effectiveElement(shapeId).fill, { type: 'none' });
+  assert.equal(controller.editor.effectiveElement(shapeId).stroke?.color, 'rgb(107,114,128)');
+  const tableId = controller.addTable(2, 2);
+  const table = controller.editor.effectiveElement(tableId);
+  assert.equal(table.kind, 'table');
+  assert.deepEqual(table.rows.flatMap(row => row.cells.map(cell => cell.fill)), [
+    { type: 'none' }, { type: 'none' }, { type: 'none' }, { type: 'none' },
+  ]);
+  controller.dispose();
+});
+
 test('Studio animation insertion appends and explicit empty steps clear the timeline', async () => {
   const bytes = await templateBytes();
   const adapter = new WebPptPresentationEngineAdapter(async () => bytes);

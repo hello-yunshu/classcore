@@ -54,6 +54,22 @@ test.describe('Presentation Studio command surface', () => {
         await expect(page.locator('.context-toolbar')).not.toContainText('...');
     });
 
+    test('inserts a neutral text box and opens native text editing', async ({ page }) => {
+        await page.getByRole('tab', { name: '插入' }).click();
+        await page.getByRole('button', { name: '文本框', exact: true }).click();
+        const editor = page.locator('[contenteditable="true"]');
+        await expect(editor).toBeVisible();
+        await editor.fill('课堂标题');
+        await expect(editor).toHaveText('课堂标题');
+        await expect(page.locator('[data-ppt-text-editor]')).toContainText('课堂标题');
+        await page.keyboard.press('Escape');
+        await page.getByRole('button', { name: '形状', exact: true }).click();
+        await page.getByRole('menuitem', { name: '矩形', exact: true }).click();
+        const insertedShape = page.locator('[data-edit-id]').last().locator('path').first();
+        await expect(insertedShape).toHaveAttribute('fill', 'none');
+        await expect(insertedShape).toHaveAttribute('stroke', /rgb\(107,\s*114,\s*128\)/);
+    });
+
     test('provides notes, zoom, and a real canvas context menu', async ({ page }) => {
         await page.getByRole('treeitem', { name: /Text 0/ }).click();
         await page.locator('.notes-toggle').press('Enter');

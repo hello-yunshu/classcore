@@ -727,7 +727,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    ]);
   }
   if (ribbonTab === 'insert') {
-   group('文本', [button('文字', wrapAction(() => { const id = controller.addShape('rect'); if (id) { controller.editText(id, '输入文字'); controller.select({ kind: 'elements', ids: [id], enteredGroup: null }); } renderAll(); }), 'tool-button', '文字', 'text')]);
+   group('文本', [button('文本框', wrapAction(() => { const id = controller.addTextBox(); if (!id) { setStatus('当前课件没有可用的文本样式', true); return; } controller.select({ kind: 'elements', ids: [id], enteredGroup: null }); renderAll(); controller.enterTextEdit(id); }), 'tool-button', '文本框', 'text')]);
    group('图片', [createSplitButton(command('image', '图片', 'image', () => chooseImage('insert')), [
     command('replace-image', '替换图片', 'replace-image', () => chooseImage('replace')),
     command('image-options', '图片选项', 'image', () => { inspectorTab = 'object'; renderAll(); }),
@@ -963,7 +963,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  if (record.src.kind === 'shape') inspectorBody.append(shapeStyleControls(id));
  if (record.src.kind === 'image') inspectorBody.append(imageStyleControls(id));
  if (record.src.kind === 'table') inspectorBody.append(tableStyleControls(id));
- inspectorBody.append(effectStyleControls(id), linkControls(id));
+ if (record.src.kind !== 'table') inspectorBody.append(effectStyleControls(id));
+ inspectorBody.append(linkControls(id));
  if (record.src.kind === 'shape' || record.src.kind === 'table') { const textArea = document.createElement('textarea');
  textArea.value = textOfEffective(element);
  textArea.placeholder = '输入对象文字';
