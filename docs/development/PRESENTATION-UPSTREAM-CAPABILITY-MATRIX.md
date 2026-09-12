@@ -68,6 +68,14 @@ No row is deferred solely for schedule. Deferred rows name the missing public AP
 
 `CLOSED`: version-line decision, command-surface icon guessing removal, global menu-listener leak removal, explicit command toggle semantics, Ribbon labels, responsive overflow access, scoped pending/recovery keys, effective-text reads, dynamic source aspect ratio, real layout gallery entry, and static source checks.
 
-`PARTIAL`: text/body formatting, shape/image/table formatting, transition/animation options, full keyboard/context-menu coverage, offline recovery, conflict, Display, Docker/LAN, and browser/runtime evidence. These remain `CAPABILITY-INTEGRATION / NOT-FROZEN` until the required browser and classroom gates are exercised.
+`CLOSED`: the three-test Presentation Studio Chromium smoke is now exercised locally and in CI on the final commit; the CI run also passed x64/arm64 full checks and the native ARM64 Docker gate.
+
+`PARTIAL`: text/body formatting, shape/image/table formatting, transition/animation options, full keyboard/context-menu coverage, offline recovery, conflict, Display, and authenticated classroom LAN/product readiness. These remain `CAPABILITY-INTEGRATION / NOT-FROZEN` until the corresponding product gates are exercised.
 
 `DEFERRED`: sections, built-in template gallery, comments, PDF/image export, and unverified chart/media/master extensions because beta.2 has no confirmed safe product seam or round-trip evidence.
+
+### Verification evidence
+
+- Local `npm run check`: PASS; 146/146 unit tests plus build, formal lesson validation, distribution/display boundaries, load simulation, WebSocket/SQLite reference gate, and smoke.
+- Local Chromium: `CLASSCORE_PRESENTATION_URL=http://127.0.0.1:29888 CI=true npm run test:e2e:presentation`: 3/3 PASS.
+- GitHub Actions final-head run: [34681175908](https://github.com/hello-yunshu/classcore/actions/runs/34681175908); `full-check (x64)`, `full-check (arm64)`, `native-arm64-docker-build`, and `presentation-browser-e2e` all PASS.
