@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Presentation Studio command surface', () => {
     test.beforeEach(async ({ page }) => {
-        test.skip(!process.env.CLASSCORE_PRESENTATION_URL, 'set CLASSCORE_PRESENTATION_URL to run against a real Studio server');
+        if (!process.env.CLASSCORE_PRESENTATION_URL) throw new Error('CLASSCORE_PRESENTATION_URL is required; presentation E2E must never silently skip');
         await page.goto('/authoring');
     });
 
@@ -32,4 +32,3 @@ test.describe('Presentation Studio command surface', () => {
         await expect(page.locator('.object-list')).toHaveCount(0);
     });
 });
-

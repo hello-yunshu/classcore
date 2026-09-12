@@ -8,7 +8,7 @@
 export type IconId =
     | 'save' | 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'delete' | 'duplicate'
     | 'new-slide' | 'text' | 'image' | 'shape' | 'table' | 'chart' | 'media'
-    | 'align' | 'distribute' | 'arrange' | 'group' | 'rotate' | 'crop' | 'replace-image'
+    | 'align' | 'distribute' | 'arrange' | 'group' | 'rotate' | 'crop' | 'shape-outline' | 'replace-image'
     | 'alt-text' | 'background' | 'transition' | 'animation' | 'preview' | 'search'
     | 'replace' | 'selection-pane' | 'zoom-in' | 'zoom-out' | 'fit' | 'snapping'
     | 'guides' | 'notes' | 'publish' | 'rehearse' | 'more' | 'chevron-down'
@@ -27,6 +27,7 @@ const PATHS: Record<IconId, string> = {
     text: '<path d="M4 5h16M12 5v14M8 19h8M7 5l-4 14M17 5l4 14"/>',
     image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m4 18 5-5 3 3 2-2 6 5"/>',
     shape: '<circle cx="8" cy="8" r="4"/><path d="m13 13 6 6M14 4h6v6M4 16h6v5H4z"/>',
+    'shape-outline': '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 4v16M4 8h16"/>',
     table: '<rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/>',
     chart: '<path d="M4 20V4M4 20h17"/><path d="m7 16 4-5 3 3 5-7"/>',
     media: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/>',
@@ -72,4 +73,3 @@ export function createIcon(id: IconId, label = ''): SVGSVGElement {
     if (label) svg.setAttribute('data-icon-label', label);
     return svg;
 }
-

@@ -2,7 +2,7 @@
 
 Status: `CAPABILITY-INTEGRATION / NOT-FROZEN`  
 Engine: `web-ppt`  
-ClassCore line: `0.5.0-beta.2` (the highest common published beta line currently available; `@web-ppt/core` alone has newer registry entries, but `edit-core`/`editor` do not, so the line remains unified)
+ClassCore line: `0.5.0-beta.2` (registry rechecked 2026-09-12: `core` reaches beta.4, while `edit-core`, `editor`, and `viewer-core` only reach beta.2; mixed beta lines are prohibited)
 
 The Studio owns product orchestration and user-facing state. Editing, selection, text search, format painting, transitions, animation data, image crop, snapping and selection-pane behavior stay behind the `PresentationStudioController` and the adapter; no parallel editor state machine is introduced.
 
@@ -24,7 +24,7 @@ The Studio owns product orchestration and user-facing state. Editing, selection,
 | Paragraph/body formatting | `queryParaProps`, `setParaProps`, `setBodyProps` | beta.2 | active text view toolbar | paragraph toolbar | P0 | controller + view | browser pending | INTEGRATE_NOW | |
 | Image insert/replace/crop | `insertImage`, `replaceImage`, `startImageCrop`, `SetCrop` | beta.2 | insert/replace/crop entry | insert/replace/crop | P0 | adapter/controller | browser pending | INTEGRATE_NOW | |
 | Background | `setBackgroundImage`, slide properties | beta.2 | solid/image | custom color + image crop | P0 | controller | adapter/browser pending | INTEGRATE_NOW | |
-| Slide layout/size | slide property APIs | beta.2 | fixed 16:9 | query/set layout and size | P1 | adapter/controller | browser pending | INTEGRATE_IF_SAFE | |
+| Slide layout/size | `queryLayout`, `setLayout`, `doc.meta` | beta.2 | real layout gallery + dynamic aspect ratio | stable layout selection | P1 | adapter/controller | static/unit; browser pending | INTEGRATE_IF_SAFE | custom slide-size writer is not exposed; current source size is read dynamically |
 | Transitions | `queryTransition`, `setTransition`, `previewTransition` | beta.2 | gallery + preview | gallery + timing/options | P0 | adapter/controller | browser pending | INTEGRATE_NOW | |
 | Animations | `SetAnimations`, `ANIMATION_EFFECTS`, `previewAnimations` | beta.2 | multi-effect gallery + append/clear | catalog + timing/order | P0 | controller | adapter/unit/browser pending | INTEGRATE_NOW | timing/order pane still read-only |
 | Animation pane | `querySlideAnimations` | beta.2 | read-only list | select/order/delete/edit | P1 | controller | browser pending | INTEGRATE_IF_SAFE | |
@@ -43,3 +43,31 @@ The Studio owns product orchestration and user-facing state. Editing, selection,
 | PDF/image export | no confirmed public export | beta.2 | absent | optional export | P2 | deferred | none | UNSUPPORTED_UPSTREAM | no stable public API confirmed |
 
 No row is deferred solely for schedule. Deferred rows name the missing public API, round-trip, offline, or bundle evidence required to promote them.
+
+## 2026-09-12 closure log
+
+### Reused from web-ppt
+
+- `queryRunProps` / `setRunProps`, `queryParaProps` / `setParaProps`, and `queryBodyProps` / `setBodyProps` remain the sole text formatting authority.
+- `effectiveElement` plus `textBodyEditText` is the source for current text; the Studio no longer derives edited text from `record.src`.
+- `AddSlide` with `doc.layoutOrder` / `doc.layouts` supplies the real layout gallery; `InsertRow`, crop, transition, animation, selection-pane, save, and preview continue through upstream commands or view seams.
+- Stable thumbnails use the upstream `Viewer`; no second document or selection model was introduced.
+
+### Referenced from PPTist / mature slide-editor patterns
+
+- Ribbon grouping, split buttons, galleries, contextual tabs, a table picker, the three-column workbench, and explicit image/shape/table inspector sections follow the established Web Slide Editor interaction pattern.
+- PPTist source is not copied into the repository; no AGPL source fragment was added in this pass.
+
+### Local implementation retained
+
+- ClassCore keeps only product orchestration: presentation-scoped local draft/server-pending metadata, Library/Publish/Rehearsal actions, classroom-facing status, and the thin command-to-adapter composition layer.
+- The local icon SVGs remain because the classroom LAN requires offline assets and no remote icon/font dependency; each command now supplies an explicit icon or the legacy wrapper uses the neutral `more` glyph.
+- Distribution remains a small controller fallback because beta.2 exposes no public distribution command; it is isolated and documented as partial rather than promoted to upstream capability.
+
+### Closure status
+
+`CLOSED`: version-line decision, command-surface icon guessing removal, global menu-listener leak removal, explicit command toggle semantics, Ribbon labels, responsive overflow access, scoped pending/recovery keys, effective-text reads, dynamic source aspect ratio, real layout gallery entry, and static source checks.
+
+`PARTIAL`: text/body formatting, shape/image/table formatting, transition/animation options, full keyboard/context-menu coverage, offline recovery, conflict, Display, Docker/LAN, and browser/runtime evidence. These remain `CAPABILITY-INTEGRATION / NOT-FROZEN` until the required browser and classroom gates are exercised.
+
+`DEFERRED`: sections, built-in template gallery, comments, PDF/image export, and unverified chart/media/master extensions because beta.2 has no confirmed safe product seam or round-trip evidence.

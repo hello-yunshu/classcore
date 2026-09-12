@@ -4,6 +4,7 @@ export interface StudioCommand {
     id: string;
     label: string;
     shortLabel?: string;
+    /** Every product command chooses its glyph explicitly; never infer it from copy. */
     icon?: IconId;
     tooltip?: string;
     shortcut?: string;
@@ -31,7 +32,7 @@ export function createCommandButton(command: StudioCommand, density: CommandDens
     item.disabled = Boolean(command.disabled);
     item.title = commandTitle(command);
     item.setAttribute('aria-label', commandTitle(command));
-    item.setAttribute('aria-pressed', String(Boolean(command.checked)));
+    if (command.checked !== undefined) item.setAttribute('aria-pressed', String(command.checked));
     if (command.icon) item.append(createIcon(command.icon, command.label));
     if (density !== 'icon-only') {
         const text = document.createElement('span');
@@ -50,7 +51,21 @@ function focusableItems(menu: HTMLElement): HTMLButtonElement[] {
 function closeMenu(menu: HTMLElement, restore: HTMLElement | null): void {
     menu.classList.remove('is-open');
     menu.querySelectorAll<HTMLElement>('.command-submenu.is-open').forEach(item => item.classList.remove('is-open'));
+    menu.querySelectorAll<HTMLButtonElement>('[aria-expanded="true"]').forEach(item => item.setAttribute('aria-expanded', 'false'));
     if (restore) restore.focus();
+}
+
+let menuDismissListenerBound = false;
+function ensureMenuDismissListener(): void {
+    if (menuDismissListenerBound || typeof document === 'undefined') return;
+    menuDismissListenerBound = true;
+    document.addEventListener('pointerdown', event => {
+        const target = event.target as Node | null;
+        document.querySelectorAll<HTMLElement>('.command-dropdown').forEach(wrapper => {
+            if (target && wrapper.contains(target)) return;
+            wrapper.querySelectorAll<HTMLElement>('.command-menu.is-open').forEach(menu => closeMenu(menu, null));
+        });
+    });
 }
 
 function makeMenuItem(item: StudioMenuItem, owner: HTMLButtonElement): HTMLDivElement {
@@ -87,13 +102,25 @@ function makeMenuItem(item: StudioMenuItem, owner: HTMLButtonElement): HTMLDivEl
         if (event.key === 'ArrowDown') { event.preventDefault(); items[(index + 1 + items.length) % items.length]?.focus(); }
         if (event.key === 'ArrowUp') { event.preventDefault(); items[(index - 1 + items.length) % items.length]?.focus(); }
         if (event.key === 'ArrowRight' && item.submenu) { event.preventDefault(); wrapper.querySelector<HTMLButtonElement>('.command-menu-item')?.click(); }
-        if (event.key === 'ArrowLeft') { event.preventDefault(); wrapper.parentElement?.closest<HTMLElement>('.command-submenu')?.classList.remove('is-open'); owner.focus(); }
+        if (event.key === 'Home') { event.preventDefault(); items[0]?.focus(); }
+        if (event.key === 'End') { event.preventDefault(); items.at(-1)?.focus(); }
+        if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            const parent = wrapper.parentElement?.closest<HTMLElement>('.command-submenu');
+            if (parent) {
+                parent.classList.remove('is-open');
+                const parentTrigger = parent.previousElementSibling as HTMLButtonElement | null;
+                parentTrigger?.setAttribute('aria-expanded', 'false');
+                parentTrigger?.focus();
+            } else owner.focus();
+        }
         if (event.key === 'Escape') { event.preventDefault(); closeMenu(owner.closest<HTMLElement>('.command-menu') ?? root, owner); }
     });
     return wrapper;
 }
 
 export function createDropdown(command: StudioCommand, items: readonly StudioMenuItem[]): HTMLElement {
+    ensureMenuDismissListener();
     const wrapper = document.createElement('div');
     wrapper.className = 'command-dropdown';
     const trigger = createCommandButton(command, 'compact', 'command-dropdown-trigger');
@@ -112,14 +139,20 @@ export function createDropdown(command: StudioCommand, items: readonly StudioMen
         trigger.setAttribute('aria-expanded', String(open));
         if (open) {
             const rect = trigger.getBoundingClientRect();
-            menu.style.top = `${Math.round(rect.bottom + 5)}px`;
-            menu.style.left = `${Math.round(rect.left)}px`;
+            const margin = 8;
+            const measured = menu.getBoundingClientRect();
+            const left = Math.max(margin, Math.min(rect.left, window.innerWidth - measured.width - margin));
+            const below = rect.bottom + 5;
+            const top = below + measured.height <= window.innerHeight - margin
+                ? below
+                : Math.max(margin, rect.top - measured.height - 5);
+            menu.style.top = `${Math.round(top)}px`;
+            menu.style.left = `${Math.round(left)}px`;
             menu.querySelector<HTMLButtonElement>('.command-menu-item')?.focus();
         }
     };
     trigger.addEventListener('click', event => { event.stopPropagation(); toggle(); });
     trigger.addEventListener('keydown', event => { if (event.key === 'ArrowDown' || event.key === 'Enter') { event.preventDefault(); toggle(); } if (event.key === 'Escape') closeMenu(menu, trigger); });
-    document.addEventListener('pointerdown', event => { if (!wrapper.contains(event.target as Node)) closeMenu(menu, null); });
     wrapper.append(trigger, menu);
     return wrapper;
 }

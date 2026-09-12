@@ -60,10 +60,11 @@ h1 { margin: 4px 0 0; color: var(--ink); font: 700 21px ui-sans-serif, -apple-sy
 .ribbon-tab { position: relative; border: 0; border-bottom: 3px solid transparent; padding: 11px 14px 8px; color: var(--muted-strong); background: transparent; cursor: pointer; font-size: 11px; white-space: nowrap; transition: color .18s ease, background .18s ease, border-color .18s ease; }
 .ribbon-tab:hover { color: var(--ink); background: #eeece5; }
 .ribbon-tab.active { color: var(--ink); border-bottom-color: var(--focus); background: var(--focus-wash); font-weight: 800; }
-.context-toolbar { display: flex; align-items: center; gap: 8px; height: 68px; min-height: 68px; padding: 6px 22px; overflow: hidden; background: var(--panel-wash); border-bottom: 1px solid var(--line); box-shadow: 0 2px 8px rgba(31, 45, 61, .035); }
-.toolbar-group { flex-shrink: 0; gap: 2px; padding-right: 8px; border-right: 1px solid var(--line); }
+.context-toolbar { display: flex; align-items: stretch; gap: 8px; height: 82px; min-height: 82px; padding: 6px 22px; overflow-x: auto; overflow-y: hidden; background: var(--panel-wash); border-bottom: 1px solid var(--line); box-shadow: 0 2px 8px rgba(31, 45, 61, .035); }
+.toolbar-group { display: flex; flex-shrink: 0; align-items: stretch; gap: 2px; padding: 0 8px 2px 0; border-right: 1px solid var(--line); }
 .toolbar-group:last-child { border-right: 0; }
-.toolbar-label, .gallery-label { display: none; }
+.toolbar-label { display: block; margin: 0 4px 3px; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .08em; line-height: 1; text-align: center; white-space: nowrap; }
+.gallery-label { display: block; }
 
 .small-button, .tool-button, .primary-button, .signal-button, .danger-button, .preview-button, .swatch-button { border: 1px solid var(--line-strong); border-radius: 7px; padding: 7px 10px; color: var(--ink-soft); background: var(--panel); cursor: pointer; font-size: 11px; white-space: nowrap; transition: border-color .18s ease, color .18s ease, background .18s ease, box-shadow .18s ease, transform .18s ease; }
 .small-button:hover, .tool-button:hover, .swatch-button:hover { border-color: #a9badc; color: var(--ink); background: #f0f3f9; }
@@ -212,10 +213,19 @@ h1 { margin: 4px 0 0; color: var(--ink); font: 700 21px ui-sans-serif, -apple-sy
 .selection-pane-host button:hover, .selection-pane-host button:focus-visible { color: var(--ink); background: #eef2f9; outline: none; }
 .toolbar-group { align-items: start; }
 .toolbar-group .command-button { min-height: 33px; }
+.toolbar-group { flex-direction: column; justify-content: space-between; }
+.toolbar-group > .command-button, .toolbar-group > .command-dropdown, .toolbar-group > .command-split, .toolbar-group > .command-gallery { align-self: stretch; }
+.toolbar-overflow { display: none; flex: 0 0 auto; align-self: center; }
+.toolbar-overflow > .command-dropdown-trigger { min-height: 42px; }
+.gallery-grid [class*="preview-table-"] { background: linear-gradient(to right, transparent 31%, currentColor 32% 36%, transparent 37% 64%, currentColor 65% 69%, transparent 70%), linear-gradient(to bottom, transparent 31%, currentColor 32% 36%, transparent 37% 64%, currentColor 65% 69%, transparent 70%); }
 
 @media (max-width: 1279px) {
     .toolbar-group { gap: 3px; }
     .toolbar-group .command-label { max-width: none; overflow: visible; text-overflow: clip; white-space: nowrap; }
+}
+
+@media (max-width: 1180px) {
+    .toolbar-overflow { display: inline-flex; position: sticky; right: 0; z-index: 2; margin-left: auto; padding-left: 6px; background: var(--panel-wash); }
 }
 
 @media (max-width: 1180px) and (min-width: 901px) {
@@ -237,7 +247,8 @@ h1 { margin: 4px 0 0; color: var(--ink); font: 700 21px ui-sans-serif, -apple-sy
     .scene-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
     .scene-thumb { flex: 0 0 142px; }
     .scene-actions, .scene-reorder { display: none; }
-    .inspector-panel { position: fixed; z-index: 8; top: 209px; right: 0; bottom: 30px; width: min(310px, calc(100vw - 24px)); box-shadow: -15px 0 32px rgba(31, 45, 61, .14); }
+    .context-toolbar { height: 82px; min-height: 82px; }
+    .inspector-panel { position: fixed; z-index: 8; top: 223px; right: 0; bottom: 30px; width: min(310px, calc(100vw - 24px)); box-shadow: -15px 0 32px rgba(31, 45, 61, .14); }
     .stage-panel { min-height: calc(100vh - 272px); padding: 18px 12px; }
     .stage-titlebar { margin-bottom: 10px; }
     .format-note { display: none; }

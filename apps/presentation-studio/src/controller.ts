@@ -13,7 +13,7 @@ import type {
     TextPosition,
     VectorFill,
 } from '@web-ppt/edit-core';
-import { copyElements } from '@web-ppt/edit-core';
+import { copyElements, textBodyEditText, textPositionAtIndex } from '@web-ppt/edit-core';
 import type { WebPptAdapter } from '@web-ppt/editor';
 import type { WebPptPresentationAsset } from '@classroom/presentation-webppt-adapter';
 
@@ -60,6 +60,13 @@ export class PresentationStudioController {
     addSlide(): SlideId | null {
         const editor = this.requireEditor();
         const result = editor.exec({ type: 'AddSlide', layoutId: editor.doc.layoutOrder[0], at: { after: this.slideId } });
+        return [...result.createdSlides][0] ?? null;
+    }
+
+    addSlideWithLayout(layoutId: string): SlideId | null {
+        const editor = this.requireEditor();
+        if (!editor.doc.layouts[layoutId]) return null;
+        const result = editor.exec({ type: 'AddSlide', layoutId, at: { after: this.slideId } });
         return [...result.createdSlides][0] ?? null;
     }
 
@@ -155,21 +162,16 @@ export class PresentationStudioController {
     }
     setNotes(id: SlideId, text: string): void { this.execute({ type: 'SetNotes', id, text }); }
     editText(id: ElementId, text: string): void {
-        const record = this.requireEditor().doc.elements[id];
-        const paragraphs = record?.src.text?.paragraphs ?? [];
-        const lastParagraph = Math.max(0, paragraphs.length - 1);
-        const lastRuns = paragraphs[lastParagraph]?.runs ?? [];
-        const lastRun = Math.max(0, lastRuns.length - 1);
-        const end: TextPosition = { p: lastParagraph, r: lastRun, off: lastRuns[lastRun]?.text.length ?? 0 };
+        const body = this.requireEditor().effectiveElement(id).text;
+        if (!body) return;
+        const end = textPositionAtIndex(body, textBodyEditText(body).length);
         this.execute({ type: 'EditText', id, ops: [{ type: 'replace', from: { p: 0, r: 0, off: 0 }, to: end, text }] });
     }
     setTextStyle(id: ElementId, props: RunPropertyOverrides): void {
-        const record = this.requireEditor().doc.elements[id];
-        const paragraphs = record?.src.text?.paragraphs ?? [];
-        const lastParagraph = Math.max(0, paragraphs.length - 1);
-        const lastRuns = paragraphs[lastParagraph]?.runs ?? [];
-        const lastRun = Math.max(0, lastRuns.length - 1);
-        this.setRunProps(id, { from: { p: 0, r: 0, off: 0 }, to: { p: lastParagraph, r: lastRun, off: lastRuns[lastRun]?.text.length ?? 0 } }, props);
+        const body = this.requireEditor().effectiveElement(id).text;
+        if (!body) return;
+        const end = textPositionAtIndex(body, textBodyEditText(body).length);
+        this.setRunProps(id, { from: { p: 0, r: 0, off: 0 }, to: end }, props);
     }
     distributeHorizontal(ids: readonly ElementId[]): void {
         if (ids.length < 3) return;
@@ -204,6 +206,14 @@ export class PresentationStudioController {
         const element = this.requireEditor().effectiveElement(id);
         this.setTransform(id, { rot: element.rot + degrees });
     }
+    rotateMany(ids: readonly ElementId[], degrees: number): void {
+        const editor = this.requireEditor();
+        const commands = ids.map(id => ({ type: 'SetXfrm', id, rot: editor.effectiveElement(id).rot + degrees }) as const);
+        if (commands.length) this.execute(...commands);
+    }
+    setFlipMany(ids: readonly ElementId[], h?: boolean, v?: boolean): void {
+        if (ids.length) this.execute(...ids.map(id => ({ type: 'SetFlip', id, h, v }) as const));
+    }
     setRunProps(id: ElementId, range: { from: TextPosition; to: TextPosition }, props: RunPropertyOverrides): void { this.execute({ type: 'SetRunProps', id, range, props }); }
     toggleBold(): void { this.toggleRunProperty('b'); }
     toggleItalic(): void { this.toggleRunProperty('i'); }
@@ -213,7 +223,13 @@ export class PresentationStudioController {
         const state = view?.queryRunProps();
         if (view && state?.size.value != null) view.setRunProps({ size: Math.max(1, state.size.value + delta) });
     }
+    queryRunProps(): ReturnType<NonNullable<WebPptAdapter['snapshot']['view']>['queryRunProps']> | null { return this.adapter.snapshot.view?.queryRunProps() ?? null; }
+    queryParagraphProps(): ReturnType<NonNullable<WebPptAdapter['snapshot']['view']>['queryParaProps']> | null { return this.adapter.snapshot.view?.queryParaProps() ?? null; }
+    queryBodyProps(): ReturnType<NonNullable<WebPptAdapter['snapshot']['view']>['queryBodyProps']> | null { return this.adapter.snapshot.view?.queryBodyProps() ?? null; }
     setParagraph(props: ParagraphPropertyOverrides): void { this.adapter.snapshot.view?.setParaProps(props); }
+    setBodyProps(props: Parameters<NonNullable<WebPptAdapter['snapshot']['view']>['setBodyProps']>[0]): void { this.adapter.snapshot.view?.setBodyProps(props); }
+    setTextColor(color: string | null): void { this.adapter.snapshot.view?.setRunProps({ color }); }
+    clearTextFormat(): void { this.adapter.snapshot.view?.setRunProps({ font: null, size: null, color: null, b: null, i: null, u: null, strike: null }); }
     private toggleRunProperty(property: 'b' | 'i' | 'u'): void {
         const view = this.adapter.snapshot.view;
         const state = view?.queryRunProps();
@@ -243,6 +259,7 @@ export class PresentationStudioController {
     startImageCrop(id?: ElementId): boolean { return this.adapter.snapshot.view?.startImageCrop(id) ?? false; }
     clearImageCrop(): void { this.selectedIds().forEach(id => this.execute({ type: 'SetCrop', id, crop: null })); }
     setLayoutFromFirst(): void { const view = this.adapter.snapshot.view; const layoutId = this.requireEditor().doc.layoutOrder[0]; if (view && layoutId) view.setLayout(layoutId); }
+    setLayout(layoutId: string): boolean { return this.adapter.snapshot.view?.setLayout(layoutId) ?? false; }
     setSnapping(snapping: boolean): void { this.adapter.setView({ snapping }); }
     setZoom(zoom: number): void { this.adapter.setView({ zoom }); }
     attachSelectionPane(container: HTMLElement | null): void { this.adapter.attachSelectionPane(container); }

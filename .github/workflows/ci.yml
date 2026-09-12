@@ -55,3 +55,45 @@ jobs:
           test "$(docker image inspect classroom-runtime:ci-arm64 --format '{{.Config.User}}')" = "node"
       - name: Run native ARM64 container restart and SQLite/WebSocket gate
         run: npm run docker:gate
+
+  presentation-e2e:
+    name: presentation-browser-e2e
+    runs-on: ubuntu-24.04
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.8.2
+          cache: npm
+      - name: Install Node dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build Studio and reference server
+        run: npm run build
+      - name: Start local-tools server
+        env:
+          HOST: 127.0.0.1
+          PORT: 8787
+          LOCAL_TOOLS_HOST: 127.0.0.1
+          LOCAL_TOOLS_PORT: 8788
+          CLASSROOM_DATA_DIR: /tmp/classcore-presentation-e2e
+        run: |
+          mkdir -p "$CLASSROOM_DATA_DIR"
+          node apps/server/runtime/server.mjs > /tmp/classcore-presentation-e2e.log 2>&1 &
+          echo $! > /tmp/classcore-presentation-e2e.pid
+          for attempt in $(seq 1 100); do
+            if curl --fail --silent http://127.0.0.1:8788/healthz >/dev/null; then exit 0; fi
+            sleep 0.1
+          done
+          cat /tmp/classcore-presentation-e2e.log
+          exit 1
+      - name: Run presentation browser E2E
+        env:
+          CI: true
+          CLASSCORE_PRESENTATION_URL: http://127.0.0.1:8788
+        run: npm run test:e2e:presentation
+      - name: Stop local-tools server
+        if: always()
+        run: if [ -f /tmp/classcore-presentation-e2e.pid ]; then kill "$(cat /tmp/classcore-presentation-e2e.pid)" || true; fi

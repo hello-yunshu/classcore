@@ -2,6 +2,7 @@ import { getSurfaceDescriptor, CLIENT_RUNTIME_BUDGETS } from '@classroom/surface
 import type { PresentationEngineAdapter } from '@classroom/presentation';
 import type { ElementId, ElementRecord, SlideId } from '@web-ppt/edit-core';
 import type { VectorFill } from '@web-ppt/edit-core';
+import { textBodyEditText } from '@web-ppt/edit-core';
 import {
     createWebPptAdapter,
     WebPptPresentationEngineAdapter,
@@ -103,10 +104,16 @@ interface PublishedPresentationRecord { version: 1;
 const DRAFT_DB = 'classcore-presentation-drafts-v1';
 const DRAFT_STORE = 'assets';
 const PUBLISHED_STORE = 'published';
-const DRAFT_META_KEY = 'classcore.presentation.draft.meta.v1';
-const PUBLISHED_META_KEY = 'classcore.presentation.published.meta.v1';
-const SERVER_META_KEY = 'classcore.presentation.server.meta.v1';
+const DRAFT_META_PREFIX = 'classcore.presentation.draft.meta.v1';
+const DRAFT_CURRENT_KEY = `${DRAFT_META_PREFIX}:current`;
+const PUBLISHED_META_PREFIX = 'classcore.presentation.published.meta.v1';
+const SERVER_META_PREFIX = 'classcore.presentation.server.meta.v1';
+const SERVER_CURRENT_KEY = `${SERVER_META_PREFIX}:current`;
 const PENDING_SYNC_META_KEY = 'classcore.presentation.pending-sync.meta.v1';
+
+function scopedStorageKey(prefix: string, identity: string): string {
+ return `${prefix}:${encodeURIComponent(identity)}`;
+}
 
 function openDraftDb(): Promise<IDBDatabase> { return new Promise((resolve, reject) => { const request = indexedDB.open(DRAFT_DB, 2);
  request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains(DRAFT_STORE)) request.result.createObjectStore(DRAFT_STORE, { keyPath: 'deckId' });
@@ -117,6 +124,7 @@ function openDraftDb(): Promise<IDBDatabase> { return new Promise((resolve, reje
  });
  }
 interface StoredDraftMetadata { presentationSchemaVersion: 1;
+ presentationId?: string;
  deckId: string;
  title: string;
  engine: WebPptPresentationAsset['engine'];
@@ -138,11 +146,22 @@ interface PendingSyncMetadata {
  document: WebPptPresentationAsset['document'];
  savedAt: string;
 }
-function loadServerProjectMetadata(): ServerProjectMetadata | null {
- try { return JSON.parse(localStorage.getItem(SERVER_META_KEY) ?? 'null') as ServerProjectMetadata | null; } catch { return null; }
+function loadServerProjectMetadata(presentationId?: string): ServerProjectMetadata | null {
+ try {
+  const id = presentationId ?? localStorage.getItem(SERVER_CURRENT_KEY);
+  return id ? JSON.parse(localStorage.getItem(scopedStorageKey(SERVER_META_PREFIX, id)) ?? 'null') as ServerProjectMetadata | null : null;
+ } catch { return null; }
 }
-function saveServerProjectMetadata(value: ServerProjectMetadata): void { localStorage.setItem(SERVER_META_KEY, JSON.stringify(value)); }
-function clearServerProjectMetadata(): void { localStorage.removeItem(SERVER_META_KEY); }
+function saveServerProjectMetadata(value: ServerProjectMetadata): void {
+ localStorage.setItem(scopedStorageKey(SERVER_META_PREFIX, value.presentationId), JSON.stringify(value));
+ localStorage.setItem(SERVER_CURRENT_KEY, value.presentationId);
+}
+function clearServerProjectMetadata(presentationId?: string): void {
+ const id = presentationId ?? localStorage.getItem(SERVER_CURRENT_KEY);
+ if (!id) return;
+ localStorage.removeItem(scopedStorageKey(SERVER_META_PREFIX, id));
+ if (localStorage.getItem(SERVER_CURRENT_KEY) === id) localStorage.removeItem(SERVER_CURRENT_KEY);
+}
 type PendingSyncIndex = Record<string, PendingSyncMetadata>;
 function loadPendingSyncIndex(): PendingSyncIndex {
  try { return JSON.parse(localStorage.getItem(PENDING_SYNC_META_KEY) ?? '{}') as PendingSyncIndex; } catch { return {}; }
@@ -173,9 +192,22 @@ async function serverJson(path: string, init: RequestInit = {}): Promise<any> {
  if (!response.ok) throw new Error(`presentation-server-http-${response.status}`);
  return response.json();
 }
-async function persistWebPptDraft(asset: WebPptPresentationAsset): Promise<void> { if (!asset.source) throw new Error('presentation-source-required-for-save');
- const metadata: StoredDraftMetadata = { presentationSchemaVersion: 1, deckId: asset.deckId, title: asset.title, engine: asset.engine, document: asset.document, classroomBindings: asset.classroomBindings, createdAt: asset.createdAt, updatedAt: asset.updatedAt, source: { kind: 'bytes', mimeType: asset.source.mimeType, sha256: asset.source.sha256 } };
- localStorage.setItem(DRAFT_META_KEY, JSON.stringify(metadata));
+async function persistWebPptDraft(asset: WebPptPresentationAsset, presentationId?: string): Promise<void> { if (!asset.source) throw new Error('presentation-source-required-for-save');
+ const identity = presentationId ?? asset.deckId;
+ const metadata: StoredDraftMetadata = {
+  presentationSchemaVersion: 1,
+  presentationId,
+  deckId: asset.deckId,
+  title: asset.title,
+  engine: asset.engine,
+  document: asset.document,
+  classroomBindings: asset.classroomBindings,
+  createdAt: asset.createdAt,
+  updatedAt: asset.updatedAt,
+  source: { kind: 'bytes', mimeType: asset.source.mimeType, sha256: asset.source.sha256 },
+ };
+ localStorage.setItem(scopedStorageKey(DRAFT_META_PREFIX, identity), JSON.stringify(metadata));
+ localStorage.setItem(DRAFT_CURRENT_KEY, identity);
  const db = await openDraftDb();
  await new Promise<void>((resolve, reject) => { const request = db.transaction(DRAFT_STORE, 'readwrite').objectStore(DRAFT_STORE).put({ deckId: asset.deckId, bytes: asset.source!.bytes });
  request.onsuccess = () => resolve();
@@ -183,7 +215,9 @@ async function persistWebPptDraft(asset: WebPptPresentationAsset): Promise<void>
  });
  db.close();
  }
-async function loadWebPptDraft(): Promise<WebPptPresentationAsset | null> { try { const metadata = JSON.parse(localStorage.getItem(DRAFT_META_KEY) ?? 'null') as StoredDraftMetadata | null;
+async function loadWebPptDraft(presentationId?: string): Promise<WebPptPresentationAsset | null> { try {
+ const identity = presentationId ?? localStorage.getItem(DRAFT_CURRENT_KEY);
+ const metadata = identity ? JSON.parse(localStorage.getItem(scopedStorageKey(DRAFT_META_PREFIX, identity)) ?? 'null') as StoredDraftMetadata | null : null;
  if (!metadata || metadata.engine.engineId !== 'web-ppt') return null;
  const db = await openDraftDb();
  const row = await new Promise<{ bytes: Uint8Array } | undefined>((resolve, reject) => { const request = db.transaction(DRAFT_STORE, 'readonly').objectStore(DRAFT_STORE).get(metadata.deckId);
@@ -194,7 +228,7 @@ async function loadWebPptDraft(): Promise<WebPptPresentationAsset | null> { try 
  return row?.bytes ? { ...metadata, source: { ...metadata.source, bytes: new Uint8Array(row.bytes) } } : null;
  } catch { return null;
  } }
-async function persistPublished(record: PublishedPresentationRecord): Promise<void> { localStorage.setItem(PUBLISHED_META_KEY, JSON.stringify({ deckId: record.deckId, title: record.title, fingerprint: record.fingerprint, publishedAt: record.publishedAt, runtimeIndex: record.runtimeIndex }));
+async function persistPublished(record: PublishedPresentationRecord): Promise<void> { localStorage.setItem(scopedStorageKey(PUBLISHED_META_PREFIX, record.deckId), JSON.stringify({ deckId: record.deckId, title: record.title, fingerprint: record.fingerprint, publishedAt: record.publishedAt, runtimeIndex: record.runtimeIndex }));
  const db = await openDraftDb();
  await new Promise<void>((resolve, reject) => { const request = db.transaction(PUBLISHED_STORE, 'readwrite').objectStore(PUBLISHED_STORE).put(record);
  request.onsuccess = () => resolve();
@@ -203,18 +237,8 @@ async function persistPublished(record: PublishedPresentationRecord): Promise<vo
  db.close();
  }
 
-const ICON_BY_LABEL: Array<[string, IconId]> = [
- ['保存', 'save'], ['撤销', 'undo'], ['重做', 'redo'], ['复制', 'copy'], ['粘贴', 'paste'], ['剪切', 'cut'], ['删除', 'delete'],
- ['新页面', 'new-slide'], ['文字', 'text'], ['图形', 'shape'], ['表格', 'table'], ['图片', 'image'], ['页面背景', 'background'],
- ['排列', 'arrange'], ['左对齐', 'align'], ['水平居中', 'align'], ['等距分布', 'distribute'], ['置顶', 'arrange'], ['置底', 'arrange'],
- ['缩小', 'zoom-out'], ['放大', 'zoom-in'], ['适应窗口', 'fit'], ['开启吸附', 'snapping'], ['关闭吸附', 'snapping'], ['吸附', 'snapping'], ['淡化', 'transition'], ['无', 'transition'],
- ['预览切换', 'preview'], ['预览', 'preview'], ['动画', 'animation'], ['下一动画', 'animation'], ['查找', 'search'], ['替换', 'replace'], ['替代文字', 'alt-text'], ['试课', 'rehearse'], ['发布冻结', 'publish'],
- ['对象', 'selection-pane'], ['选择窗格', 'selection-pane'], ['页面', 'background'], ['备注', 'notes'], ['格式刷', 'format-painter'], ['加粗', 'font'], ['斜体', 'font'], ['下划线', 'font'],
- ['上移一层', 'arrange'], ['下移一层', 'arrange'], ['水平翻转', 'rotate'], ['垂直翻转', 'rotate'], ['隐藏此页', 'hide'],
-];
-function iconForLabel(label: string): IconId | undefined { return ICON_BY_LABEL.find(([name]) => label.startsWith(name))?.[1]; }
-function button(label: string, action: () => void | Promise<void>, className = '', title = label): HTMLButtonElement {
- return commandSurface!.createCommandButton({ id: `legacy:${label}`, label, icon: iconForLabel(label), tooltip: title, execute: action }, 'compact', className) as HTMLButtonElement;
+function button(label: string, action: () => void | Promise<void>, className = '', title = label, icon: IconId = 'more'): HTMLButtonElement {
+ return commandSurface!.createCommandButton({ id: `command:${label}`, label, icon, tooltip: title, execute: action }, 'compact', className) as HTMLButtonElement;
  }
 function input(label: string, value: string, onChange: (value: string) => void, type = 'text'): HTMLInputElement { const control = document.createElement('input');
  control.type = type;
@@ -231,9 +255,7 @@ function escapeText(value: string): string {
         .replaceAll('"', '&' + 'quot;')
         .replaceAll("'", '&' + '#39;');
 }
-function textOf(record: ElementRecord | null): string { const paragraphs = (record?.src as { text?: { paragraphs?: Array<{ runs?: Array<{ text?: string }> }> } } | undefined)?.text?.paragraphs ?? [];
- return paragraphs.map(paragraph => (paragraph.runs ?? []).map(run => run.text ?? '').join('')).join('\n');
- }
+function textOfEffective(element: { text?: Parameters<typeof textBodyEditText>[0] } | null): string { return element?.text ? textBodyEditText(element.text) : ''; }
 function solid(color: string): VectorFill { return { type: 'solid', color };
  }
 function rgb(hex: string): string { const value = hex.replace('#', '');
@@ -373,11 +395,14 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  }
  function renderRibbonTabs(): void {
   ribbonTabs.replaceChildren();
-  const tabs: Array<[string, string]> = [['file', '文件'], ['start', '开始'], ['insert', '插入'], ['design', '设计'], ['transition', '切换'], ['animation', '动画'], ['show', '幻灯片放映'], ['review', '审阅'], ['view', '视图']];
+  const tabs: Array<[string, string]> = [['file', '文件'], ['start', '开始'], ['insert', '插入'], ['design', '设计'], ['transition', '切换'], ['animation', '动画'], ['show', '幻灯片放映'], ['view', '视图']];
   const selected = selectedIds()[0];
   const selectedRecord = selected ? controller.element(selected) : null;
+  if (selectedRecord?.src.kind === 'shape' || selectedRecord?.src.kind === 'table') tabs.push(['text-format', '文本格式']);
   if (selectedRecord?.src.kind === 'image') tabs.push(['image-format', '图片格式']);
   if (selectedRecord?.src.kind === 'shape') tabs.push(['shape-format', '形状格式']);
+  if (selectedRecord?.src.kind === 'table') tabs.push(['table-design', '表格设计'], ['table-layout', '表格布局']);
+  if (!tabs.some(([id]) => id === ribbonTab)) ribbonTab = 'start';
   tabs.forEach(([id, label]) => {
    const tab = button(label, () => { ribbonTab = id; renderRibbonTabs(); renderToolbar(); }, `ribbon-tab${ribbonTab === id ? ' active' : ''}`, label);
    tab.setAttribute('role', 'tab');
@@ -477,6 +502,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  } }
     function renderScenePanel(updateThumbnails = true): void { const editor = currentSession()?.editor;
  const slides = editor?.doc.slideOrder ?? [];
+ const slideRatio = editor?.doc.meta ? `${editor.doc.meta.width} / ${editor.doc.meta.height}` : '16 / 9';
  const active = currentSlide();
  scenePanel.replaceChildren();
  const heading = document.createElement('div');
@@ -496,6 +522,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  number.textContent = String(index + 1).padStart(2, '0');
  const thumb = document.createElement('span');
  thumb.className = 'scene-mini-canvas';
+ thumb.style.aspectRatio = slideRatio;
  thumb.dataset.thumbnailHost = slideId;
  item.append(number, thumb);
  sceneList.append(item);
@@ -528,12 +555,22 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  }
     function renderToolbar(): void { toolbar.replaceChildren();
  const renderOfficeToolbar = (): void => {
-  const group = (_label: string, controls: HTMLElement[], extraClass = ''): void => { const section = document.createElement('div'); section.className = `toolbar-group${extraClass ? ` ${extraClass}` : ''}`; section.append(...controls); toolbar.append(section); };
+  const group = (label: string, controls: HTMLElement[], extraClass = ''): void => {
+   const section = document.createElement('div');
+   section.className = `toolbar-group${extraClass ? ` ${extraClass}` : ''}`;
+   const heading = document.createElement('span');
+   heading.className = 'toolbar-label';
+   heading.textContent = label;
+   section.append(heading, ...controls);
+   toolbar.append(section);
+  };
   const command = (id: string, label: string, icon: IconId, execute: () => void | Promise<void>, shortcut?: string, disabled = false): StudioCommand => ({ id, label, icon, shortcut, disabled, execute: wrapAction(execute) });
+  const selectionIds = selectedIds();
+  const selectedRecord = selectionIds.length === 1 ? controller.element(selectionIds[0]) : null;
   const arrange: StudioMenuItem[] = [
    command('layer-front', '置于顶层', 'arrange', () => { controller.setLayerMany(selectedIds(), 'front'); renderAll(); }),
-   command('layer-forward', '上移一层', 'arrange', () => { selectedIds().forEach(id => controller.setLayer(id, 'forward')); renderAll(); }),
-   command('layer-backward', '下移一层', 'arrange', () => { selectedIds().forEach(id => controller.setLayer(id, 'backward')); renderAll(); }),
+   command('layer-forward', '上移一层', 'arrange', () => { controller.setLayerMany(selectedIds(), 'forward'); renderAll(); }),
+   command('layer-backward', '下移一层', 'arrange', () => { controller.setLayerMany(selectedIds(), 'backward'); renderAll(); }),
    command('layer-back', '置于底层', 'arrange', () => { controller.setLayerMany(selectedIds(), 'back'); renderAll(); }),
    { ...command('align', '对齐', 'align', () => undefined), submenu: [
     command('align-left', '左对齐', 'align', () => { controller.align(selectedIds(), 'left'); renderAll(); }),
@@ -548,14 +585,16 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     command('distribute-vertical', '垂直分布', 'distribute', () => { controller.distributeVertical(selectedIds()); renderAll(); }, undefined, selectedIds().length < 3),
    ] },
    { ...command('rotate', '旋转', 'rotate', () => undefined), submenu: [
-    command('rotate-right', '向右旋转 90°', 'rotate', () => { selectedIds().forEach(id => controller.rotate(id, 90)); renderAll(); }),
-    command('rotate-left', '向左旋转 90°', 'rotate', () => { selectedIds().forEach(id => controller.rotate(id, -90)); renderAll(); }),
-    command('flip-h', '水平翻转', 'rotate', () => { selectedIds().forEach(id => controller.setFlip(id, true)); renderAll(); }),
-    command('flip-v', '垂直翻转', 'rotate', () => { selectedIds().forEach(id => controller.setFlip(id, undefined, true)); renderAll(); }),
+    command('rotate-right', '向右旋转 90°', 'rotate', () => { controller.rotateMany(selectedIds(), 90); renderAll(); }),
+    command('rotate-left', '向左旋转 90°', 'rotate', () => { controller.rotateMany(selectedIds(), -90); renderAll(); }),
+    command('flip-h', '水平翻转', 'rotate', () => { controller.setFlipMany(selectedIds(), true); renderAll(); }),
+    command('flip-v', '垂直翻转', 'rotate', () => { controller.setFlipMany(selectedIds(), undefined, true); renderAll(); }),
    ] },
+   command('group', '组合', 'group', () => { controller.group(selectedIds()); renderAll(); }, '⌘/Ctrl+G', selectionIds.length < 2),
+   command('ungroup', '取消组合', 'group', () => { if (selectionIds[0]) controller.ungroup(selectionIds[0]); renderAll(); }, '⌘/Ctrl+Shift+G', selectedRecord?.src.kind !== 'group'),
    command('selection-pane', '选择窗格', 'selection-pane', () => { inspectorTab = 'object'; renderAll(); }),
   ];
-  const addNewSlide = (): void => { const id = controller.addSlide(); if (id) webPpt.setView({ slideId: id, mode: 'edit' }); renderAll(); };
+  const addNewSlide = (layoutId?: string): void => { const id = layoutId ? controller.addSlideWithLayout(layoutId) : controller.addSlide(); if (id) webPpt.setView({ slideId: id, mode: 'edit' }); renderAll(); };
   const addShape = (preset: string): void => { controller.addShape(preset); renderAll(); };
   if (ribbonTab === 'file') group('文件', [createDropdown(command('file', '文件', 'save', () => undefined), [
    command('new', '新建', 'new-slide', () => newDeck()),
@@ -573,9 +612,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    ]);
    group('幻灯片', [
     createSplitButton(command('new-slide', '新建幻灯片', 'new-slide', addNewSlide), [
-     command('layout-title', '标题幻灯片', 'new-slide', addNewSlide),
-     command('layout-content', '标题和内容', 'new-slide', addNewSlide),
-     command('layout-blank', '空白', 'new-slide', addNewSlide),
+     ...(currentSession()?.editor.doc.layoutOrder ?? []).map((layoutId: string) => command(`layout:${layoutId}`, currentSession()!.editor.doc.layouts[layoutId]?.name ?? '版式', 'new-slide', () => addNewSlide(layoutId))),
     ]),
     button('复制', wrapAction(() => { const id = currentSlide(); if (id) { const copy = controller.duplicateSlide(id); if (copy) webPpt.setView({ slideId: copy, mode: 'edit' }); renderAll(); } }), 'tool-button'),
     button('删除', wrapAction(() => { const id = currentSlide(); if (id) controller.removeSlide(id); renderAll(); }), 'danger-button'),
@@ -601,12 +638,20 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     { ...command('shape-roundrect', '圆角矩形', 'shape', () => addShape('roundRect')), preview: 'preview-roundrect' },
     { ...command('shape-ellipse', '椭圆', 'shape', () => addShape('ellipse')), preview: 'preview-ellipse' },
     { ...command('shape-diamond', '菱形', 'shape', () => addShape('diamond')), preview: 'preview-diamond' },
-   ], 4), button('表格', wrapAction(() => {
+    { ...command('shape-triangle', '三角形', 'shape', () => addShape('triangle')), preview: 'preview-triangle' },
+    { ...command('shape-pentagon', '五边形', 'shape', () => addShape('pentagon')), preview: 'preview-pentagon' },
+    { ...command('shape-hexagon', '六边形', 'shape', () => addShape('hexagon')), preview: 'preview-hexagon' },
+    { ...command('shape-heart', '心形', 'shape', () => addShape('heart')), preview: 'preview-heart' },
+   ], 4), createGallery('table-picker', '插入表格', Array.from({ length: 16 }, (_unused, index) => {
+    const rows = Math.floor(index / 4) + 1;
+    const cols = index % 4 + 1;
+    return { ...command(`table:${rows}x${cols}`, `${rows} × ${cols}`, 'table', () => { controller.addTable(rows, cols); renderAll(); }), preview: `preview-table-${rows}-${cols}` };
+   }), 4), button('插入表格…', wrapAction(() => {
     const rows = Number.parseInt(globalThis.prompt?.('行数', '3') ?? '3', 10);
     const cols = Number.parseInt(globalThis.prompt?.('列数', '3') ?? '3', 10);
     if (Number.isFinite(rows) && Number.isFinite(cols)) controller.addTable(Math.max(1, Math.min(10, rows)), Math.max(1, Math.min(10, cols)));
     renderAll();
-   }), 'tool-button')]);
+   }), 'tool-button', '插入表格…', 'table')]);
   }
   if (ribbonTab === 'design') group('设计', [
    button('页面背景', wrapAction(() => backgroundInput.click()), 'tool-button'),
@@ -631,7 +676,6 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    { ...command('animation-spin', '旋转', 'animation', () => addAnimation('spin', 'emphasis')), preview: 'preview-spin' },
   ], 6), button('动画窗格', wrapAction(() => { inspectorTab = 'animation'; renderAll(); }), 'tool-button'), button('预览', wrapAction(() => { void controller.previewAnimations(); }), 'tool-button')]);
   if (ribbonTab === 'show') group('放映', [button('预览', wrapAction(() => togglePreview()), 'preview-button'), button('试课', wrapAction(() => rehearse()), 'show-rehearse-button'), button('发布冻结', wrapAction(() => publish()), 'show-publish-button')], 'show-toolbar-group');
-  if (ribbonTab === 'review') group('审阅', [button('查找', wrapAction(() => controller.openTextSearch({ mode: 'find' })), 'tool-button'), button('替换', wrapAction(() => controller.openTextSearch({ mode: 'replace' })), 'tool-button'), button('替代文字', wrapAction(() => setStatus('当前 beta.2 未提供独立 Alt Text seam，先使用选择窗格重命名对象', true)), 'tool-button')]);
   if (ribbonTab === 'view') group('视图', [
    button('选择窗格', wrapAction(() => { inspectorTab = 'object'; renderAll(); }), 'tool-button'),
    button(controller.snapshot.snapping ? '关闭吸附' : '开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'),
@@ -649,6 +693,61 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    button('形状轮廓', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.setStroke(id, { color: rgb('#24324B'), width: 1.5, dash: null, cap: 'butt', join: 'miter', compound: 'sng' }); renderAll(); }), 'tool-button'),
    createDropdown(command('shape-arrange', '排列', 'arrange', () => undefined), arrange),
   ]);
+  if (ribbonTab === 'text-format') {
+   const view = webPpt.snapshot.view;
+   const textState = controller.queryRunProps();
+   const textDisabled = !view || !textState;
+   group('字体', [
+    commandSurface!.createCommandButton({ id: 'text-bold', label: '加粗', icon: 'font', checked: textState?.b.value === true, disabled: textDisabled, execute: () => { controller.toggleBold(); renderAll(false); } }, 'compact'),
+    commandSurface!.createCommandButton({ id: 'text-italic', label: '斜体', icon: 'font', checked: textState?.i.value === true, disabled: textDisabled, execute: () => { controller.toggleItalic(); renderAll(false); } }, 'compact'),
+    commandSurface!.createCommandButton({ id: 'text-underline', label: '下划线', icon: 'font', checked: textState?.u.value === true, disabled: textDisabled, execute: () => { controller.toggleUnderline(); renderAll(false); } }, 'compact'),
+    commandSurface!.createCommandButton({ id: 'text-smaller', label: '减小字号', icon: 'zoom-out', disabled: textDisabled, execute: () => { controller.adjustFontSize(-2); renderAll(false); } }, 'compact'),
+    commandSurface!.createCommandButton({ id: 'text-larger', label: '增大字号', icon: 'zoom-in', disabled: textDisabled, execute: () => { controller.adjustFontSize(2); renderAll(false); } }, 'compact'),
+    commandSurface!.createCommandButton({ id: 'text-clear', label: '清除格式', icon: 'font', disabled: textDisabled, execute: () => { controller.clearTextFormat(); renderAll(false); } }, 'compact'),
+   ]);
+   const paraState = controller.queryParagraphProps();
+   const bodyState = controller.queryBodyProps();
+   group('段落', [
+    commandSurface!.createCommandButton({ id: 'para-left', label: '左对齐', icon: 'align', checked: paraState?.align.value === 'left', disabled: textDisabled, execute: () => { controller.setParagraph({ align: 'left' }); renderAll(false); } }, 'compact'),
+    commandSurface!.createCommandButton({ id: 'para-center', label: '居中', icon: 'align', checked: paraState?.align.value === 'center', disabled: textDisabled, execute: () => { controller.setParagraph({ align: 'center' }); renderAll(false); } }, 'compact'),
+    commandSurface!.createCommandButton({ id: 'para-right', label: '右对齐', icon: 'align', checked: paraState?.align.value === 'right', disabled: textDisabled, execute: () => { controller.setParagraph({ align: 'right' }); renderAll(false); } }, 'compact'),
+   ]);
+   group('文本框', [
+    createDropdown({ id: 'text-anchor', label: '垂直对齐', icon: 'text', checked: bodyState?.anchor === 'middle', disabled: textDisabled, execute: () => undefined }, [
+     command('text-anchor-top', '顶部', 'text', () => { controller.setBodyProps({ anchor: 'top' }); renderAll(false); }),
+     command('text-anchor-middle', '居中', 'text', () => { controller.setBodyProps({ anchor: 'middle' }); renderAll(false); }),
+     command('text-anchor-bottom', '底部', 'text', () => { controller.setBodyProps({ anchor: 'bottom' }); renderAll(false); }),
+    ]),
+    createDropdown({ id: 'text-autofit', label: '自动调整', icon: 'text', disabled: textDisabled, execute: () => undefined }, [
+     command('text-fit-none', '不自动调整', 'text', () => { controller.setBodyProps({ autoFit: 'none' }); renderAll(false); }),
+     command('text-fit-shrink', '溢出时缩小文字', 'text', () => { controller.setBodyProps({ autoFit: 'normal' }); renderAll(false); }),
+     command('text-fit-shape', '根据文字调整形状', 'text', () => { controller.setBodyProps({ autoFit: 'shape' }); renderAll(false); }),
+    ]),
+   ]);
+  }
+  if (ribbonTab === 'table-design') group('表格设计', [
+   button('表格底纹', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.setFill(id, solid(rgb('#E7ECF7'))); renderAll(false); }), 'tool-button', '表格底纹', 'background'),
+   button('无底纹', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.setFill(id, { type: 'none' }); renderAll(false); }), 'tool-button', '无底纹', 'background'),
+   button('边框', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.setStroke(id, { color: rgb('#24324B'), width: 1, dash: null, cap: 'butt', join: 'miter', compound: 'sng' }); renderAll(false); }), 'tool-button', '边框', 'shape-outline' as IconId),
+  ]);
+  if (ribbonTab === 'table-layout') group('表格布局', [
+   button('插入行', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.execute({ type: 'InsertRow', id }); renderAll(false); }), 'tool-button', '在末尾插入一行', 'table'),
+  ]);
+  const overflowItems: StudioMenuItem[] = [
+   command('overflow-save', '保存', 'save', () => persist(), '⌘/Ctrl+S'),
+   command('overflow-undo', '撤销', 'undo', () => { controller.undo(); renderAll(); }),
+   command('overflow-redo', '重做', 'redo', () => { controller.redo(); renderAll(); }),
+   command('overflow-textbox', '文本框', 'text', () => { const id = controller.addShape('rect'); if (id) controller.select({ kind: 'elements', ids: [id], enteredGroup: null }); renderAll(); }),
+   command('overflow-shape', '形状', 'shape', () => addShape('roundRect')),
+   command('overflow-table', '表格', 'table', () => { controller.addTable(3, 4); renderAll(); }),
+   command('overflow-image', '图片', 'image', () => chooseImage('insert')),
+   command('overflow-pane', '选择窗格', 'selection-pane', () => { inspectorTab = 'object'; renderAll(); }),
+   command('overflow-notes', '备注', 'notes', () => { inspectorTab = 'page'; renderAll(); }),
+   command('overflow-preview', '预览', 'preview', () => togglePreview()),
+  ];
+  const overflow = createDropdown(command('toolbar-overflow', '更多', 'more', () => undefined), overflowItems);
+  overflow.classList.add('toolbar-overflow');
+  toolbar.append(overflow);
  };
  renderOfficeToolbar();
  return;
@@ -702,7 +801,6 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  if (ribbonTab === 'transition') group('切换', [button('淡化', wrapAction(() => { controller.setTransition({ type: 'fade' }); renderAll(false); }), 'tool-button'), button('无', wrapAction(() => { controller.setTransition(null); renderAll(false); }), 'tool-button'), button('预览切换', wrapAction(() => controller.previewTransition()), 'tool-button')]);
  if (ribbonTab === 'animation') group('动画', [button('给选中对象加入淡入', wrapAction(() => addAnimation()), 'tool-button'), button('下一动画', wrapAction(() => { if (preview) void preview.session.nextStep?.(); }), 'tool-button')]);
  if (ribbonTab === 'show') group('放映', [button('预览', wrapAction(() => togglePreview()), 'preview-button')]);
- if (ribbonTab === 'review') group('审阅', [button('查找', wrapAction(() => { controller.openTextSearch({ mode: 'find' }); }), 'tool-button'), button('替换', wrapAction(() => { controller.openTextSearch({ mode: 'replace' }); }), 'tool-button')]);
  if (ribbonTab === 'view') group('视图', [button(controller.snapshot.snapping ? '关闭吸附' : '开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'), button('适应窗口', wrapAction(() => { applyStageZoom(true); renderAll(false); }), 'tool-button')]);
  }
     function renderInspector(): void { inspectorBody.replaceChildren();
@@ -744,9 +842,11 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  }, 'number'));
  grid.append(field);
  } inspectorBody.append(grid);
- if (record.src.kind === 'shape' || record.src.kind === 'image' || record.src.kind === 'table') inspectorBody.append(styleControls(id));
+ if (record.src.kind === 'shape') inspectorBody.append(shapeStyleControls(id));
+ if (record.src.kind === 'image') inspectorBody.append(imageStyleControls(id));
+ if (record.src.kind === 'table') inspectorBody.append(tableStyleControls(id));
  if (record.src.kind === 'shape' || record.src.kind === 'table') { const textArea = document.createElement('textarea');
- textArea.value = textOf(record);
+ textArea.value = textOfEffective(element);
  textArea.placeholder = '输入对象文字';
  textArea.setAttribute('aria-label', '对象文字');
  textArea.addEventListener('change', () => { controller.editText(id, textArea.value);
@@ -815,7 +915,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  controller.appendAnimations(slideId, [step]);
  renderAll();
  }
-    function styleControls(id: ElementId): HTMLElement { const group = document.createElement('div');
+    function shapeStyleControls(id: ElementId): HTMLElement { const group = document.createElement('div');
  group.className = 'inspector-section';
  const label = document.createElement('span');
  label.className = 'section-label';
@@ -829,6 +929,25 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  strokes.className = 'swatch-row';
  strokes.append(button('描边', wrapAction(() => { controller.setStroke(id, { color: rgb('#24324B'), width: 1.5, dash: null, cap: 'butt', join: 'miter', compound: 'sng' }); renderAll(); }), 'swatch-button'), button('无描边', wrapAction(() => { controller.setStroke(id, { type: 'none' }); renderAll(); }), 'swatch-button'));
  group.append(label, swatches, strokes);
+ return group;
+ }
+    function imageStyleControls(id: ElementId): HTMLElement { const group = document.createElement('div');
+ group.className = 'inspector-section';
+ const label = document.createElement('span');
+ label.className = 'section-label';
+ label.textContent = '图片格式';
+ group.append(button('替换图片', wrapAction(() => chooseImage('replace')), 'small-button', '替换图片', 'replace-image'), button('裁剪', wrapAction(() => { controller.startImageCrop(id); }), 'small-button', '裁剪', 'crop'), button('恢复裁剪', wrapAction(() => controller.clearImageCrop()), 'small-button', '恢复裁剪', 'crop'));
+ return group;
+ }
+    function tableStyleControls(id: ElementId): HTMLElement { const group = document.createElement('div');
+ group.className = 'inspector-section';
+ const label = document.createElement('span');
+ label.className = 'section-label';
+ label.textContent = '表格样式';
+ const swatches = document.createElement('div');
+ swatches.className = 'swatch-row';
+ [['浅蓝', '#E7ECF7'], ['白色', '#FFFFFF'], ['珊瑚', '#F4E1DA']].forEach(([name, color]) => swatches.append(button(name, wrapAction(() => { controller.setFill(id, solid(rgb(color))); renderAll(false); }), 'swatch-button', name, 'background')));
+ group.append(label, swatches, button('无边框', wrapAction(() => { controller.setStroke(id, { type: 'none' }); renderAll(false); }), 'small-button', '无边框', 'shape-outline'));
  return group;
  }
     function layerControls(id: ElementId): HTMLElement { const group = document.createElement('div');
@@ -863,13 +982,15 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  renderToolbar();
  renderInspector();
  const slideId = currentSlide();
+ const documentMeta = currentSession()?.editor.doc.meta;
+ editorHost.style.aspectRatio = documentMeta ? `${documentMeta.width} / ${documentMeta.height}` : '16 / 9';
  const index = currentSession()?.editor.doc.slideOrder.indexOf(slideId ?? '') ?? 0;
  stageTitle.replaceChildren();
  const title = document.createElement('div');
  title.innerHTML = `<span class="eyebrow">正在编辑 · web-ppt / OOXML</span><strong>${escapeText(asset?.title ?? '请打开课件')}</strong>`;
  const meta = document.createElement('span');
  meta.className = 'format-note';
- meta.textContent = `16:9 · 第 ${Math.max(0, index + 1)} / ${currentSession()?.editor.doc.slideOrder.length ?? 0} 页`;
+ meta.textContent = `${documentMeta ? `${(documentMeta.width / documentMeta.height).toFixed(2)}:1` : '16:9'} · 第 ${Math.max(0, index + 1)} / ${currentSession()?.editor.doc.slideOrder.length ?? 0} 页`;
  stageTitle.append(title, meta);
  stageFooter.textContent = `${controller.snapshot.status} · ${controller.snapshot.zoom.toFixed(2)}× · ${currentSession()?.editor.history.undoCount ?? 0} 个可撤销操作${published ? ` · 已发布 ${published.fingerprint.slice(0, 12)}` : ''}`;
  const pageNumber = (currentSession()?.editor.doc.slideOrder.indexOf(currentSlide() ?? '') ?? -1) + 1;
@@ -890,7 +1011,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    const next: WebPptPresentationAsset = { ...sourceAsset, source: saved.source, updatedAt: new Date().toISOString() };
    asset = next;
    thumbnailAsset = next;
-   await persistWebPptDraft(next);
+   await persistWebPptDraft(next, serverProject?.presentationId);
    if (serverProject) savePendingSyncMetadata(next, serverProject);
    try {
     await syncServerDraft(next);
@@ -938,7 +1059,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const validation = await engine.validate(saved);
  if (!validation.valid) throw new Error(`试课阻断：${validation.errors.join('、')}`);
  const runtimeIndex = await engine.buildRuntimeIndex(saved);
- await persistWebPptDraft(saved);
+ await persistWebPptDraft(saved, serverProject?.presentationId);
  await syncServerDraft(saved);
  const response = await serverJson(`/api/presentations/${encodeURIComponent(serverProject!.presentationId)}/rehearsal-session`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}) });
  const rehearsal = response.rehearsal;
@@ -955,7 +1076,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const validation = await engine.validate(saved);
  if (!validation.valid) throw new Error(`发布阻断：${validation.errors.join('、')}`);
  const runtimeIndex = await engine.buildRuntimeIndex(saved);
- await persistWebPptDraft(saved);
+ await persistWebPptDraft(saved, serverProject?.presentationId);
  await syncServerDraft(saved);
  const publishedResponse = await serverJson(`/api/presentations/${encodeURIComponent(serverProject!.presentationId)}/published`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ engine: saved.engine, document: { ...saved.document, deckId: saved.deckId }, runtimeIndex }) });
  const publishedRevision = publishedResponse.revision;
@@ -1078,11 +1199,18 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  } if (modifier && event.key.toLowerCase() === 'z') { event.preventDefault();
  event.shiftKey ? controller.redo() : controller.undo();
  renderAll();
+ } if (modifier && event.key.toLowerCase() === 'y') { event.preventDefault(); controller.redo(); renderAll();
+ } if (modifier && event.key.toLowerCase() === 'x' && !isTypingTarget(event.target)) { event.preventDefault(); controller.cut(); renderAll();
  } if (modifier && event.key.toLowerCase() === 'c' && !isTypingTarget(event.target)) { event.preventDefault();
  controller.copy();
  } if (modifier && event.key.toLowerCase() === 'v' && !isTypingTarget(event.target)) { event.preventDefault();
  controller.paste();
  renderAll();
+ } if (modifier && event.key.toLowerCase() === 'd' && !isTypingTarget(event.target)) { event.preventDefault(); if (controller.copy()) controller.paste(); renderAll();
+ } if (modifier && event.key.toLowerCase() === 'g' && !isTypingTarget(event.target)) { event.preventDefault(); if (event.shiftKey) { const id = controller.selectedIds()[0]; if (id) controller.ungroup(id); } else controller.group(controller.selectedIds()); renderAll();
+ } if (modifier && event.key.toLowerCase() === 'f' && !isTypingTarget(event.target)) { event.preventDefault(); controller.openTextSearch({ mode: 'find' });
+ } if (modifier && event.key.toLowerCase() === 'h' && !isTypingTarget(event.target)) { event.preventDefault(); controller.openTextSearch({ mode: 'replace' });
+ } if (event.key === 'Escape') { controller.cancelFormatPainter(); controller.closeTextSearch();
  } if ((event.key === 'Delete' || event.key === 'Backspace') && !isTypingTarget(event.target)) { controller.removeSelected();
  renderAll();
  } });
@@ -1093,7 +1221,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   try {
    const pending = loadPendingSyncMetadata(remoteId ?? undefined);
    if (remoteId && pending?.presentationId === remoteId) {
-    draft = await loadWebPptDraft();
+    draft = await loadWebPptDraft(pending.presentationId);
     if (draft) { serverProject = { presentationId: pending.presentationId, currentDraftRevision: pending.baseDraftRevision }; saveServerProjectMetadata(serverProject); }
    }
    if (!draft) draft = remoteId ? await loadRemotePresentation(remoteId) : await loadWebPptDraft();
