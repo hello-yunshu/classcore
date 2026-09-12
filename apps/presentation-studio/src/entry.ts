@@ -727,7 +727,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    ]);
   }
   if (ribbonTab === 'insert') {
-   group('文本', [button('文本框', wrapAction(() => { const id = controller.addTextBox(); if (!id) { setStatus('当前课件没有可用的文本样式', true); return; } controller.select({ kind: 'elements', ids: [id], enteredGroup: null }); renderAll(); controller.enterTextEdit(id); }), 'tool-button', '文本框', 'text')]);
+   group('文本', [button('文本框', wrapAction(() => { const id = controller.addTextBox(); if (!id) { setStatus('当前课件没有可用的文本样式', true); return; } controller.select({ kind: 'elements', ids: [id], enteredGroup: null }); renderAll(); controller.enterTextEdit(id); renderAll(false); }), 'tool-button', '文本框', 'text')]);
    group('图片', [createSplitButton(command('image', '图片', 'image', () => chooseImage('insert')), [
     command('replace-image', '替换图片', 'replace-image', () => chooseImage('replace')),
     command('image-options', '图片选项', 'image', () => { inspectorTab = 'object'; renderAll(); }),
@@ -1237,7 +1237,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     else setStatus('等待同步');
    }
    savedGeneration = generation;
-   renderAll(false);
+   refreshAfterEditorChange();
    if (editGeneration > generation) setStatus('正在保存');
   } while (editGeneration > savedGeneration);
   if (!serverSyncPending) setStatus(`已保存 ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
@@ -1406,8 +1406,19 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   setStatus('正在保存');
   autosaveTimer = setTimeout(() => { autosaveTimer = null; void persist(); }, 1500);
  }
- webPpt.subscribe(() => { editGeneration += 1; renderAll(false); scheduleThumbnailRefresh(); scheduleAutosave(); });
- controller.subscribe(() => { editGeneration += 1; renderAll(false); scheduleThumbnailRefresh(); scheduleAutosave(); });
+ const nativeTextInputActive = (): boolean => {
+  const active = document.activeElement as HTMLElement | null;
+  return active?.isContentEditable === true && active.closest('.web-ppt-stage') === editorHost;
+ };
+ const refreshAfterEditorChange = (): void => {
+  // web-ppt owns the native contenteditable during text input. Rebuilding the
+  // Studio chrome in the same turn can race IME composition and make the
+  // browser drop its active input target. The editor view already updates the
+  // canvas and text layer; refresh the outer UI after focus leaves editing.
+  if (!nativeTextInputActive()) renderAll(false);
+ };
+ webPpt.subscribe(() => { editGeneration += 1; refreshAfterEditorChange(); scheduleThumbnailRefresh(); scheduleAutosave(); });
+ controller.subscribe(() => { editGeneration += 1; refreshAfterEditorChange(); scheduleThumbnailRefresh(); scheduleAutosave(); });
  window.addEventListener('keydown', event => { const modifier = event.metaKey || event.ctrlKey;
  if (modifier && event.key.toLowerCase() === 's') { event.preventDefault();
  void persist();

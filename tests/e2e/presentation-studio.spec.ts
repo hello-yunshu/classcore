@@ -59,6 +59,12 @@ test.describe('Presentation Studio command surface', () => {
         await page.getByRole('button', { name: '文本框', exact: true }).click();
         const editor = page.locator('[contenteditable="true"]');
         await expect(editor).toBeVisible();
+        await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute('contenteditable'))).toBe('true');
+        // Text input replaces the editor's internal DOM view as it commits.
+        // The Studio shell must not compete for focus while that native input
+        // target is active, otherwise IME composition is cancelled mid-entry.
+        await page.keyboard.type('连续输入');
+        await expect(page.locator('[data-ppt-text-editor]')).toContainText('连续输入');
         await editor.fill('课堂标题');
         await expect(editor).toHaveText('课堂标题');
         await expect(page.locator('[data-ppt-text-editor]')).toContainText('课堂标题');
