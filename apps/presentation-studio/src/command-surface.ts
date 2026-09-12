@@ -27,6 +27,7 @@ export interface StudioCommand {
 export interface StudioMenuItem extends StudioCommand {
     submenu?: readonly StudioMenuItem[];
     separator?: boolean;
+    preview?: string;
 }
 
 export type CommandDensity = 'icon-only' | 'compact' | 'large';
@@ -90,6 +91,12 @@ function makeMenuItem(item: StudioMenuItem, owner: HTMLButtonElement): HTMLDivEl
     }
     const button = createCommandButton(item, 'compact', 'command-menu-item');
     button.setAttribute('role', 'menuitem');
+    if (item.preview) {
+        const preview = document.createElement('span');
+        preview.className = `gallery-preview ${item.preview}`;
+        button.querySelector('.studio-icon')?.remove();
+        button.prepend(preview);
+    }
     if (!item.submenu) wrapper.append(button);
     else {
         button.setAttribute('aria-haspopup', 'menu');
@@ -136,10 +143,10 @@ function makeMenuItem(item: StudioMenuItem, owner: HTMLButtonElement): HTMLDivEl
     return wrapper;
 }
 
-export function createDropdown(command: StudioCommand, items: readonly StudioMenuItem[]): HTMLElement {
+export function createDropdown(command: StudioCommand, items: readonly StudioMenuItem[], extraClass = ''): HTMLElement {
     ensureMenuDismissListener();
     const wrapper = document.createElement('div');
-    wrapper.className = 'command-dropdown';
+    wrapper.className = `command-dropdown${extraClass ? ` ${extraClass}` : ''}`;
     const trigger = createCommandButton(command, 'compact', 'command-dropdown-trigger');
     trigger.setAttribute('aria-haspopup', 'menu');
     trigger.setAttribute('aria-expanded', 'false');
@@ -184,6 +191,12 @@ export function createSplitButton(primary: StudioCommand, items: readonly Studio
 }
 
 export interface GalleryItem extends StudioCommand { preview?: string; }
+
+export function createGalleryDropdown(command: StudioCommand, items: readonly GalleryItem[], columns = 4): HTMLElement {
+    const picker = createDropdown(command, items, 'ribbon-picker gallery-picker');
+    picker.style.setProperty('--gallery-columns', String(columns));
+    return picker;
+}
 
 export function createGallery(id: string, label: string, items: readonly GalleryItem[], columns = 6): HTMLElement {
     const section = document.createElement('div');

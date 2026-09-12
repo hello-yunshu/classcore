@@ -284,7 +284,7 @@ export function computeStageFitZoom(viewportWidth: number, viewportHeight: numbe
 
 async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  commandSurface = await import('./command-surface.js');
- const { createCommandButton, createDropdown, createGallery, createSplitButton } = commandSurface;
+ const { createCommandButton, createDropdown, createGallery, createGalleryDropdown, createSplitButton } = commandSurface;
     const { PresentationStudioController } = await import('./controller.js');
     const templateUrl = '/assets/presentation-webppt-blank.pptx';
     const engine = new WebPptPresentationEngineAdapter(async () => { const response = await fetch(templateUrl);
@@ -732,7 +732,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     command('replace-image', '替换图片', 'replace-image', () => chooseImage('replace')),
     command('image-options', '图片选项', 'image', () => { inspectorTab = 'object'; renderAll(); }),
    ])]);
-   group('形状', [createGallery('shape-gallery', '形状库', [
+   const shapeItems = [
     { ...command('shape-rect', '矩形', 'shape', () => addShape('rect')), preview: 'preview-rect' },
     { ...command('shape-roundrect', '圆角矩形', 'shape', () => addShape('roundRect')), preview: 'preview-roundrect' },
     { ...command('shape-ellipse', '椭圆', 'shape', () => addShape('ellipse')), preview: 'preview-ellipse' },
@@ -744,11 +744,14 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     { ...command('shape-cloud', '云形', 'shape', () => addShape('cloud')), preview: 'preview-cloud' },
     { ...command('shape-arrow', '下箭头', 'shape', () => addShape('downArrow')), preview: 'preview-arrow' },
     { ...command('shape-line', '直线', 'shape', () => addShape('line')), preview: 'preview-line' },
-   ], 4), createGallery('table-picker', '插入表格', Array.from({ length: 16 }, (_unused, index) => {
+   ];
+   const tableItems = Array.from({ length: 16 }, (_unused, index) => {
     const rows = Math.floor(index / 4) + 1;
     const cols = index % 4 + 1;
     return { ...command(`table:${rows}x${cols}`, `${rows} × ${cols}`, 'table', () => { controller.addTable(rows, cols); renderAll(); }), preview: `preview-table-${rows}-${cols}` };
-   }), 4), button('插入表格', wrapAction(() => {
+   });
+   group('形状', [createGalleryDropdown(command('shape-picker', '形状', 'shape', () => undefined), shapeItems, 3)]);
+   group('表格', [createGalleryDropdown(command('table-picker', '表格', 'table', () => undefined), tableItems, 4), button('插入表格', wrapAction(() => {
     const rows = Number.parseInt(globalThis.prompt?.('行数', '3') ?? '3', 10);
     const cols = Number.parseInt(globalThis.prompt?.('列数', '3') ?? '3', 10);
     if (Number.isFinite(rows) && Number.isFinite(cols)) controller.addTable(Math.max(1, Math.min(10, rows)), Math.max(1, Math.min(10, cols)));

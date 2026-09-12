@@ -40,9 +40,15 @@ test.describe('Presentation Studio command surface', () => {
 
     test('keeps local icons and exposes editor controls without ellipsis placeholders', async ({ page }) => {
         await page.getByRole('tab', { name: '插入' }).click();
-        await expect(page.getByRole('listbox', { name: '形状库' })).toBeVisible();
+        await expect(page.getByRole('button', { name: '形状', exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: '表格', exact: true })).toBeVisible();
+        await page.getByRole('button', { name: '形状', exact: true }).click();
+        await expect(page.getByRole('menuitem', { name: '矩形', exact: true })).toBeVisible();
+        await expect(page.locator('.gallery-picker .preview-rect')).toBeVisible();
+        await page.keyboard.press('Escape');
+        await page.getByRole('button', { name: '表格', exact: true }).click();
+        await expect(page.getByRole('menuitem', { name: '4 × 4', exact: true })).toBeVisible();
         expect(await page.locator('.studio-icon').count()).toBeGreaterThan(8);
-        await expect(page.locator('.gallery-item .studio-icon')).toHaveCount(0);
         await expect(page.locator('.toolbar-label')).toHaveCount(0);
         await expect(page.getByRole('button', { name: '图片' }).first()).toBeVisible();
         await expect(page.locator('.context-toolbar')).not.toContainText('...');
