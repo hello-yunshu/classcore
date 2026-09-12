@@ -114,14 +114,27 @@ export class PresentationStudioController {
     addTextBox(): ElementId | null {
         const slideId = this.requireSlide();
         const editor = this.requireEditor();
-        const sourceId = editor.doc.slides[slideId]?.children.find((id: ElementId) => {
+        const sourceId = editor.doc.slideOrder.flatMap((id: SlideId) => editor.doc.slides[id]?.children ?? []).find((id: ElementId) => {
             const element = editor.effectiveElement(id);
             return element.kind === 'shape' && Boolean(element.text);
         });
-        if (!sourceId) return null;
-        const payload = copyElements(editor.doc, [sourceId]);
-        this.execute({ type: 'PasteElements', payload, at: { parentId: slideId, x: 320, y: 220 } });
-        const id = editor.selection.kind === 'elements' ? editor.selection.ids[0] ?? null : null;
+        let id: ElementId | null = null;
+        if (sourceId) {
+            const payload = copyElements(editor.doc, [sourceId]);
+            this.execute({ type: 'PasteElements', payload, at: { parentId: slideId, x: 320, y: 220 } });
+            id = editor.selection.kind === 'elements' ? editor.selection.ids[0] ?? null : null;
+        } else {
+            id = this.addShape('rect');
+            if (id) {
+                this.setStroke(id, { type: 'none' });
+                editor.exec({ type: 'SetBodyProps', id, props: { anchor: 'middle' } });
+                editor.exec({
+                    type: 'EditText',
+                    id,
+                    ops: [{ type: 'replace', from: { p: 0, r: 0, off: 0 }, to: { p: 0, r: 0, off: 0 }, text: '' }],
+                });
+            }
+        }
         if (!id) return null;
         this.setTransform(id, { x: 320, y: 220, w: 320, h: 128 });
         this.editText(id, '');

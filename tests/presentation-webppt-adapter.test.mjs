@@ -110,6 +110,24 @@ test('Studio insertion keeps new shapes and tables neutral until styled explicit
   controller.dispose();
 });
 
+test('Studio text box insertion does not require an existing text-shaped source', async () => {
+  const bytes = await templateBytes();
+  const adapter = new WebPptPresentationEngineAdapter(async () => bytes);
+  const asset = await adapter.createBlank('Standalone text box gate');
+  const webPpt = createWebPptAdapter();
+  await webPpt.applyBinding({ source: asset.source.bytes, openOptions: { idPrefix: asset.document.idPrefix }, mode: 'edit' });
+  const controller = new PresentationStudioController(webPpt);
+  const slide = controller.editor.doc.slides[controller.slideId];
+  for (const id of [...(slide?.children ?? [])]) controller.execute({ type: 'RemoveElement', id });
+  const textBoxId = controller.addTextBox();
+  assert.ok(textBoxId);
+  assert.equal(controller.editor.effectiveElement(textBoxId).kind, 'shape');
+  assert.ok(controller.editor.effectiveElement(textBoxId).text);
+  assert.deepEqual(controller.editor.effectiveElement(textBoxId).fill, { type: 'none' });
+  assert.equal(controller.editor.effectiveElement(textBoxId).stroke, null);
+  controller.dispose();
+});
+
 test('Studio animation insertion appends and explicit empty steps clear the timeline', async () => {
   const bytes = await templateBytes();
   const adapter = new WebPptPresentationEngineAdapter(async () => bytes);
