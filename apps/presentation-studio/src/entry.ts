@@ -282,6 +282,66 @@ export function computeStageFitZoom(viewportWidth: number, viewportHeight: numbe
     return Math.min(viewportWidth / presentationWidth, viewportHeight / presentationHeight);
 }
 
+export interface StageViewportLayout {
+    contentWidth: number;
+    contentHeight: number;
+    stageLeft: number;
+    stageTop: number;
+}
+
+export interface StageViewportFrame {
+    width: number;
+    height: number;
+}
+
+/** Let the viewport hug the stage until it reaches the available editing area. */
+export function computeStageViewportFrame(
+    availableWidth: number,
+    availableHeight: number,
+    presentationWidth: number,
+    presentationHeight: number,
+    zoom: number,
+    borderWidth = 0,
+    borderHeight = 0,
+    padding = 0,
+): StageViewportFrame {
+    const safeAvailableWidth = Math.max(0, Number.isFinite(availableWidth) ? availableWidth : 0);
+    const safeAvailableHeight = Math.max(0, Number.isFinite(availableHeight) ? availableHeight : 0);
+    const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+    const safeBorderWidth = Math.max(0, Number.isFinite(borderWidth) ? borderWidth : 0);
+    const safeBorderHeight = Math.max(0, Number.isFinite(borderHeight) ? borderHeight : 0);
+    const safePadding = Math.max(0, Number.isFinite(padding) ? padding : 0);
+    return {
+        width: Math.min(safeAvailableWidth, presentationWidth * safeZoom + safePadding * 2 + safeBorderWidth),
+        height: Math.min(safeAvailableHeight, presentationHeight * safeZoom + safePadding * 2 + safeBorderHeight),
+    };
+}
+
+/** Keep a zoomed presentation fully reachable while centering it on axes that still fit. */
+export function computeStageViewportLayout(
+    viewportWidth: number,
+    viewportHeight: number,
+    presentationWidth: number,
+    presentationHeight: number,
+    zoom: number,
+    padding = 20,
+): StageViewportLayout {
+    const safeViewportWidth = Math.max(0, Number.isFinite(viewportWidth) ? viewportWidth : 0);
+    const safeViewportHeight = Math.max(0, Number.isFinite(viewportHeight) ? viewportHeight : 0);
+    const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+    const safePadding = Math.max(0, Number.isFinite(padding) ? padding : 0);
+    const scaledWidth = Math.max(0, presentationWidth * safeZoom);
+    const scaledHeight = Math.max(0, presentationHeight * safeZoom);
+    const contentWidth = Math.max(safeViewportWidth, scaledWidth + safePadding * 2);
+    const contentHeight = Math.max(safeViewportHeight, scaledHeight + safePadding * 2);
+    return {
+        contentWidth,
+        contentHeight,
+        stageLeft: (contentWidth - scaledWidth) / 2,
+        stageTop: (contentHeight - scaledHeight) / 2,
+    };
+}
+
 async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  commandSurface = await import('./command-surface.js');
  const { createCommandButton, createDropdown, createGallery, createGalleryDropdown, createSplitButton } = commandSurface;
@@ -317,6 +377,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  let imageInputMode: 'insert' | 'replace' = 'insert';
  let fitZoom = 1;
  let stageZoomFactor = 1;
+ const stageViewportPadding = 20;
  let canvasTextInput: { id: ElementId; element: HTMLTextAreaElement; reposition: () => void } | null = null;
  let canvasTextCommitPending = false;
     const thumbnailSessions = new Map<string, Awaited<ReturnType<typeof engine.mountPlayer>>>();
@@ -328,7 +389,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  header.className = 'studio-header';
  const brand = document.createElement('div');
  brand.className = 'studio-brand';
- brand.innerHTML = '<span class="brand-square">C</span><div><span class="eyebrow">Authoring Studio · web-ppt</span><h1>课堂课件工作台</h1></div>';
+ brand.innerHTML = '<span class="brand-square">C</span><div><h1>课堂课件工作台</h1><span class="brand-meta">Authoring Studio · web-ppt</span></div>';
  const documentBar = document.createElement('div');
  documentBar.className = 'document-bar';
  const titleInput = document.createElement('input');
@@ -368,15 +429,33 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  selectionPaneHost.className = 'selection-pane-host';
  selectionPaneHost.setAttribute('aria-label', '选择窗格');
  const syncSelectionPaneIcons = (): void => {
-  selectionPaneHost.querySelectorAll<HTMLButtonElement>('button[aria-label]').forEach(button => {
+  selectionPaneHost.querySelectorAll<HTMLElement>('[data-pane-element]').forEach(row => {
+   const id = row.dataset.paneElement as ElementId | undefined;
+   if (!id) return;
+   const displayName = objectDisplayName(id);
+   const name = row.querySelector<HTMLElement>('[data-pane-name]');
+   if (name && name.textContent !== displayName) name.textContent = displayName;
+   const rowLabel = row.getAttribute('aria-label') ?? '';
+   if (rowLabel) {
+    const parts = rowLabel.split('，');
+    if (parts.length >= 2) row.setAttribute('aria-label', [displayName, displayName, ...parts.slice(2)].join('，'));
+   }
+   row.querySelectorAll<HTMLButtonElement>('button[aria-label]').forEach(button => {
    const label = button.getAttribute('aria-label') ?? '';
-   const iconId: IconId | null = label.slice(0, 4) === '隐藏对象' ? 'hide' : label.slice(0, 4) === '显示对象' ? 'show' : label.slice(0, 4) === '锁定对象' ? 'lock' : label.slice(0, 4) === '解锁对象' ? 'unlock' : null;
+   const action = label.split('：')[0];
+   const iconId: IconId | null = action === '隐藏对象' ? 'hide' : action === '显示对象' ? 'show' : action === '锁定对象' ? 'lock' : action === '解锁对象' ? 'unlock' : null;
    if (!iconId) return;
+   const nextLabel = `${action}：${displayName}`;
+   if (label !== nextLabel) {
+    button.setAttribute('aria-label', nextLabel);
+    button.title = nextLabel;
+   }
    const expectedClass = `studio-icon-${iconId}`;
    if (button.querySelector(`.${expectedClass}`)) return;
-   button.replaceChildren(commandSurface!.createIcon(iconId, label));
+   button.replaceChildren(commandSurface!.createIcon(iconId, nextLabel));
    button.classList.add('selection-pane-icon-button');
-   button.title = label;
+   button.title = nextLabel;
+   });
   });
  };
  const selectionPaneObserver = new MutationObserver(syncSelectionPaneIcons);
@@ -391,27 +470,38 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  sceneList.className = 'scene-list';
  const stageTitle = document.createElement('div');
  stageTitle.className = 'stage-titlebar';
+ const stageViewportSlot = document.createElement('div');
+ stageViewportSlot.className = 'stage-viewport-slot';
  const editorHost = document.createElement('div');
  editorHost.className = 'studio-stage web-ppt-stage';
+ editorHost.tabIndex = 0;
+ editorHost.setAttribute('aria-label', '课件画布，可使用滚轮或触控板浏览放大的页面');
+ stageViewportSlot.append(editorHost);
  const stageFooter = document.createElement('div');
  stageFooter.className = 'stage-footer';
- stagePanel.append(stageTitle, editorHost, stageFooter);
+ stagePanel.append(stageTitle, stageViewportSlot, stageFooter);
  const notesPane = document.createElement('section');
  notesPane.className = 'notes-pane';
  const notesHeader = document.createElement('div');
  notesHeader.className = 'notes-header';
  const notesTitle = document.createElement('strong');
  notesTitle.textContent = '备注';
+ const notesMeta = document.createElement('span');
+ notesMeta.className = 'notes-meta';
+ notesMeta.textContent = '仅备课可见';
+ const notesHeading = document.createElement('div');
+ notesHeading.className = 'notes-heading';
+ notesHeading.append(notesTitle, notesMeta);
  const notesToggle = document.createElement('button');
  notesToggle.type = 'button';
  notesToggle.className = 'notes-toggle';
  notesToggle.setAttribute('aria-label', '展开或收起备注');
  notesToggle.addEventListener('click', () => { notesExpanded = !notesExpanded; renderAll(false); });
- notesHeader.append(notesTitle, notesToggle);
+ notesHeader.append(notesHeading, notesToggle);
  const notesEditor = document.createElement('textarea');
  notesEditor.className = 'notes-editor';
  notesEditor.setAttribute('aria-label', '当前页面备注');
- notesEditor.placeholder = '教师备注不会出现在大屏放映中';
+ notesEditor.placeholder = '记录讲解提示、提问或板书安排';
  notesEditor.addEventListener('change', () => { const id = currentSlide(); if (id) controller.setNotes(id, notesEditor.value); renderAll(false); });
  notesPane.append(notesHeader, notesEditor);
  stagePanel.append(notesPane);
@@ -464,8 +554,16 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   renderAll(false);
   beginCanvasTextInput(id);
  }, true);
- const stageResizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => { applyStageZoom(); });
- stageResizeObserver?.observe(editorHost);
+ let stageZoomFrame: number | null = null;
+ const scheduleStageZoom = (): void => {
+  if (stageZoomFrame !== null) cancelAnimationFrame(stageZoomFrame);
+  stageZoomFrame = requestAnimationFrame(() => {
+   stageZoomFrame = null;
+   applyStageZoom();
+  });
+ };
+ const stageResizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleStageZoom);
+ stageResizeObserver?.observe(stageViewportSlot);
     function currentSession() { return controller.session;
  } function currentSlide(): SlideId | null { return controller.slideId ?? currentSession()?.editor.doc.slideOrder[0] ?? null;
  } function selectedIds() { return controller.selectedIds();
@@ -475,6 +573,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   if (!active) return;
   canvasTextInput = null;
   window.removeEventListener('resize', active.reposition);
+  editorHost.removeEventListener('scroll', active.reposition);
   const value = active.element.value;
   active.element.remove();
   if (!commit || !currentSession()?.editor.doc.elements[active.id]) return;
@@ -501,8 +600,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    if (!textInput.isConnected || !target.isConnected) return;
    const hostRect = editorHost.getBoundingClientRect();
    const targetRect = target.getBoundingClientRect();
-   textInput.style.left = `${targetRect.left - hostRect.left}px`;
-   textInput.style.top = `${targetRect.top - hostRect.top}px`;
+   textInput.style.left = `${targetRect.left - hostRect.left + editorHost.scrollLeft}px`;
+   textInput.style.top = `${targetRect.top - hostRect.top + editorHost.scrollTop}px`;
    textInput.style.width = `${Math.max(80, targetRect.width)}px`;
    textInput.style.height = `${Math.max(36, targetRect.height)}px`;
    textInput.style.fontSize = `${Math.max(16, 32 * controller.snapshot.zoom)}px`;
@@ -524,28 +623,120 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   editorHost.append(textInput);
   reposition();
   window.addEventListener('resize', reposition);
+  editorHost.addEventListener('scroll', reposition);
   textInput.focus({ preventScroll: true });
   textInput.select();
   return true;
  } function setStatus(message: string, error = false): void { saveState.textContent = message;
  saveState.className = `save-state${error ? ' status-error' : ''}`;
  }
+ function readStageBoxMetrics(element: HTMLElement): { width: number; height: number; borderWidth: number; borderHeight: number } {
+  const rect = element.getBoundingClientRect();
+  const style = getComputedStyle(element);
+  const borderWidth = Number.parseFloat(style.borderLeftWidth) + Number.parseFloat(style.borderRightWidth);
+  const borderHeight = Number.parseFloat(style.borderTopWidth) + Number.parseFloat(style.borderBottomWidth);
+  return { width: rect.width, height: rect.height, borderWidth, borderHeight };
+ }
+ function readStageViewportSize(): { width: number; height: number } {
+  const { width, height, borderWidth, borderHeight } = readStageBoxMetrics(editorHost);
+  return { width: width - borderWidth, height: height - borderHeight };
+ }
  function readStageFitZoom(): number {
   const meta = currentSession()?.editor.doc.meta;
-  return meta ? computeStageFitZoom(editorHost.clientWidth, editorHost.clientHeight, meta.width, meta.height) : 1;
+  if (!meta) return 1;
+  const slot = readStageBoxMetrics(stageViewportSlot);
+  const host = readStageBoxMetrics(editorHost);
+  return computeStageFitZoom(
+   slot.width - host.borderWidth,
+   slot.height - host.borderHeight,
+   meta.width,
+   meta.height,
+  );
+ }
+ function sizeStageViewport(zoom: number): void {
+  const meta = currentSession()?.editor.doc.meta;
+  if (!meta) return;
+  const slot = readStageBoxMetrics(stageViewportSlot);
+  const host = readStageBoxMetrics(editorHost);
+  const isOverflowing = zoom > fitZoom + .001;
+  const padding = isOverflowing ? stageViewportPadding : 0;
+  const frame = computeStageViewportFrame(
+   slot.width,
+   slot.height,
+   meta.width,
+   meta.height,
+   zoom,
+   host.borderWidth,
+   host.borderHeight,
+   padding,
+  );
+  editorHost.style.width = `${frame.width}px`;
+  editorHost.style.height = `${frame.height}px`;
+  editorHost.classList.toggle('is-overflowing', isOverflowing);
+ }
+ function captureStageViewportAnchor(): { x: number; y: number } | null {
+  const viewElement = webPpt.snapshot.view?.element;
+  const stage = viewElement?.querySelector<HTMLElement>('[data-ppt-stage]');
+  const zoom = webPpt.snapshot.zoom;
+  if (!viewElement || !stage || !Number.isFinite(zoom) || zoom <= 0) return null;
+  return {
+   x: (editorHost.scrollLeft + editorHost.clientWidth / 2 - (Number.parseFloat(stage.style.left) || 0)) / zoom,
+   y: (editorHost.scrollTop + editorHost.clientHeight / 2 - (Number.parseFloat(stage.style.top) || 0)) / zoom,
+  };
+ }
+ function layoutStageViewport(zoom: number, anchor: { x: number; y: number } | null = null): void {
+  const meta = currentSession()?.editor.doc.meta;
+  const viewElement = webPpt.snapshot.view?.element;
+  const stage = viewElement?.querySelector<HTMLElement>('[data-ppt-stage]');
+  if (!meta || !viewElement || !stage) return;
+  const viewportPadding = zoom > fitZoom + .001 ? stageViewportPadding : 0;
+  const viewport = readStageViewportSize();
+  const layout = computeStageViewportLayout(
+   viewport.width,
+   viewport.height,
+   meta.width,
+   meta.height,
+   zoom,
+   viewportPadding,
+  );
+  viewElement.style.width = `${layout.contentWidth}px`;
+  viewElement.style.height = `${layout.contentHeight}px`;
+  viewElement.style.overflow = 'visible';
+  stage.style.position = 'absolute';
+  stage.style.left = `${layout.stageLeft}px`;
+  stage.style.top = `${layout.stageTop}px`;
+  if (anchor) {
+   editorHost.scrollLeft = layout.stageLeft + anchor.x * zoom - editorHost.clientWidth / 2;
+   editorHost.scrollTop = layout.stageTop + anchor.y * zoom - editorHost.clientHeight / 2;
+  }
  }
  function applyStageZoom(resetFactor = false): void {
   if (resetFactor) stageZoomFactor = 1;
+  const anchor = resetFactor ? null : captureStageViewportAnchor();
   fitZoom = readStageFitZoom();
   const nextZoom = Math.min(2, Math.max(.1, fitZoom * stageZoomFactor));
-  if (!webPpt.snapshot.view || Math.abs(webPpt.snapshot.zoom - nextZoom) < .001) return;
-  controller.setZoom(nextZoom);
-  renderAll(false);
+  if (!webPpt.snapshot.view) return;
+  if (Math.abs(webPpt.snapshot.zoom - nextZoom) >= .001) {
+   controller.setZoom(nextZoom);
+   renderAll(false);
+  }
+  sizeStageViewport(nextZoom);
+  layoutStageViewport(nextZoom, anchor);
+  if (resetFactor) {
+   editorHost.scrollLeft = 0;
+   editorHost.scrollTop = 0;
+  }
  }
  function changeStageZoom(delta: number): void {
   fitZoom = readStageFitZoom();
-  stageZoomFactor = Math.max(.25, Math.min(4, stageZoomFactor + delta));
-  applyStageZoom();
+  const currentZoom = controller.snapshot.zoom;
+  const nextZoom = Math.min(2, Math.max(.1, currentZoom + delta));
+  stageZoomFactor = nextZoom / Math.max(.01, fitZoom);
+  if (Math.abs(currentZoom - nextZoom) < .001) return;
+  const anchor = captureStageViewportAnchor();
+  controller.setZoom(nextZoom);
+  sizeStageViewport(nextZoom);
+  layoutStageViewport(nextZoom, anchor);
  }
  function renderRibbonTabs(): void {
   ribbonTabs.replaceChildren();
@@ -671,14 +862,24 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const active = currentSlide();
  scenePanel.replaceChildren();
  const heading = document.createElement('div');
- heading.className = 'panel-heading';
- heading.innerHTML = `<span>页面</span><span class="count-pill">${slides.length}</span>`;
- scenePanel.append(heading, sceneList);
+ heading.className = 'panel-heading scene-panel-heading';
+ const headingTitle = document.createElement('span');
+ headingTitle.textContent = '页面';
+ const count = document.createElement('span');
+ count.className = 'count-pill';
+ count.textContent = `${slides.length} 页`;
+ count.setAttribute('aria-label', `${slides.length} 个页面`);
+ heading.append(headingTitle, count);
+ const intro = document.createElement('p');
+ intro.className = 'scene-panel-intro';
+ intro.textContent = '选择页面，快速调整顺序和内容。';
+ scenePanel.append(heading, intro, sceneList);
  sceneList.replaceChildren();
  slides.forEach((slideId: SlideId, index: number) => { const item = document.createElement('button');
  item.type = 'button';
  item.className = `scene-thumb${slideId === active ? ' active' : ''}`;
  item.setAttribute('aria-label', `第 ${index + 1} 页`);
+ item.setAttribute('aria-current', slideId === active ? 'page' : 'false');
  item.addEventListener('click', () => { webPpt.setView({ slideId, mode: 'edit' });
  renderAll();
  });
@@ -689,15 +890,30 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  thumb.className = 'scene-mini-canvas';
  thumb.style.aspectRatio = slideRatio;
  thumb.dataset.thumbnailHost = slideId;
- item.append(number, thumb);
+ const thumbContent = document.createElement('span');
+ thumbContent.className = 'scene-thumb-content';
+ const caption = document.createElement('span');
+ caption.className = 'scene-thumb-caption';
+ const label = document.createElement('span');
+ label.className = 'scene-thumb-label';
+ label.textContent = `第 ${index + 1} 页`;
+ caption.append(label);
+ if (slideId === active) {
+  const state = document.createElement('span');
+  state.className = 'scene-thumb-state';
+  state.textContent = '当前';
+  caption.append(state);
+ }
+ thumbContent.append(thumb, caption);
+ item.append(number, thumbContent);
  sceneList.append(item);
  });
  const actions = document.createElement('div');
  actions.className = 'scene-actions';
- actions.append(button('+ 新页面', wrapAction(() => { const id = controller.addSlide();
+ actions.append(button('新建页面', wrapAction(() => { const id = controller.addSlide();
  if (id) webPpt.setView({ slideId: id, mode: 'edit' });
  renderAll();
- }), 'primary-button', '新建页面', 'new-slide'), button('复制', wrapAction(() => { const id = currentSlide();
+ }), 'primary-button', '新建页面', 'new-slide'), button('复制页面', wrapAction(() => { const id = currentSlide();
  if (!id) return;
  const copy = controller.duplicateSlide(id);
  if (copy) webPpt.setView({ slideId: copy, mode: 'edit' });
@@ -705,16 +921,25 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  }), 'small-button', '复制页面', 'copy'));
  const reorder = document.createElement('div');
  reorder.className = 'scene-reorder';
- reorder.append(button('上移', wrapAction(() => { const id = currentSlide();
+ const reorderTitle = document.createElement('span');
+ reorderTitle.className = 'scene-reorder-title';
+ reorderTitle.textContent = '页面顺序';
+ const reorderActions = document.createElement('div');
+ reorderActions.className = 'scene-reorder-actions';
+ reorderActions.append(button('上移', wrapAction(() => { const id = currentSlide();
  if (id) controller.moveSlide(id, -1);
  renderAll();
  }), 'small-button', '上移页面', 'arrange'), button('下移', wrapAction(() => { const id = currentSlide();
  if (id) controller.moveSlide(id, 1);
  renderAll();
- }), 'small-button', '下移页面', 'arrange'), button('删除页', wrapAction(() => { const id = currentSlide();
+ }), 'small-button', '下移页面', 'arrange'));
+ const deletePage = button('删除页面', wrapAction(() => { const id = currentSlide();
  if (id) controller.removeSlide(id);
  renderAll();
- }), 'danger-button', '删除页面', 'delete'));
+ }), 'danger-button', slides.length <= 1 ? '至少保留一个页面' : '删除页面', 'delete');
+ deletePage.disabled = slides.length <= 1;
+ reorderActions.append(deletePage);
+ reorder.append(reorderTitle, reorderActions);
  scenePanel.append(actions, reorder);
  if (updateThumbnails) void syncThumbnails();
  }
@@ -875,14 +1100,21 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    }), 'tool-button', '应用到全部页面', 'duplicate');
    group('切换', [transitionGallery, transitionDirection, transitionDuration, transitionAdvance, applyAllTransitions, button('预览切换', wrapAction(() => controller.previewTransition()), 'tool-button', '预览切换', 'preview')]);
   }
-  if (ribbonTab === 'animation') group('动画', [createGallery('animation-gallery', '动画库', [
-   { ...command('animation-appear', '出现', 'animation', () => addAnimation('appear')), preview: 'preview-appear' },
-   { ...command('animation-fade', '淡入', 'animation', () => addAnimation('fade')), preview: 'preview-fade' },
-   { ...command('animation-fly', '飞入', 'animation', () => addAnimation('fly')), preview: 'preview-fly' },
-   { ...command('animation-wipe', '擦除', 'animation', () => addAnimation('wipe')), preview: 'preview-wipe' },
-   { ...command('animation-zoom', '缩放', 'animation', () => addAnimation('zoom')), preview: 'preview-zoom' },
-   { ...command('animation-spin', '旋转', 'animation', () => addAnimation('spin', 'emphasis')), preview: 'preview-spin' },
-  ], 6), button('动画窗格', wrapAction(() => { inspectorTab = 'animation'; renderAll(); }), 'tool-button', '动画窗格', 'animation'), button('预览', wrapAction(() => { void controller.previewAnimations(); }), 'tool-button', '预览', 'preview')]);
+  if (ribbonTab === 'animation') {
+   const animationGallery = createGallery('animation-gallery', '添加动画', [
+    { ...command('animation-appear', '出现', 'animation', () => addAnimation('appear')), preview: 'preview-appear' },
+    { ...command('animation-fade', '淡入', 'animation', () => addAnimation('fade')), preview: 'preview-fade' },
+    { ...command('animation-fly', '飞入', 'animation', () => addAnimation('fly')), preview: 'preview-fly' },
+    { ...command('animation-wipe', '擦除', 'animation', () => addAnimation('wipe')), preview: 'preview-wipe' },
+    { ...command('animation-zoom', '缩放', 'animation', () => addAnimation('zoom')), preview: 'preview-zoom' },
+    { ...command('animation-spin', '旋转', 'animation', () => addAnimation('spin', 'emphasis')), preview: 'preview-spin' },
+   ], 6);
+   const galleryLabel = document.createElement('span');
+   galleryLabel.className = 'gallery-label';
+   galleryLabel.textContent = '添加动画';
+   animationGallery.prepend(galleryLabel);
+   group('动画', [animationGallery, button('打开动画窗格', wrapAction(() => { inspectorTab = 'animation'; renderAll(); }), 'tool-button', '打开动画窗格', 'animation'), button('预览动画', wrapAction(() => { void controller.previewAnimations(); }), 'tool-button', '预览动画', 'preview')]);
+  }
   if (ribbonTab === 'show') group('放映', [button('预览', wrapAction(() => togglePreview()), 'preview-button', '预览', 'preview'), button('试课', wrapAction(() => rehearse()), 'show-rehearse-button', '试课', 'rehearse'), button('发布冻结', wrapAction(() => publish()), 'show-publish-button', '发布冻结', 'publish')], 'show-toolbar-group');
   if (ribbonTab === 'view') group('视图', [
    button('选择窗格', wrapAction(() => { inspectorTab = 'object'; renderAll(); }), 'tool-button', '选择窗格', 'selection-pane'),
@@ -1000,7 +1232,15 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   const heading = document.createElement('div');
   heading.className = 'inspector-heading';
   heading.textContent = `已选择 ${ids.length} 个对象`;
-  inspectorBody.append(heading, emptyInspector('批量操作会在一次撤销事务中完成'));
+  const intro = document.createElement('p');
+  intro.className = 'object-pane-intro';
+  intro.textContent = '对齐、组合或置顶，批量调整会在一次撤销事务中完成。';
+  inspectorBody.append(heading, intro);
+  const multiSection = document.createElement('div');
+  multiSection.className = 'inspector-section object-actions-section';
+  const multiLabel = document.createElement('span');
+  multiLabel.className = 'section-label';
+  multiLabel.textContent = '批量操作';
   const multi = document.createElement('div');
   multi.className = 'layer-actions';
   multi.append(
@@ -1009,20 +1249,42 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    button('组合', wrapAction(() => { controller.group(ids); renderAll(false); }), 'small-button', '组合', 'group'),
    button('置顶', wrapAction(() => { controller.setLayerMany(ids, 'front'); renderAll(false); }), 'small-button', '置顶', 'arrange'),
   );
-  inspectorBody.append(multi);
+  multiSection.append(multiLabel, multi);
+  inspectorBody.append(multiSection);
   return;
  }
  const record = controller.element(id);
  const element = editor.effectiveElement(id);
  if (!record || !element) { inspectorBody.append(emptyInspector('对象已失效'));
  return;
- } const heading = document.createElement('div');
+ } const objectHeading = document.createElement('div');
+ objectHeading.className = 'object-pane-heading';
+ const objectTitle = document.createElement('div');
+ objectTitle.className = 'object-pane-title';
+ const heading = document.createElement('h2');
  heading.className = 'inspector-heading';
- heading.textContent = `${kindLabel(record)} · ${id.slice(-8)}`;
- inspectorBody.append(heading);
- const nameInput = input('对象名称', element.name ?? '', value => { controller.setName(id, value.trim()); renderAll(false); });
- nameInput.placeholder = '对象名称';
- inspectorBody.append(labelBlock('名称', nameInput));
+ heading.textContent = objectDisplayName(id);
+ objectTitle.append(heading);
+ const objectMeta = document.createElement('span');
+ objectMeta.className = 'object-pane-meta';
+ objectMeta.textContent = `对象 ID · ${id.slice(-8)}`;
+ objectHeading.append(objectTitle, objectMeta);
+ const intro = document.createElement('p');
+ intro.className = 'object-pane-intro';
+ intro.textContent = '调整这个对象的位置、尺寸和显示方式。';
+ inspectorBody.append(objectHeading, intro);
+ const objectActions = document.createElement('div');
+ objectActions.className = 'object-quick-actions';
+ objectActions.append(
+  button('复制对象', wrapAction(() => { controller.copy(); renderAll(false); }), 'small-button', '复制对象', 'copy'),
+  button('删除对象', wrapAction(() => { controller.removeSelected(); renderAll(false); }), 'danger-button', '删除对象', 'delete'),
+ );
+ inspectorBody.append(objectActions);
+ const transformSection = document.createElement('div');
+ transformSection.className = 'inspector-section object-transform-section';
+ const transformLabel = document.createElement('span');
+ transformLabel.className = 'section-label';
+ transformLabel.textContent = '位置与尺寸';
  const grid = document.createElement('div');
  grid.className = 'property-grid';
  for (const [label, key, value] of [['X', 'x', element.x], ['Y', 'y', element.y], ['宽', 'w', element.w], ['高', 'h', element.h], ['旋转', 'rot', element.rot]] as const) { const field = document.createElement('label');
@@ -1032,109 +1294,240 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  renderAll(false);
  }, 'number'));
  grid.append(field);
- } inspectorBody.append(grid);
+ } transformSection.append(transformLabel, grid);
+ inspectorBody.append(transformSection);
  if (record.src.kind === 'shape') inspectorBody.append(shapeStyleControls(id));
  if (record.src.kind === 'image') inspectorBody.append(imageStyleControls(id));
  if (record.src.kind === 'table') inspectorBody.append(tableStyleControls(id));
  if (record.src.kind !== 'table') inspectorBody.append(effectStyleControls(id));
  inspectorBody.append(linkControls(id));
- if (record.src.kind === 'shape' || record.src.kind === 'table') { const textArea = document.createElement('textarea');
+ if (record.src.kind === 'shape' || record.src.kind === 'table') { const textSection = document.createElement('div');
+ textSection.className = 'inspector-section object-text-section';
+ const textLabel = document.createElement('span');
+ textLabel.className = 'section-label';
+ textLabel.textContent = '文字内容';
+ const textArea = document.createElement('textarea');
  textArea.value = textOfEffective(element);
  textArea.placeholder = '输入对象文字';
  textArea.setAttribute('aria-label', '对象文字');
  textArea.addEventListener('change', () => { controller.editText(id, textArea.value);
  renderAll(false);
  });
- inspectorBody.append(labelBlock('文字', textArea));
+ textSection.append(textLabel, textArea);
  const textTools = document.createElement('div');
  textTools.className = 'layer-actions';
  const bold = button('加粗', wrapAction(() => { controller.setTextStyle(id, { b: true }); renderAll(false); }), 'small-button', '加粗', 'font');
  const italic = button('斜体', wrapAction(() => { controller.setTextStyle(id, { i: true }); renderAll(false); }), 'small-button', '斜体', 'font');
  const underline = button('下划线', wrapAction(() => { controller.setTextStyle(id, { u: true }); renderAll(false); }), 'small-button', '下划线', 'font');
  textTools.append(bold, italic, underline);
- inspectorBody.append(textTools);
+ textSection.append(textTools);
+ inspectorBody.append(textSection);
  } inspectorBody.append(layerControls(id));
  }
     function renderPageInspector(): void { const slideId = currentSlide();
  if (!slideId) { inspectorBody.append(emptyInspector('没有可编辑的页面'));
  return;
- } const title = document.createElement('h2');
+ } const pageHeading = document.createElement('div');
+ pageHeading.className = 'page-pane-heading';
+ const title = document.createElement('h2');
  title.textContent = `第 ${(currentSession()?.editor.doc.slideOrder.indexOf(slideId) ?? 0) + 1} 页`;
- inspectorBody.append(title);
+ const pageMeta = document.createElement('span');
+ pageMeta.className = 'page-pane-meta';
+ pageMeta.textContent = '页面设置';
+ pageHeading.append(title, pageMeta);
+ const intro = document.createElement('p');
+ intro.className = 'page-pane-intro';
+ intro.textContent = '调整当前页面的背景、备课备注和显示状态。';
+ inspectorBody.append(pageHeading, intro);
  const colors: Array<[string, string]> = [['纸张', '#F7F4EE'], ['蓝灰', '#E7ECF7'], ['珊瑚', '#F4E1DA'], ['白色', '#FFFFFF']];
  const swatches = document.createElement('div');
  swatches.className = 'swatch-row';
  colors.forEach(([label, color]) => swatches.append(button(label, wrapAction(() => { controller.setSlideBackground(slideId, solid(rgb(color)));
  renderAll();
  }), 'swatch-button')));
- inspectorBody.append(labelBlock('页面背景', swatches));
+ const backgroundSection = document.createElement('section');
+ backgroundSection.className = 'inspector-section page-background-section';
+ const backgroundLabel = document.createElement('span');
+ backgroundLabel.className = 'section-label';
+ backgroundLabel.textContent = '页面背景';
+ const backgroundHint = document.createElement('p');
+ backgroundHint.className = 'page-section-hint';
+ backgroundHint.textContent = '快速套用主题色，或输入自定义颜色。';
+ backgroundSection.append(backgroundLabel, backgroundHint, swatches);
  const customColor = input('自定义背景色', '#F7F4EE', value => { if (/^#[0-9a-f]{6}$/i.test(value)) { controller.setSlideBackground(slideId, solid(rgb(value))); renderAll(); } });
  customColor.className = 'background-hex';
- inspectorBody.append(labelBlock('十六进制颜色', customColor));
+ backgroundSection.append(labelBlock('自定义颜色', customColor));
+ inspectorBody.append(backgroundSection);
+ const notesSection = document.createElement('section');
+ notesSection.className = 'inspector-section page-notes-section';
+ const notesLabel = document.createElement('span');
+ notesLabel.className = 'section-label';
+ notesLabel.textContent = '教师备注';
+ const notesHint = document.createElement('p');
+ notesHint.className = 'page-section-hint';
+ notesHint.textContent = '仅备课时可见，不会出现在大屏放映中。';
  const notes = document.createElement('textarea');
  notes.value = currentSession()?.editor.toSlide(slideId).notes ?? '';
- notes.placeholder = '教师备注不会出现在大屏';
+ notes.placeholder = '记录讲解提示、提问或板书安排';
+ notes.setAttribute('aria-label', '教师备注');
  notes.addEventListener('change', () => { controller.setNotes(slideId, notes.value);
  renderAll(false);
  });
- inspectorBody.append(labelBlock('教师备注', notes));
- inspectorBody.append(button('隐藏此页', wrapAction(() => { controller.execute({ type: 'SetHidden', id: slideId, v: true });
+ notesSection.append(notesLabel, notesHint, notes);
+ inspectorBody.append(notesSection);
+ const stateSection = document.createElement('section');
+ stateSection.className = 'inspector-section page-state-section';
+ const stateLabel = document.createElement('span');
+ stateLabel.className = 'section-label';
+ stateLabel.textContent = '页面状态';
+ const stateHint = document.createElement('p');
+ stateHint.className = 'page-section-hint';
+ stateHint.textContent = '隐藏后不会出现在放映流程中。';
+ stateSection.append(stateLabel, stateHint, button('隐藏页面', wrapAction(() => { controller.execute({ type: 'SetHidden', id: slideId, v: true });
  renderAll();
- }), 'small-button', '隐藏此页', 'hide'));
+ }), 'small-button', '隐藏页面', 'hide'));
+ inspectorBody.append(stateSection);
  }
-    function renderAnimationInspector(slideId: SlideId): void { const animationState = webPpt.snapshot.view?.queryAnimations(); const animations = (animationState?.value ?? []) as readonly { effect?: string;
- kind: string;
+    function renderAnimationInspector(slideId: SlideId): void {
+ const animationState = webPpt.snapshot.view?.queryAnimations();
+ const animations = (animationState?.value ?? []) as readonly { target: ElementId;
+ effect?: string;
+ kind: 'entrance' | 'exit' | 'emphasis' | 'motion';
  trigger: 'click' | 'withPrev' | 'afterPrev';
  delayMs?: number;
- durationMs?: number }[];
- const heading = document.createElement('div');
+ durationMs?: number;
+ dir?: string }[];
+ const effectLabels: Record<string, string> = { appear: '出现', fade: '淡入', fly: '飞入', wipe: '擦除', zoom: '缩放', dissolve: '溶解', spin: '旋转', grow: '放大' };
+ const kindLabels: Record<string, string> = { entrance: '进入', exit: '退出', emphasis: '强调', motion: '路径' };
+ const triggerOptions: readonly [string, string][] = [['click', '单击时'], ['withPrev', '与上一动画同时'], ['afterPrev', '上一动画之后']];
+ const selected = selectedIds();
+ const readonlySource = Boolean(animationState?.sourceReadonly);
+ const pageNumber = (currentSession()?.editor.doc.slideOrder.indexOf(slideId) ?? 0) + 1;
+ const headingRow = document.createElement('div');
+ headingRow.className = 'animation-pane-heading';
+ const heading = document.createElement('h2');
  heading.className = 'inspector-heading';
- heading.textContent = `第 ${(currentSession()?.editor.doc.slideOrder.indexOf(slideId) ?? 0) + 1} 页动画`;
- inspectorBody.append(heading);
+ heading.textContent = `第 ${pageNumber} 页动画`;
+ const count = document.createElement('span');
+ count.className = 'animation-count';
+ count.textContent = `${animations.length} 个步骤`;
+ headingRow.append(heading, count);
+ inspectorBody.append(headingRow);
+ const intro = document.createElement('p');
+ intro.className = 'animation-pane-intro';
+ intro.textContent = animations.length ? '按列表顺序播放；调整排序可控制讲解节奏。' : '为对象添加进入或强调效果，让课堂讲解更有节奏。';
+ inspectorBody.append(intro);
+ if (readonlySource) {
+  const readonlyNote = document.createElement('div');
+  readonlyNote.className = 'animation-readonly-note';
+  readonlyNote.textContent = '来源动画仅支持预览；另存为可编辑版本后可修改。';
+  inspectorBody.append(readonlyNote);
+ }
+ const updateStep = (index: number, patch: Record<string, unknown>): void => {
+  if (readonlySource) { setStatus('来源动画只读，请先另存为可编辑版本', true); return; }
+  const next = animations.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item);
+  controller.setAnimations(slideId, next as readonly EditAnimationStep[]);
+  renderAll(false);
+ };
+ const secondsField = (label: string, valueMs: number, onChange: (milliseconds: number) => void): HTMLElement => {
+  const field = document.createElement('label');
+  field.className = 'animation-field';
+  const name = document.createElement('span');
+  name.textContent = label;
+  const shell = document.createElement('span');
+  shell.className = 'animation-number-shell';
+  const control = input(label, (Math.max(0, valueMs) / 1000).toFixed(2), value => {
+   const seconds = Number(value);
+   if (Number.isFinite(seconds) && seconds >= 0) onChange(Math.round(seconds * 1000));
+  }, 'number');
+  control.className = 'animation-number';
+  control.min = '0';
+  control.step = '0.05';
+  const suffix = document.createElement('span');
+  suffix.className = 'animation-unit';
+  suffix.textContent = '秒';
+  shell.append(control, suffix);
+  field.append(name, shell);
+  return field;
+ };
+ const effectOptionsFor = (kind: string, currentEffect: string): [string, string][] => {
+  const options: [string, string][] = kind === 'emphasis'
+   ? [['spin', '旋转'], ['grow', '放大']]
+   : [['appear', '出现'], ['fade', '淡入'], ['fly', '飞入'], ['wipe', '擦除'], ['zoom', '缩放'], ['dissolve', '溶解']];
+  if (currentEffect && !options.some(([value]) => value === currentEffect)) options.push([currentEffect, effectLabels[currentEffect] ?? currentEffect]);
+  return options;
+ };
+ const directionOptionsFor = (effect: string): [string, string][] | null => {
+  if (effect === 'zoom') return [['in', '放大进入'], ['out', '缩小退出']];
+  if (effect === 'fly' || effect === 'wipe') return [['l', '向左'], ['r', '向右'], ['u', '向上'], ['d', '向下']];
+  return null;
+ };
  const list = document.createElement('div');
  list.className = 'animation-list';
- if (!animations.length) list.append(emptyInspector('当前页面暂无动画'));
- animations.forEach((step, index) => { const row = document.createElement('div');
- row.className = 'animation-row';
- const title = document.createElement('strong'); title.textContent = `${index + 1}. ${step.effect ?? step.kind}`;
- const controls = document.createElement('div'); controls.className = 'animation-controls';
- const trigger = selectControl('动画触发', step.trigger, [['click', '单击时'], ['withPrev', '与上一动画同时'], ['afterPrev', '上一动画之后']], value => {
-  if (animationState?.sourceReadonly) { setStatus('来源动画只读，请先另存为可编辑版本', true); return; }
-  const next = animations.map((item, itemIndex) => itemIndex === index ? { ...item, trigger: value as typeof step.trigger } : item);
-  controller.setAnimations(slideId, next as readonly EditAnimationStep[]);
-  renderAll(false);
+ if (!animations.length) {
+  const empty = document.createElement('div');
+  empty.className = 'animation-empty';
+  const emptyTitle = document.createElement('strong');
+  emptyTitle.textContent = '还没有动画步骤';
+  const emptyCopy = document.createElement('p');
+  emptyCopy.textContent = selected.length ? '从上方动画库选择一个效果，或使用下方默认设置添加。' : '先选择一个对象，再从上方动画库添加效果。';
+  empty.append(emptyTitle, emptyCopy);
+  if (!selected.length) empty.append(button('先选择对象', () => { inspectorTab = 'object'; renderAll(); }, 'small-button', '先选择对象'));
+  list.append(empty);
+ }
+ animations.forEach((step, index) => {
+  const row = document.createElement('article');
+  row.className = `animation-row animation-row-${step.kind}`;
+  const rowHead = document.createElement('div');
+  rowHead.className = 'animation-row-head';
+  const order = document.createElement('span');
+  order.className = 'animation-order';
+  order.textContent = String(index + 1).padStart(2, '0');
+  const targetName = objectDisplayName(step.target);
+  const target = button(targetName, wrapAction(() => { controller.select({ kind: 'elements', ids: [step.target], enteredGroup: null }); renderAll(false); }), 'animation-target', `选择对象：${targetName}`);
+  rowHead.append(order, target);
+  const effectLine = document.createElement('div');
+  effectLine.className = 'animation-effect-line';
+  const kind = document.createElement('span');
+  kind.className = 'animation-kind';
+  kind.textContent = kindLabels[step.kind] ?? step.kind;
+  const effectName = document.createElement('strong');
+  effectName.textContent = effectLabels[step.effect ?? ''] ?? step.effect ?? '未知效果';
+  effectLine.append(kind, effectName);
+  const controls = document.createElement('div');
+  controls.className = 'animation-controls';
+  const effect = selectControl('效果', step.effect ?? 'fade', effectOptionsFor(step.kind, step.effect ?? ''), value => updateStep(index, { effect: value }));
+  const trigger = selectControl('触发方式', step.trigger, triggerOptions, value => updateStep(index, { trigger: value as typeof step.trigger }));
+  const duration = secondsField('时长', step.durationMs ?? animationDurationMs, milliseconds => updateStep(index, { durationMs: milliseconds }));
+  const delay = secondsField('延迟', step.delayMs ?? 0, milliseconds => updateStep(index, { delayMs: milliseconds }));
+  controls.append(labelBlock('效果', effect), labelBlock('触发方式', trigger), duration, delay);
+  const directionOptions = directionOptionsFor(step.effect ?? '');
+  if (directionOptions) controls.append(labelBlock('方向', selectControl('方向', step.dir ?? directionOptions[0][0], directionOptions, value => updateStep(index, { dir: value }))));
+  const actions = document.createElement('div');
+  actions.className = 'animation-row-actions';
+  const up = button('上移', wrapAction(() => { if (index === 0 || readonlySource) return; const next = [...animations]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; controller.setAnimations(slideId, next as readonly EditAnimationStep[]); renderAll(false); }), 'small-button', '动画上移', 'arrange');
+  const down = button('下移', wrapAction(() => { if (index >= animations.length - 1 || readonlySource) return; const next = [...animations]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; controller.setAnimations(slideId, next as readonly EditAnimationStep[]); renderAll(false); }), 'small-button', '动画下移', 'arrange');
+  const remove = button('删除', wrapAction(() => { if (readonlySource) { setStatus('来源动画只读，请先另存为可编辑版本', true); return; } controller.setAnimations(slideId, animations.filter((_item, itemIndex) => itemIndex !== index) as readonly EditAnimationStep[]); renderAll(false); }), 'danger-button', '删除动画', 'delete');
+  actions.append(up, down, remove);
+  row.append(rowHead, effectLine, controls, actions);
+  list.append(row);
  });
- const duration = input('动画时长', String(step.durationMs ?? animationDurationMs), value => {
-  const ms = Number(value);
-  if (!Number.isFinite(ms) || ms < 0 || animationState?.sourceReadonly) return;
-  const next = animations.map((item, itemIndex) => itemIndex === index ? { ...item, durationMs: ms } : item);
-  controller.setAnimations(slideId, next as readonly EditAnimationStep[]);
-  renderAll(false);
- }, 'number');
- duration.min = '0'; duration.step = '50'; duration.className = 'animation-duration';
- const up = button('上移', wrapAction(() => { if (index === 0 || animationState?.sourceReadonly) return; const next = [...animations]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; controller.setAnimations(slideId, next as readonly EditAnimationStep[]); renderAll(false); }), 'small-button', '动画上移', 'arrange');
- const down = button('下移', wrapAction(() => {
-  if (index >= animations.length - 1 || animationState?.sourceReadonly) return;
-  const next = [...animations];
-  [next[index], next[index + 1]] = [next[index + 1], next[index]];
-  controller.setAnimations(slideId, next as readonly EditAnimationStep[]);
-  renderAll(false);
- }), 'small-button', '动画下移', 'arrange');
- const remove = button('删除', wrapAction(() => { if (animationState?.sourceReadonly) return; controller.setAnimations(slideId, animations.filter((_item, itemIndex) => itemIndex !== index) as readonly EditAnimationStep[]); renderAll(false); }), 'danger-button', '删除动画', 'delete');
- controls.append(trigger, duration, up, down, remove);
- row.append(title, controls);
- list.append(row);
- });
- const defaultTrigger = selectControl('默认触发方式', animationTrigger, [['click', '单击时'], ['withPrev', '与上一动画同时'], ['afterPrev', '上一动画之后']], value => {
-  animationTrigger = value as typeof animationTrigger;
- });
- const defaultDuration = input('默认动画时长', String(animationDurationMs), value => {
-  const ms = Number(value);
-  if (Number.isFinite(ms) && ms >= 0) animationDurationMs = ms;
- }, 'number');
- inspectorBody.append(list, defaultTrigger, defaultDuration, button('给选中对象加入动画', wrapAction(() => addAnimation()), 'primary-button', '给选中对象加入动画', 'animation'), button('清除本页动画', wrapAction(() => { controller.setAnimations(slideId, []);
- renderAll();
- }), 'danger-button', '清除本页动画', 'delete'));
+ const defaults = document.createElement('section');
+ defaults.className = 'animation-defaults';
+ const defaultsTitle = document.createElement('strong');
+ defaultsTitle.textContent = '新动画默认设置';
+ const defaultsGrid = document.createElement('div');
+ defaultsGrid.className = 'animation-defaults-grid';
+ const defaultTrigger = selectControl('默认触发方式', animationTrigger, triggerOptions, value => { animationTrigger = value as typeof animationTrigger; });
+ const defaultDuration = secondsField('默认时长', animationDurationMs, milliseconds => { animationDurationMs = milliseconds; });
+ defaultsGrid.append(labelBlock('触发方式', defaultTrigger), defaultDuration);
+ defaults.append(defaultsTitle, defaultsGrid);
+ const paneActions = document.createElement('div');
+ paneActions.className = 'animation-pane-actions';
+ const addButton = button('添加到选中对象', wrapAction(() => addAnimation()), 'primary-button', '添加到选中对象', 'animation');
+ const clearButton = button('清除本页动画', wrapAction(() => { if (readonlySource) { setStatus('来源动画只读，请先另存为可编辑版本', true); return; } controller.setAnimations(slideId, []); renderAll(); }), 'danger-button', '清除本页动画', 'delete');
+ paneActions.append(addButton, clearButton);
+ inspectorBody.append(list, defaults, paneActions);
  }
     function addAnimation(effect: 'appear' | 'fade' | 'fly' | 'wipe' | 'zoom' | 'spin' = 'fade', kind: 'entrance' | 'emphasis' = 'entrance'): void { const slideId = currentSlide();
  const id = selectedIds()[0];
@@ -1142,15 +1535,16 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  return;
  } const step = kind === 'emphasis'
   ? { target: id, kind: 'emphasis' as const, effect: (effect === 'spin' ? 'spin' : 'grow') as 'spin' | 'grow', trigger: animationTrigger, delayMs: 0, durationMs: animationDurationMs }
-  : { target: id, kind: 'entrance' as const, effect: effect === 'spin' ? 'fade' as const : effect, trigger: animationTrigger, delayMs: 0, durationMs: animationDurationMs };
+ : { target: id, kind: 'entrance' as const, effect: effect === 'spin' ? 'fade' as const : effect, trigger: animationTrigger, delayMs: 0, durationMs: animationDurationMs };
  controller.appendAnimations(slideId, [step]);
+ inspectorTab = 'animation';
  renderAll();
  }
     function shapeStyleControls(id: ElementId): HTMLElement { const group = document.createElement('div');
  group.className = 'inspector-section';
  const label = document.createElement('span');
  label.className = 'section-label';
- label.textContent = '样式';
+ label.textContent = '填充与描边';
  const swatches = document.createElement('div');
  swatches.className = 'swatch-row';
  [['蓝', '#5375B8'], ['珊瑚', '#D66B52'], ['金', '#E6A23C'], ['墨', '#24324B'], ['无', '']].forEach(([name, color]) => swatches.append(button(name, wrapAction(() => { controller.setFill(id, color ? solid(rgb(color)) : { type: 'none' });
@@ -1174,7 +1568,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  group.className = 'inspector-section';
  const label = document.createElement('span');
  label.className = 'section-label';
- label.textContent = '效果';
+ label.textContent = '视觉效果';
  const state = controller.queryEffects([id]);
  const shadow = button('柔和阴影', wrapAction(() => { controller.setEffects(id, { ...state?.value, shadow: { dx: 3, dy: 4, blur: 8, color: 'rgba(36,50,75,.28)' } }); renderAll(false); }), 'small-button', '添加柔和阴影', 'effects');
  const glow = button('外发光', wrapAction(() => { controller.setEffects(id, { ...state?.value, glow: { radius: 6, color: 'rgba(83,117,184,.45)' } }); renderAll(false); }), 'small-button', '添加外发光', 'effects');
@@ -1186,7 +1580,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  group.className = 'inspector-section';
  const label = document.createElement('span');
  label.className = 'section-label';
- label.textContent = '链接';
+ label.textContent = '交互链接';
  const state = controller.queryLink([id]);
  const href = state?.value?.kind === 'external' ? state.value.href : '';
  const link = input('超链接地址', href, value => {
@@ -1211,9 +1605,14 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  group.append(label, swatches, button('无边框', wrapAction(() => { controller.setStroke(id, { type: 'none' }); renderAll(false); }), 'small-button', '无边框', 'shape-outline'));
  return group;
  }
-    function layerControls(id: ElementId): HTMLElement { const group = document.createElement('div');
- group.className = 'layer-actions';
- group.append(button('上移一层', wrapAction(() => { controller.setLayer(id, 'forward');
+ function layerControls(id: ElementId): HTMLElement { const group = document.createElement('div');
+ group.className = 'inspector-section layer-section';
+ const label = document.createElement('span');
+ label.className = 'section-label';
+ label.textContent = '排列与显示';
+ const actions = document.createElement('div');
+ actions.className = 'layer-actions';
+ actions.append(button('上移一层', wrapAction(() => { controller.setLayer(id, 'forward');
  renderAll();
  }), 'small-button', '上移一层', 'arrange'), button('下移一层', wrapAction(() => { controller.setLayer(id, 'backward');
  renderAll();
@@ -1222,7 +1621,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  }), 'small-button', '水平翻转', 'rotate'), button('垂直翻转', wrapAction(() => { controller.setFlip(id, undefined, true);
  renderAll();
  }), 'small-button', '垂直翻转', 'rotate'));
- group.append(button('锁定', wrapAction(() => { controller.setLocked(id, true); renderAll(false); }), 'small-button', '锁定对象', 'lock'), button('隐藏', wrapAction(() => { controller.setHidden(id, true); renderAll(false); }), 'small-button', '隐藏对象', 'hide'));
+ actions.append(button('锁定对象', wrapAction(() => { controller.setLocked(id, true); renderAll(false); }), 'small-button', '锁定对象', 'lock'), button('隐藏对象', wrapAction(() => { controller.setHidden(id, true); renderAll(false); }), 'small-button', '隐藏对象', 'hide'));
+ group.append(label, actions);
  return group;
  }
     function labelBlock(label: string, child: HTMLElement): HTMLElement { const block = document.createElement('label');
@@ -1237,18 +1637,59 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  note.textContent = message;
  return note;
  }
- function kindLabel(record: ElementRecord | null): string { const kind = record?.src.kind;
- return kind === 'shape' ? '图形' : kind === 'image' ? '图片' : kind === 'table' ? '表格' : kind === 'group' ? '组合' : '对象';
+ function kindLabel(record: ElementRecord | null, hasText = false): string { const kind = record?.src.kind;
+ return kind === 'shape' ? (hasText ? '文本' : '图形') : kind === 'image' ? '图片' : kind === 'table' ? '表格' : kind === 'group' ? '组合' : '对象';
+ }
+ function objectDisplayName(id: ElementId): string {
+  const record = controller.element(id);
+  const element = currentSession()?.editor.effectiveElement(id);
+  return kindLabel(record, element?.kind === 'shape' && element.text !== null);
+ }
+ function isTextElement(id: ElementId): boolean {
+  const element = currentSession()?.editor.effectiveElement(id);
+  return element?.kind === 'shape' && element.text !== null;
  }
  function renderFloatingToolbar(): void {
   floatingToolbar.replaceChildren();
   const ids = selectedIds();
   if (!ids.length) { floatingToolbar.hidden = true; return; }
   floatingToolbar.hidden = false;
+  const textSelection = ids.length === 1 && isTextElement(ids[0]);
+  if (textSelection) {
+   const paragraphState = controller.queryParagraphProps();
+   const runState = controller.queryRunProps();
+   const textCommand = (id: string, label: string, icon: IconId, action: () => void, checked?: boolean): StudioMenuItem => ({
+    id,
+    label,
+    icon,
+    checked,
+    execute: wrapAction(action),
+   });
+   const textMenuItems: StudioMenuItem[] = [
+    textCommand('floating-text-left', '左对齐', 'align-left', () => { controller.setParagraphForElement(ids[0], { align: 'left' }); renderAll(false); }, paragraphState?.align.value === 'left'),
+    textCommand('floating-text-center', '居中', 'align-center-horizontal', () => { controller.setParagraphForElement(ids[0], { align: 'center' }); renderAll(false); }, paragraphState?.align.value === 'center'),
+    textCommand('floating-text-right', '右对齐', 'align-right', () => { controller.setParagraphForElement(ids[0], { align: 'right' }); renderAll(false); }, paragraphState?.align.value === 'right'),
+    { id: 'floating-text-divider', label: '', separator: true, execute: () => undefined },
+    textCommand('floating-text-bold', '加粗', 'bold', () => { controller.toggleBold(); renderAll(false); }, runState?.b.value === true),
+    textCommand('floating-text-italic', '斜体', 'italic', () => { controller.toggleItalic(); renderAll(false); }, runState?.i.value === true),
+    textCommand('floating-text-underline', '下划线', 'underline', () => { controller.toggleUnderline(); renderAll(false); }, runState?.u.value === true),
+   ];
+   const textSplit = createSplitButton({
+    id: 'floating-text-center',
+    label: '居中',
+    icon: 'align-center-horizontal',
+    tooltip: '文本居中',
+    execute: wrapAction(() => { controller.setParagraphForElement(ids[0], { align: 'center' }); renderAll(false); }),
+   }, textMenuItems);
+   floatingToolbar.append(
+    textSplit,
+   );
+  } else {
+   floatingToolbar.append(button('左对齐', wrapAction(() => { controller.align(ids, 'left'); renderAll(false); }), 'small-button', '对象左对齐', 'align-left'));
+  }
   floatingToolbar.append(
    button('复制', wrapAction(() => { controller.copy(); renderAll(false); }), 'small-button', '复制', 'copy'),
    button('删除', wrapAction(() => { controller.removeSelected(); renderAll(false); }), 'small-button', '删除', 'delete'),
-   button('左对齐', wrapAction(() => { controller.align(ids, 'left'); renderAll(false); }), 'small-button', '左对齐', 'align'),
    button('格式刷', wrapAction(() => { controller.startFormatPainter(); }), 'small-button', '格式刷', 'format-painter'),
   );
  }
@@ -1266,7 +1707,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const index = currentSession()?.editor.doc.slideOrder.indexOf(slideId ?? '') ?? 0;
  stageTitle.replaceChildren();
  const title = document.createElement('div');
- title.innerHTML = `<span class="eyebrow">正在编辑 · web-ppt / OOXML</span><strong>${escapeText(asset?.title ?? '请打开课件')}</strong>`;
+ title.innerHTML = `<strong>${escapeText(asset?.title ?? '请打开课件')}</strong><span class="stage-meta">正在编辑 · web-ppt / OOXML</span>`;
  const meta = document.createElement('span');
  meta.className = 'format-note';
  meta.textContent = `${documentMeta ? `${(documentMeta.width / documentMeta.height).toFixed(2)}:1` : '16:9'} · 第 ${Math.max(0, index + 1)} / ${currentSession()?.editor.doc.slideOrder.length ?? 0} 页`;
@@ -1277,11 +1718,29 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const statusText = document.createElement('span');
  statusText.textContent = `${pageNumber} / ${currentSession()?.editor.doc.slideOrder.length ?? 0} 页 · ${controller.snapshot.snapping ? '吸附开启' : '吸附关闭'}`;
  const zoomLabel = document.createElement('span');
+ zoomLabel.className = 'status-zoom-value';
  zoomLabel.textContent = `${Math.round(controller.snapshot.zoom * 100)}%`;
  const zoomSlider = document.createElement('input');
  zoomSlider.type = 'range'; zoomSlider.min = '10'; zoomSlider.max = '200'; zoomSlider.step = '5'; zoomSlider.value = String(Math.round(controller.snapshot.zoom * 100)); zoomSlider.setAttribute('aria-label', '缩放');
- zoomSlider.addEventListener('input', () => { stageZoomFactor = Math.max(.25, Math.min(4, Number(zoomSlider.value) / Math.max(.01, fitZoom * 100))); controller.setZoom(Number(zoomSlider.value) / 100); zoomLabel.textContent = `${zoomSlider.value}%`; });
- statusBar.append(statusText, zoomSlider, zoomLabel);
+ const zoomControls = document.createElement('div');
+ zoomControls.className = 'status-zoom-controls';
+ const fitButton = commandSurface!.createCommandButton({
+  id: 'status-fit-stage',
+  label: '恢复默认舞台大小',
+  icon: 'fit',
+  tooltip: '适应窗口并恢复默认大小',
+  disabled: !webPpt.snapshot.view,
+  execute: () => { applyStageZoom(true); renderAll(false); },
+ }, 'icon-only', 'status-fit-button');
+ const syncFitButtonState = (zoom: number): void => {
+  const atDefault = Math.abs(zoom - fitZoom) < .01;
+  fitButton.classList.toggle('is-default', atDefault);
+  fitButton.dataset.atDefault = String(atDefault);
+ };
+ syncFitButtonState(controller.snapshot.zoom);
+ zoomSlider.addEventListener('input', () => { const nextZoom = Number(zoomSlider.value) / 100; const anchor = captureStageViewportAnchor(); fitZoom = readStageFitZoom(); stageZoomFactor = nextZoom / Math.max(.01, fitZoom); controller.setZoom(nextZoom); sizeStageViewport(nextZoom); layoutStageViewport(nextZoom, anchor); zoomLabel.textContent = `${zoomSlider.value}%`; syncFitButtonState(nextZoom); });
+ zoomControls.append(zoomSlider, zoomLabel, fitButton);
+ statusBar.append(statusText, zoomControls);
  if (!thumbnails) thumbnailGeneration += 1;
  }
     async function persist(): Promise<void> {
@@ -1397,6 +1856,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  applyStageZoom(true);
  controller.attachEditorSubscription();
  renderAll();
+ scheduleStageZoom();
  setStatus('已打开 · 编辑状态');
  } catch (error) { setStatus(error instanceof Error ? error.message : String(error), true);
  } finally { busy = false;

@@ -128,6 +128,23 @@ test('Studio text box insertion does not require an existing text-shaped source'
   controller.dispose();
 });
 
+test('Studio controller centers a text element without entering text editing', async () => {
+  const bytes = await templateBytes();
+  const adapter = new WebPptPresentationEngineAdapter(async () => bytes);
+  const asset = await adapter.createBlank('Text alignment gate');
+  const webPpt = createWebPptAdapter();
+  await webPpt.applyBinding({ source: asset.source.bytes, openOptions: { idPrefix: asset.document.idPrefix }, mode: 'edit' });
+  const controller = new PresentationStudioController(webPpt);
+  const textBoxId = controller.addTextBox();
+  assert.ok(textBoxId);
+  controller.editText(textBoxId, '课堂标题');
+  controller.setParagraphForElement(textBoxId, { align: 'center' });
+  const text = controller.editor.effectiveElement(textBoxId).text;
+  assert.ok(text);
+  assert.equal(text.paragraphs[0].align, 'center');
+  controller.dispose();
+});
+
 test('Studio animation insertion appends and explicit empty steps clear the timeline', async () => {
   const bytes = await templateBytes();
   const adapter = new WebPptPresentationEngineAdapter(async () => bytes);

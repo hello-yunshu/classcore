@@ -143,7 +143,7 @@ function makeMenuItem(item: StudioMenuItem, owner: HTMLButtonElement): HTMLDivEl
     return wrapper;
 }
 
-export function createDropdown(command: StudioCommand, items: readonly StudioMenuItem[], extraClass = ''): HTMLElement {
+export function createDropdown(command: StudioCommand, items: readonly StudioMenuItem[], extraClass = '', anchorElement: HTMLElement | null = null): HTMLElement {
     ensureMenuDismissListener();
     const wrapper = document.createElement('div');
     wrapper.className = `command-dropdown${extraClass ? ` ${extraClass}` : ''}`;
@@ -162,7 +162,7 @@ export function createDropdown(command: StudioCommand, items: readonly StudioMen
         menu.classList.toggle('is-open', open);
         trigger.setAttribute('aria-expanded', String(open));
         if (open) {
-            const rect = trigger.getBoundingClientRect();
+            const rect = (anchorElement ?? trigger).getBoundingClientRect();
             const margin = 8;
             const measured = menu.getBoundingClientRect();
             const left = Math.max(margin, Math.min(rect.left, window.innerWidth - measured.width - margin));
@@ -185,7 +185,7 @@ export function createSplitButton(primary: StudioCommand, items: readonly Studio
     const wrapper = document.createElement('div');
     wrapper.className = 'command-split';
     const main = createCommandButton(primary, 'compact', 'command-split-main');
-    const menu = createDropdown({ ...primary, id: `${primary.id}:menu`, execute: () => undefined }, items);
+    const menu = createDropdown({ ...primary, id: `${primary.id}:menu`, execute: () => undefined }, items, '', wrapper);
     wrapper.append(main, menu);
     return wrapper;
 }

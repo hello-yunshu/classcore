@@ -80,12 +80,156 @@ test.describe('Presentation Studio command surface', () => {
     });
 
     test('provides notes, zoom, and a real canvas context menu', async ({ page }) => {
-        await page.getByRole('treeitem', { name: /Text 0/ }).click();
+        await page.getByRole('treeitem', { name: /文本/ }).click();
         await page.locator('.notes-toggle').press('Enter');
         await expect(page.getByRole('textbox', { name: '当前页面备注' })).toBeVisible();
         await page.locator('.studio-stage').click({ button: 'right' });
         await expect(page.getByRole('menuitem', { name: '复制' })).toBeVisible();
         await expect(page.getByRole('slider', { name: '缩放' })).toBeVisible();
+        await expect(page.getByRole('button', { name: '适应窗口并恢复默认大小' })).toBeVisible();
+    });
+
+    test('provides an editable animation timeline with classroom-friendly timing controls', async ({ page }) => {
+        await page.getByRole('treeitem', { name: /文本/ }).click();
+        await page.getByRole('tab', { name: '动画' }).click();
+        await page.locator('.gallery-item').filter({ hasText: '淡入' }).click();
+        await expect(page.getByText('1 个步骤', { exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: '选择对象：文本' })).toBeVisible();
+        await expect(page.getByRole('combobox', { name: '效果' })).toHaveValue('fade');
+        await expect(page.getByRole('spinbutton', { name: '时长', exact: true })).toHaveValue('0.30');
+        await expect(page.getByRole('spinbutton', { name: '延迟', exact: true })).toHaveValue('0.00');
+        await page.getByRole('combobox', { name: '触发方式', exact: true }).selectOption('afterPrev');
+        await expect(page.getByRole('combobox', { name: '触发方式', exact: true })).toHaveValue('afterPrev');
+        await page.getByRole('spinbutton', { name: '时长', exact: true }).fill('0.75');
+        await page.getByRole('spinbutton', { name: '时长', exact: true }).press('Tab');
+        await expect(page.getByRole('spinbutton', { name: '时长', exact: true })).toHaveValue('0.75');
+        await page.getByRole('button', { name: '清除本页动画' }).click();
+        await expect(page.getByText('还没有动画步骤')).toBeVisible();
+    });
+
+    test('groups selected-object inspector controls into clear, responsive sections', async ({ page }) => {
+        await page.setViewportSize({ width: 375, height: 900 });
+        await expect(page.getByText('选择页面，快速调整顺序和内容。', { exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: '第 1 页', exact: true })).toHaveAttribute('aria-current', 'page');
+        await expect(page.getByRole('button', { name: '新建页面', exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: '复制页面', exact: true })).toBeVisible();
+        await expect(page.locator('.scene-reorder-actions .danger-button')).toBeDisabled();
+        await page.getByRole('treeitem', { name: /文本/ }).click();
+        await page.getByRole('button', { name: '对象', exact: true }).click();
+
+        await expect(page.getByRole('heading', { name: '文本' })).toBeVisible();
+        await expect(page.getByText('位置与尺寸', { exact: true })).toBeVisible();
+        await expect(page.getByText('填充与描边', { exact: true })).toBeVisible();
+        await expect(page.getByText('文字内容', { exact: true })).toBeVisible();
+        await expect(page.getByText('排列与显示', { exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: '复制对象' })).toBeVisible();
+        await expect(page.getByRole('button', { name: '删除对象' })).toBeVisible();
+        await expect(page.getByRole('textbox', { name: '对象文字' })).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+
+        await page.getByRole('button', { name: '页面', exact: true }).click();
+        await expect(page.getByRole('heading', { name: '第 1 页' })).toBeVisible();
+        await expect(page.getByText('页面背景', { exact: true })).toBeVisible();
+        await expect(page.getByText('教师备注', { exact: true })).toBeVisible();
+        await expect(page.getByText('页面状态', { exact: true })).toBeVisible();
+        await expect(page.getByRole('textbox', { name: '教师备注' })).toBeVisible();
+        await expect(page.getByRole('button', { name: '隐藏页面' })).toBeVisible();
+        await page.getByRole('button', { name: '动画', exact: true }).click();
+        await expect(page.getByRole('heading', { name: '第 1 页动画' })).toBeVisible();
+        await page.getByRole('button', { name: '对象', exact: true }).click();
+        await expect(page.getByText('位置与尺寸', { exact: true })).toBeVisible();
+    });
+
+    test('keeps a zoomed canvas scrollable without covering short-wide chrome', async ({ page }) => {
+        await page.setViewportSize({ width: 1600, height: 650 });
+        const stageTitle = page.locator('.stage-titlebar');
+        const stageViewport = page.locator('.studio-stage');
+        const stageFooter = page.locator('.stage-footer');
+        const notesPane = page.locator('.notes-pane');
+        const statusBar = page.locator('.status-bar');
+        const readVerticalOrder = () => Promise.all([stageTitle, stageViewport, stageFooter, notesPane, statusBar]
+            .map(locator => locator.evaluate(element => {
+                const rect = element.getBoundingClientRect();
+                return { top: rect.top, bottom: rect.bottom };
+            })));
+        await expect.poll(async () => {
+            const verticalOrder = await readVerticalOrder();
+            return verticalOrder[1].top >= verticalOrder[0].bottom
+                && verticalOrder[2].top >= verticalOrder[1].bottom
+                && verticalOrder[3].top >= verticalOrder[2].bottom
+                && verticalOrder[4].top >= verticalOrder[3].bottom;
+        }).toBe(true);
+
+        const stageFrameMatches = () => stageViewport.evaluate(element => {
+            const stage = element.querySelector('[data-ppt-stage]');
+            if (!stage) return false;
+            const viewportRect = element.getBoundingClientRect();
+            const stageRect = stage.getBoundingClientRect();
+            return Math.abs(viewportRect.width - stageRect.width) <= .5
+                && Math.abs(viewportRect.height - stageRect.height) <= .5
+                && Math.abs(viewportRect.width / viewportRect.height - stageRect.width / stageRect.height) <= .001;
+        });
+        await expect.poll(stageFrameMatches).toBe(true);
+
+        await page.getByRole('slider', { name: '缩放' }).fill('25');
+        await expect.poll(stageFrameMatches).toBe(true);
+
+        await page.getByRole('slider', { name: '缩放' }).fill('150');
+        await expect.poll(() => stageViewport.evaluate(element => ({
+            horizontal: element.scrollWidth > element.clientWidth,
+            vertical: element.scrollHeight > element.clientHeight,
+        }))).toEqual({ horizontal: true, vertical: true });
+        await expect(page.getByText('150%', { exact: true })).toBeVisible();
+
+        await stageViewport.hover();
+        const beforeWheel = await stageViewport.evaluate(element => element.scrollTop);
+        await page.mouse.wheel(0, 180);
+        await expect.poll(() => stageViewport.evaluate(element => element.scrollTop)).toBeGreaterThan(beforeWheel);
+        await stageViewport.evaluate(element => { element.scrollLeft = 0; });
+        const beforeTrackpad = await stageViewport.evaluate(element => element.scrollLeft);
+        await page.mouse.wheel(180, 0);
+        await expect.poll(() => stageViewport.evaluate(element => element.scrollLeft)).toBeGreaterThan(beforeTrackpad);
+
+        await page.getByRole('button', { name: '适应窗口并恢复默认大小' }).click();
+        await expect.poll(() => stageViewport.evaluate(element => ({
+            horizontal: element.scrollWidth > element.clientWidth,
+            vertical: element.scrollHeight > element.clientHeight,
+            left: element.scrollLeft,
+            top: element.scrollTop,
+        }))).toEqual({ horizontal: false, vertical: false, left: 0, top: 0 });
+        const fittedGaps = await stageViewport.evaluate(element => {
+            const stage = element.querySelector('[data-ppt-stage]');
+            if (!stage) return null;
+            const viewportRect = element.getBoundingClientRect();
+            const stageRect = stage.getBoundingClientRect();
+            const viewportLeft = viewportRect.left + element.clientLeft;
+            const viewportTop = viewportRect.top + element.clientTop;
+            return {
+                width: Math.abs(stageRect.width - element.clientWidth),
+                height: Math.abs(stageRect.height - element.clientHeight),
+                horizontalCenter: Math.abs((stageRect.left - viewportLeft)
+                    - (viewportLeft + element.clientWidth - stageRect.right)),
+                verticalCenter: Math.abs((stageRect.top - viewportTop)
+                    - (viewportTop + element.clientHeight - stageRect.bottom)),
+            };
+        });
+        expect(fittedGaps).not.toBeNull();
+        expect(Math.min(fittedGaps!.width, fittedGaps!.height)).toBeLessThanOrEqual(1);
+        expect(fittedGaps!.horizontalCenter).toBeLessThanOrEqual(1);
+        expect(fittedGaps!.verticalCenter).toBeLessThanOrEqual(1);
+    });
+
+    test('keeps the status bar after the canvas and notes in the narrow stacked layout', async ({ page }) => {
+        await page.setViewportSize({ width: 820, height: 900 });
+        const notesBottom = await page.locator('.notes-pane').evaluate(element => element.getBoundingClientRect().bottom);
+        const inspectorBounds = await page.locator('.inspector-panel').evaluate(element => {
+            const rect = element.getBoundingClientRect();
+            return { top: rect.top, bottom: rect.bottom };
+        });
+        const statusTop = await page.locator('.status-bar').evaluate(element => element.getBoundingClientRect().top);
+        expect(inspectorBounds.top).toBeGreaterThanOrEqual(notesBottom);
+        expect(statusTop).toBeGreaterThanOrEqual(inspectorBounds.bottom);
+        expect(await page.evaluate(() => document.body.scrollHeight)).toBeGreaterThan(900);
     });
 
     test('exposes file, text, and transition controls from the active surface', async ({ page }) => {
@@ -94,7 +238,7 @@ test.describe('Presentation Studio command surface', () => {
         await expect(page.getByRole('menuitem', { name: '另存为副本' })).toBeVisible();
         await page.keyboard.press('Escape');
 
-        await page.getByRole('treeitem', { name: /Text 0/ }).click();
+        await page.getByRole('treeitem', { name: /文本/ }).click();
         await expect(page.getByRole('tab', { name: '文本格式' })).toBeVisible();
         await page.getByRole('tab', { name: '文本格式' }).click();
         await expect(page.getByRole('combobox', { name: '字体' })).toBeVisible();
@@ -103,6 +247,19 @@ test.describe('Presentation Studio command surface', () => {
         await page.getByRole('tab', { name: '切换' }).click();
         await expect(page.getByRole('button', { name: '应用到全部页面' })).toBeVisible();
         await expect(page.getByRole('spinbutton', { name: '自动换页毫秒' })).toBeVisible();
+    });
+
+    test('uses text centering in the floating toolbar and exposes text edits in a menu', async ({ page }) => {
+        await page.getByRole('treeitem', { name: /文本/ }).click();
+        const floatingToolbar = page.locator('.floating-toolbar');
+        await expect(floatingToolbar).toBeVisible();
+        const textSplit = floatingToolbar.locator('.command-split');
+        await expect(textSplit.locator('.command-split-main')).toBeVisible();
+        await expect(textSplit.locator('.command-split-main')).toHaveAttribute('aria-label', '文本居中');
+        await textSplit.locator('.command-dropdown-trigger').click();
+        await expect(floatingToolbar.getByRole('menuitem', { name: '居中' })).toBeVisible();
+        await expect(floatingToolbar.getByRole('menuitem', { name: '加粗' })).toBeVisible();
+        await floatingToolbar.getByRole('menuitem', { name: '居中' }).click();
     });
 
     test('offers slide actions when the canvas has no object selection', async ({ page }) => {

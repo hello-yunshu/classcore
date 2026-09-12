@@ -9,6 +9,8 @@ import {
   addScene,
   cloneScene,
   computeStageFitZoom,
+  computeStageViewportFrame,
+  computeStageViewportLayout,
   createBlankStudioDocument,
   moveElementLayer,
   moveScene,
@@ -59,4 +61,37 @@ test('Authoring Studio stage derives zoom from its responsive viewport', () => {
   assert.equal(computeStageFitZoom(640, 360, 1280, 720), 0.5);
   assert.equal(computeStageFitZoom(800, 360, 1280, 720), 0.5);
   assert.equal(computeStageFitZoom(0, 360, 1280, 720), 1);
+});
+
+test('Authoring Studio stage keeps zoomed content scrollable and centers content that fits', () => {
+  assert.deepEqual(computeStageViewportFrame(1000, 600, 1280, 720, 0.5), {
+    width: 640,
+    height: 360,
+  });
+  assert.deepEqual(computeStageViewportFrame(1000, 600, 1280, 720, 0.75, 0, 0, 20), {
+    width: 1000,
+    height: 580,
+  });
+  assert.deepEqual(computeStageViewportFrame(1000, 600, 1280, 720, 1.5, 0, 0, 20), {
+    width: 1000,
+    height: 600,
+  });
+  assert.deepEqual(computeStageViewportLayout(1000, 600, 1280, 720, 0.78125, 0), {
+    contentWidth: 1000,
+    contentHeight: 600,
+    stageLeft: 0,
+    stageTop: 18.75,
+  });
+  assert.deepEqual(computeStageViewportLayout(1000, 600, 1280, 720, 0.75, 20), {
+    contentWidth: 1000,
+    contentHeight: 600,
+    stageLeft: 20,
+    stageTop: 30,
+  });
+  assert.deepEqual(computeStageViewportLayout(1000, 600, 1280, 720, 1.5, 20), {
+    contentWidth: 1960,
+    contentHeight: 1120,
+    stageLeft: 20,
+    stageTop: 20,
+  });
 });

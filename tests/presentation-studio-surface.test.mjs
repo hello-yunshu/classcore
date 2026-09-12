@@ -33,6 +33,16 @@ test('Studio keeps command and recovery state explicit and scoped', async () => 
     assert.doesNotMatch(e2e, /test\.skip\(/);
 });
 
+test('floating toolbar routes text alignment to paragraph formatting', () => {
+    assert.match(entry, /function isTextElement\(id: ElementId\)/);
+    assert.match(entry, /const textSplit = createSplitButton/);
+    assert.match(entry, /id: 'floating-text-center'/);
+    assert.match(entry, /label: '居中',[\s\S]*controller\.setParagraphForElement\(ids\[0\], \{ align: 'center' \}\)/);
+    assert.match(entry, /floating-text-center/);
+    assert.match(entry, /controller\.align\(ids, 'left'\)/);
+    assert.match(commandSurface, /anchorElement: HTMLElement \| null = null/);
+});
+
 test('production Studio seed content is generic rather than lesson-specific', () => {
     assert.match(entry, /text: '标题'/);
     assert.match(entry, /text: '副标题'/);

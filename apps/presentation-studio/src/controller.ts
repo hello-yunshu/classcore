@@ -292,6 +292,12 @@ export class PresentationStudioController {
         if (ids.length) this.execute(...ids.map(id => ({ type: 'SetFlip', id, h, v }) as const));
     }
     setRunProps(id: ElementId, range: { from: TextPosition; to: TextPosition }, props: RunPropertyOverrides): void { this.execute({ type: 'SetRunProps', id, range, props }); }
+    setParagraphForElement(id: ElementId, props: ParagraphPropertyOverrides): void {
+        const body = this.requireEditor().effectiveElement(id).text;
+        if (!body) return;
+        const end = textPositionAtIndex(body, textBodyEditText(body).length);
+        this.execute({ type: 'SetParaProps', id, range: { from: { p: 0, r: 0, off: 0 }, to: end }, props });
+    }
     setFont(font: string | null): void { this.adapter.snapshot.view?.setRunProps({ font }); }
     setFontSize(size: number | null): void { this.adapter.snapshot.view?.setRunProps({ size }); }
     toggleBold(): void { this.toggleRunProperty('b'); }
