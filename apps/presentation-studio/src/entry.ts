@@ -636,10 +636,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   const group = (label: string, controls: HTMLElement[], extraClass = ''): void => {
    const section = document.createElement('div');
    section.className = `toolbar-group${extraClass ? ` ${extraClass}` : ''}`;
-   const heading = document.createElement('span');
-   heading.className = 'toolbar-label';
-   heading.textContent = label;
-   section.append(heading, ...controls);
+   section.setAttribute('aria-label', label);
+   section.append(...controls);
    toolbar.append(section);
   };
   const command = (id: string, label: string, icon: IconId, execute: () => void | Promise<void>, shortcut?: string, disabled = false): StudioCommand => ({ id, label, icon, shortcut, disabled, execute: wrapAction(execute) });

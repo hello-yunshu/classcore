@@ -37,7 +37,8 @@ test.describe('Presentation Studio command surface', () => {
         await page.getByRole('tab', { name: '插入' }).click();
         await expect(page.getByRole('listbox', { name: '形状库' })).toBeVisible();
         expect(await page.locator('.studio-icon').count()).toBeGreaterThan(8);
-        await expect(page.locator('.toolbar-label')).toContainText(['文本', '图片', '形状']);
+        await expect(page.locator('.toolbar-label')).toHaveCount(0);
+        await expect(page.getByRole('button', { name: '图片' }).first()).toBeVisible();
         await expect(page.locator('.context-toolbar')).not.toContainText('...');
     });
 

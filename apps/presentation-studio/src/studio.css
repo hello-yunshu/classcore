@@ -60,10 +60,10 @@ h1 { margin: 4px 0 0; color: var(--ink); font: 700 21px ui-sans-serif, -apple-sy
 .ribbon-tab { position: relative; border: 0; border-bottom: 3px solid transparent; padding: 11px 14px 8px; color: var(--muted-strong); background: transparent; cursor: pointer; font-size: 11px; white-space: nowrap; transition: color .18s ease, background .18s ease, border-color .18s ease; }
 .ribbon-tab:hover { color: var(--ink); background: #eeece5; }
 .ribbon-tab.active { color: var(--ink); border-bottom-color: var(--focus); background: var(--focus-wash); font-weight: 800; }
-.context-toolbar { display: flex; align-items: center; gap: 8px; height: 84px; min-height: 84px; padding: 6px 22px; overflow-x: auto; overflow-y: visible; background: var(--panel-wash); border-bottom: 1px solid var(--line); box-shadow: 0 2px 8px rgba(31, 45, 61, .035); }
+.context-toolbar { display: flex; align-items: center; gap: 8px; height: 68px; min-height: 68px; padding: 6px 22px; overflow-x: auto; overflow-y: visible; background: var(--panel-wash); border-bottom: 1px solid var(--line); box-shadow: 0 2px 8px rgba(31, 45, 61, .035); }
 .toolbar-group { flex-shrink: 0; gap: 2px; padding-right: 8px; border-right: 1px solid var(--line); }
 .toolbar-group:last-child { border-right: 0; }
-.toolbar-label { display: block; width: 100%; margin-top: 2px; color: var(--muted-strong); font-size: 9px; font-weight: 800; line-height: 1.1; text-align: center; letter-spacing: .04em; }
+.toolbar-label { display: none; }
 .gallery-label { display: block; }
 
 .small-button, .tool-button, .primary-button, .signal-button, .danger-button, .preview-button, .swatch-button { border: 1px solid var(--line-strong); border-radius: 7px; padding: 7px 10px; color: var(--ink-soft); background: var(--panel); cursor: pointer; font-size: 11px; white-space: nowrap; transition: border-color .18s ease, color .18s ease, background .18s ease, box-shadow .18s ease, transform .18s ease; }
@@ -227,7 +227,7 @@ h1 { margin: 4px 0 0; color: var(--ink); font: 700 21px ui-sans-serif, -apple-sy
 .selection-pane-host [role="tree"], .selection-pane-host [role="list"] { min-height: 120px; padding: 8px 0; }
 .selection-pane-host button { width: 100%; border: 0; border-radius: 5px; padding: 7px 8px; color: var(--ink-soft); background: transparent; text-align: left; cursor: pointer; font-size: 11px; }
 .selection-pane-host button:hover, .selection-pane-host button:focus-visible { color: var(--ink); background: #eef2f9; outline: none; }
-.toolbar-group { align-items: start; }
+.toolbar-group { align-items: center; }
 .toolbar-group .command-button { min-height: 33px; }
 .gallery-grid [class*="preview-table-"] { background: linear-gradient(to right, transparent 31%, currentColor 32% 36%, transparent 37% 64%, currentColor 65% 69%, transparent 70%), linear-gradient(to bottom, transparent 31%, currentColor 32% 36%, transparent 37% 64%, currentColor 65% 69%, transparent 70%); }
 
