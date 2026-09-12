@@ -840,7 +840,10 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  inspectorBody.append(labelBlock('文字', textArea));
  const textTools = document.createElement('div');
  textTools.className = 'layer-actions';
- textTools.append(button('加粗', wrapAction(() => { controller.setTextStyle(id, { b: true }); renderAll(false); }), 'small-button', '加粗', 'font'), button('斜体', wrapAction(() => { controller.setTextStyle(id, { i: true }); renderAll(false); }), 'small-button', '斜体', 'font'), button('下划线', wrapAction(() => { controller.setTextStyle(id, { u: true }); renderAll(false); }), 'small-button', '下划线', 'font'));
+ const bold = button('加粗', wrapAction(() => { controller.setTextStyle(id, { b: true }); renderAll(false); }), 'small-button', '加粗', 'font');
+ const italic = button('斜体', wrapAction(() => { controller.setTextStyle(id, { i: true }); renderAll(false); }), 'small-button', '斜体', 'font');
+ const underline = button('下划线', wrapAction(() => { controller.setTextStyle(id, { u: true }); renderAll(false); }), 'small-button', '下划线', 'font');
+ textTools.append(bold, italic, underline);
  inspectorBody.append(textTools);
  } if (record.src.kind === 'shape' || record.src.kind === 'image') inspectorBody.append(layerControls(id));
  }
