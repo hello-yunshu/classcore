@@ -203,7 +203,6 @@ h1 { margin: 4px 0 0; color: var(--ink); font: 700 21px ui-sans-serif, -apple-sy
 .command-menu { position: absolute; z-index: 40; top: calc(100% + 5px); left: 0; display: none; min-width: 188px; padding: 6px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--panel); box-shadow: var(--shadow-float); }
 .command-dropdown > .command-menu { position: fixed; top: 0; left: 0; }
 .command-menu.is-open { display: grid; gap: 2px; }
-.command-menu-heading { padding: 5px 8px 4px; color: var(--muted-strong); border-bottom: 1px solid var(--line); font-size: 10px; font-weight: 800; letter-spacing: .04em; line-height: 1.2; }
 .command-menu-entry { position: relative; display: block; }
 .command-menu-item { width: 100%; justify-content: flex-start; text-align: left; }
 .command-menu-item .menu-chevron { margin-left: auto; }

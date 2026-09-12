@@ -93,11 +93,6 @@ function makeMenuItem(item: StudioMenuItem, owner: HTMLButtonElement): HTMLDivEl
         const submenu = document.createElement('div');
         submenu.className = 'command-menu command-submenu';
         submenu.setAttribute('role', 'menu');
-        const heading = document.createElement('div');
-        heading.className = 'command-menu-heading';
-        heading.textContent = item.label;
-        heading.setAttribute('role', 'presentation');
-        submenu.append(heading);
         item.submenu.forEach(child => submenu.append(makeMenuItem(child, owner)));
         const open = () => {
             wrapper.parentElement?.querySelectorAll<HTMLElement>(':scope > .command-menu-entry > .command-submenu.is-open').forEach(other => other.classList.remove('is-open'));

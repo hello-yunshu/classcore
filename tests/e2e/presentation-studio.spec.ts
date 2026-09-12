@@ -22,6 +22,7 @@ test.describe('Presentation Studio command surface', () => {
         await expect(page.getByRole('menuitem', { name: '对齐' })).toBeVisible();
         await page.getByRole('menuitem', { name: '对齐' }).hover();
         await expect(page.getByRole('menuitem', { name: '左对齐' })).toBeVisible();
+        await expect(page.locator('.command-menu-heading')).toHaveCount(0);
         await page.keyboard.press('Escape');
     });
 
