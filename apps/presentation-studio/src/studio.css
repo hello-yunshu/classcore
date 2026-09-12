@@ -60,7 +60,7 @@ h1 { margin: 4px 0 0; color: var(--ink); font: 700 21px ui-sans-serif, -apple-sy
 .ribbon-tab { position: relative; border: 0; border-bottom: 3px solid transparent; padding: 11px 14px 8px; color: var(--muted-strong); background: transparent; cursor: pointer; font-size: 11px; white-space: nowrap; transition: color .18s ease, background .18s ease, border-color .18s ease; }
 .ribbon-tab:hover { color: var(--ink); background: #eeece5; }
 .ribbon-tab.active { color: var(--ink); border-bottom-color: var(--focus); background: var(--focus-wash); font-weight: 800; }
-.context-toolbar { display: flex; align-items: center; gap: 8px; height: 68px; min-height: 68px; padding: 6px 22px; overflow-x: auto; overflow-y: visible; background: var(--panel-wash); border-bottom: 1px solid var(--line); box-shadow: 0 2px 8px rgba(31, 45, 61, .035); }
+.context-toolbar { display: flex; align-items: center; gap: 8px; min-height: 68px; padding: 6px 22px; overflow-x: auto; overflow-y: visible; background: var(--panel-wash); border-bottom: 1px solid var(--line); box-shadow: 0 2px 8px rgba(31, 45, 61, .035); }
 .toolbar-group { flex-shrink: 0; gap: 2px; padding-right: 8px; border-right: 1px solid var(--line); }
 .toolbar-group:last-child { border-right: 0; }
 .toolbar-label { display: none; }
@@ -175,7 +175,7 @@ h1 { margin: 4px 0 0; color: var(--ink); font: 700 21px ui-sans-serif, -apple-sy
 .command-button.preview-exit { border-color: var(--signal); background: var(--signal); }
 .command-button.preview-exit:hover:not(:disabled) { border-color: #ad4d40; color: #fff; background: #b85e4a; }
 .context-toolbar > .toolbar-group .command-button { min-width: 42px; min-height: 50px; flex: 0 0 auto; flex-direction: column; gap: 2px; padding: 4px 6px 3px; line-height: 1; }
-.context-toolbar .studio-icon { width: 14px; height: 14px; }
+.context-toolbar .studio-icon { width: 17px; height: 17px; }
 .context-toolbar .dropdown-chevron { width: 12px; height: 12px; stroke-width: 1.8; }
 .context-toolbar .command-label { max-width: none; overflow: visible; flex: 0 0 auto; font-size: 10px; line-height: 1.15; text-align: center; text-overflow: clip; white-space: nowrap; }
 .context-toolbar .command-menu .command-button { min-width: 0; min-height: 31px; flex-direction: row; gap: 6px; padding: 5px 8px; line-height: normal; }
@@ -203,14 +203,16 @@ h1 { margin: 4px 0 0; color: var(--ink); font: 700 21px ui-sans-serif, -apple-sy
 .command-menu { position: absolute; z-index: 40; top: calc(100% + 5px); left: 0; display: none; min-width: 188px; padding: 6px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--panel); box-shadow: var(--shadow-float); }
 .command-dropdown > .command-menu { position: fixed; top: 0; left: 0; }
 .command-menu.is-open { display: grid; gap: 2px; }
+.command-menu-divider { height: 1px; margin: 4px 2px; background: var(--line); }
 .command-menu-entry { position: relative; display: block; }
 .command-menu-item { width: 100%; justify-content: flex-start; text-align: left; }
 .command-menu-item .menu-chevron { margin-left: auto; }
 .command-submenu { top: -7px; left: calc(100% + 5px); }
 .command-gallery { display: grid; gap: 5px; min-width: 224px; }
+.context-toolbar .command-gallery { max-height: 132px; overflow-y: auto; padding-right: 4px; scrollbar-width: thin; }
 .gallery-label { color: var(--muted-strong); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .gallery-grid { display: grid; grid-template-columns: repeat(var(--gallery-columns), minmax(42px, 1fr)); gap: 4px; }
-.gallery-item { min-width: 42px; min-height: 44px; flex-direction: column; padding: 4px; font-size: 10px; }
+.gallery-item { min-width: 42px; min-height: 38px; flex-direction: column; padding: 4px; font-size: 10px; }
 .gallery-item .studio-icon { width: 14px; height: 14px; }
 .gallery-preview { width: 22px; height: 14px; border: 1px solid currentColor; opacity: .7; }
 .preview-roundrect { border-radius: 4px; }

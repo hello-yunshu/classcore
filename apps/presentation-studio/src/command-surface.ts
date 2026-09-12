@@ -1,4 +1,5 @@
 import { createIcon, type IconId } from './icons/index.js';
+export { createIcon } from './icons/index.js';
 
 /** Shared state passed by a product surface to command renderers. */
 export interface CommandContext {
@@ -25,6 +26,7 @@ export interface StudioCommand {
 
 export interface StudioMenuItem extends StudioCommand {
     submenu?: readonly StudioMenuItem[];
+    separator?: boolean;
 }
 
 export type CommandDensity = 'icon-only' | 'compact' | 'large';
@@ -81,6 +83,11 @@ function ensureMenuDismissListener(): void {
 function makeMenuItem(item: StudioMenuItem, owner: HTMLButtonElement): HTMLDivElement {
     const wrapper = document.createElement('div');
     wrapper.className = 'command-menu-entry';
+    if (item.separator) {
+        wrapper.className = 'command-menu-divider';
+        wrapper.setAttribute('role', 'separator');
+        return wrapper;
+    }
     const button = createCommandButton(item, 'compact', 'command-menu-item');
     button.setAttribute('role', 'menuitem');
     if (!item.submenu) wrapper.append(button);
@@ -193,7 +200,12 @@ export function createGallery(id: string, label: string, items: readonly Gallery
         const button = createCommandButton(item, 'compact', 'gallery-item');
         button.setAttribute('role', 'option');
         button.setAttribute('aria-selected', String(Boolean(item.checked)));
-        if (item.preview) { const preview = document.createElement('span'); preview.className = `gallery-preview ${item.preview}`; button.prepend(preview); }
+        if (item.preview) {
+            const preview = document.createElement('span');
+            preview.className = `gallery-preview ${item.preview}`;
+            button.querySelector('.studio-icon')?.remove();
+            button.prepend(preview);
+        }
         grid.append(button);
     });
     section.append(grid);

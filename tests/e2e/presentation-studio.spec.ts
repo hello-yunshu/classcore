@@ -19,9 +19,12 @@ test.describe('Presentation Studio command surface', () => {
         await page.getByRole('tab', { name: '开始' }).click();
         const arrange = page.getByRole('button', { name: '排列' });
         await arrange.click();
+        await expect(page.locator('.command-menu-divider')).toHaveCount(2);
         await expect(page.getByRole('menuitem', { name: '对齐' })).toBeVisible();
         await page.getByRole('menuitem', { name: '对齐' }).hover();
         await expect(page.getByRole('menuitem', { name: '左对齐' })).toBeVisible();
+        const alignmentIcons = await page.locator('.command-submenu.is-open > .command-menu-entry > .command-menu-item > .studio-icon').evaluateAll(nodes => nodes.map(node => node.getAttribute('class')));
+        expect(new Set(alignmentIcons).size).toBe(6);
         await expect(page.locator('.command-menu-heading')).toHaveCount(0);
         await page.keyboard.press('Escape');
     });
@@ -31,12 +34,15 @@ test.describe('Presentation Studio command surface', () => {
         await page.getByRole('button', { name: '选择窗格' }).click();
         await expect(page.locator('.selection-pane-host')).toBeVisible();
         await expect(page.locator('.object-list')).toHaveCount(0);
+        await expect(page.locator('.selection-pane-host .studio-icon')).toHaveCount(2);
+        await expect(page.locator('.selection-pane-host')).not.toContainText('🔓');
     });
 
     test('keeps local icons and exposes editor controls without ellipsis placeholders', async ({ page }) => {
         await page.getByRole('tab', { name: '插入' }).click();
         await expect(page.getByRole('listbox', { name: '形状库' })).toBeVisible();
         expect(await page.locator('.studio-icon').count()).toBeGreaterThan(8);
+        await expect(page.locator('.gallery-item .studio-icon')).toHaveCount(0);
         await expect(page.locator('.toolbar-label')).toHaveCount(0);
         await expect(page.getByRole('button', { name: '图片' }).first()).toBeVisible();
         await expect(page.locator('.context-toolbar')).not.toContainText('...');

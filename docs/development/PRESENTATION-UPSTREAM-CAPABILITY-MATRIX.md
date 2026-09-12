@@ -66,7 +66,7 @@ No row is deferred solely for schedule. Deferred rows name the missing public AP
 
 ### Closure status
 
-`CLOSED`: version-line decision, command-surface icon guessing removal, global menu-listener leak removal, explicit command toggle semantics, explicit control labels without redundant Ribbon group headings, responsive overflow access, scoped pending/recovery keys, effective-text reads, dynamic source aspect ratio, real layout gallery entry, and static source checks.
+`CLOSED`: version-line decision, command-surface icon guessing removal, explicit layer/alignment/distribution/transform icons, grouped Arrange menu separators, global menu-listener leak removal, explicit command toggle semantics, explicit control labels without redundant Ribbon group headings, responsive gallery access, scoped pending/recovery keys, effective-text reads, dynamic source aspect ratio, real layout gallery entry, and static source checks.
 
 `CLOSED`: the seven-test Presentation Studio Chromium smoke is exercised locally on the current worktree; the historical CI run remains evidence for the earlier three-test surface only and is not reused as current-head evidence.
 

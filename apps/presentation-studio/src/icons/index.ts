@@ -8,12 +8,14 @@
 export type IconId =
     | 'save' | 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'delete' | 'duplicate'
     | 'new-slide' | 'text' | 'image' | 'shape' | 'table' | 'chart' | 'media'
-    | 'align' | 'distribute' | 'arrange' | 'group' | 'rotate' | 'crop' | 'shape-outline' | 'replace-image'
+    | 'align' | 'align-left' | 'align-center-horizontal' | 'align-right' | 'align-top' | 'align-middle' | 'align-bottom'
+    | 'distribute' | 'distribute-horizontal' | 'distribute-vertical' | 'arrange' | 'bring-front' | 'bring-forward' | 'send-backward' | 'send-back'
+    | 'group' | 'ungroup' | 'rotate' | 'rotate-left' | 'rotate-right' | 'flip-horizontal' | 'flip-vertical' | 'crop' | 'shape-outline' | 'replace-image'
     | 'alt-text' | 'background' | 'transition' | 'animation' | 'preview' | 'search'
     | 'replace' | 'selection-pane' | 'zoom-in' | 'zoom-out' | 'fit' | 'snapping'
     | 'guides' | 'notes' | 'publish' | 'rehearse' | 'more' | 'chevron-down'
     | 'chevron-right' | 'format-painter' | 'font' | 'font-family' | 'font-size' | 'bold' | 'italic' | 'underline' | 'strike'
-    | 'paragraph' | 'bullet-list' | 'number-list' | 'indent' | 'line-spacing' | 'lock' | 'hide' | 'effects' | 'link';
+    | 'paragraph' | 'bullet-list' | 'number-list' | 'indent' | 'line-spacing' | 'lock' | 'unlock' | 'hide' | 'show' | 'effects' | 'link';
 
 const PATHS: Record<IconId, string> = {
     save: '<path d="M4 3h13l3 3v15H4z"/><path d="M7 3v6h9V3M7 21v-7h10v7"/>',
@@ -33,10 +35,27 @@ const PATHS: Record<IconId, string> = {
     chart: '<path d="M4 20V4M4 20h17"/><path d="m7 16 4-5 3 3 5-7"/>',
     media: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/>',
     align: '<path d="M4 5h16M4 12h12M4 19h16"/>',
+    'align-left': '<path d="M5 4v16M8 6h11M8 12h8M8 18h11"/>',
+    'align-center-horizontal': '<path d="M12 4v16M6 7h12M8 12h8M6 17h12"/>',
+    'align-right': '<path d="M19 4v16M5 6h11M8 12h8M5 18h11"/>',
+    'align-top': '<path d="M4 5h16M6 8v11M12 8v8M18 8v11"/>',
+    'align-middle': '<path d="M4 12h16M7 6v12M12 8v8M17 6v12"/>',
+    'align-bottom': '<path d="M4 19h16M6 5v11M12 8v11M18 5v11"/>',
     distribute: '<path d="M4 4v16M12 7v10M20 4v16M6 12h4M14 12h4"/>',
+    'distribute-horizontal': '<path d="M4 4v16M20 4v16M9 7h6M9 12h6M9 17h6"/><path d="M7 9 9 7l2 2M15 7l2 2-2 2M7 14l2-2 2 2M15 12l2 2-2 2"/>',
+    'distribute-vertical': '<path d="M4 4h16M4 20h16M7 9v6M12 9v6M17 9v6"/><path d="M9 7 7 9l2 2M7 15l2 2 2-2M14 7l2 2-2 2M14 15l2 2 2-2"/>',
     arrange: '<rect x="4" y="4" width="10" height="10"/><rect x="10" y="10" width="10" height="10"/>',
+    'bring-front': '<path d="M5 17h8M5 12h8M5 7h8M17 19V5M14 8l3-3 3 3"/>',
+    'bring-forward': '<path d="M5 17h8M5 12h8M5 7h8M17 19V9M14 12l3-3 3 3"/>',
+    'send-backward': '<path d="M5 17h8M5 12h8M5 7h8M17 5v10M14 12l3 3 3-3"/>',
+    'send-back': '<path d="M5 17h8M5 12h8M5 7h8M17 5v14M14 16l3 3 3-3"/>',
     group: '<rect x="4" y="5" width="7" height="7"/><rect x="13" y="12" width="7" height="7"/><path d="M7 16h6M10 13v6"/>',
+    ungroup: '<rect x="4" y="5" width="6" height="6"/><rect x="14" y="5" width="6" height="6"/><rect x="9" y="14" width="6" height="6"/>',
     rotate: '<path d="M5 9a7 7 0 1 1 2 8"/><path d="M5 4v5h5"/>',
+    'rotate-left': '<path d="M19 9a7 7 0 1 0-2 8"/><path d="M19 4v5h-5"/>',
+    'rotate-right': '<path d="M5 9a7 7 0 1 1 2 8"/><path d="M5 4v5h5"/>',
+    'flip-horizontal': '<path d="M12 4v16M5 7l4 5-4 5M19 7l-4 5 4 5"/>',
+    'flip-vertical': '<path d="M4 12h16M7 5l5 4 5-4M7 19l5-4 5 4"/>',
     crop: '<path d="M6 3v14a4 4 0 0 0 4 4h11M3 6h14a4 4 0 0 1 4 4v11"/>',
     'replace-image': '<rect x="3" y="5" width="13" height="14" rx="2"/><path d="m4 17 4-4 3 3 2-2 3 3M19 4v6M16 7l3-3 3 3"/>',
     'alt-text': '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 16c1-3 2-5 3-5s2 2 3 5M8 13h4M16 9h3M16 13h3"/>',
@@ -72,7 +91,9 @@ const PATHS: Record<IconId, string> = {
     indent: '<path d="M4 6h16M4 12h12M4 18h16M7 9l-3 3 3 3"/>',
     'line-spacing': '<path d="M6 5v14M3 8l3-3 3 3M3 16l3 3 3-3M13 6h7M13 12h7M13 18h7"/>',
     lock: '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+    unlock: '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 7-2"/>',
     hide: '<path d="M3 12s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2"/><path d="M4 4l16 16"/>',
+    show: '<path d="M3 12s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2"/>',
     effects: '<path d="m12 3 2.2 5.1L20 10.3l-5.8 2.2L12 18l-2.2-5.5L4 10.3l5.8-2.2z"/><path d="m19 16 .8 1.8L22 18.6l-2.2.8 0 2.4-.8-1.6-2.2-.8 2.2-.8z"/>',
     link: '<path d="M10 13.5 14 9.5M7.5 16.5l-1 1a3.5 3.5 0 0 1-5-5l3-3a3.5 3.5 0 0 1 5 0M16.5 7.5l1-1a3.5 3.5 0 0 1 5 5l-3 3a3.5 3.5 0 0 1-5 0"/>',
 };

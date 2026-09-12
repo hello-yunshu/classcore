@@ -365,6 +365,20 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const selectionPaneHost = document.createElement('div');
  selectionPaneHost.className = 'selection-pane-host';
  selectionPaneHost.setAttribute('aria-label', '选择窗格');
+ const syncSelectionPaneIcons = (): void => {
+  selectionPaneHost.querySelectorAll<HTMLButtonElement>('button[aria-label]').forEach(button => {
+   const label = button.getAttribute('aria-label') ?? '';
+   const iconId: IconId | null = label.slice(0, 4) === '隐藏对象' ? 'hide' : label.slice(0, 4) === '显示对象' ? 'show' : label.slice(0, 4) === '锁定对象' ? 'lock' : label.slice(0, 4) === '解锁对象' ? 'unlock' : null;
+   if (!iconId) return;
+   const expectedClass = `studio-icon-${iconId}`;
+   if (button.querySelector(`.${expectedClass}`)) return;
+   button.replaceChildren(commandSurface!.createIcon(iconId, label));
+   button.classList.add('selection-pane-icon-button');
+   button.title = label;
+  });
+ };
+ const selectionPaneObserver = new MutationObserver(syncSelectionPaneIcons);
+ selectionPaneObserver.observe(selectionPaneHost, { childList: true, subtree: true });
  inspector.append(inspectorBody, selectionPaneHost);
  layout.append(scenePanel, stagePanel, inspector);
  app.append(layout);
@@ -643,31 +657,38 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   const command = (id: string, label: string, icon: IconId, execute: () => void | Promise<void>, shortcut?: string, disabled = false): StudioCommand => ({ id, label, icon, shortcut, disabled, execute: wrapAction(execute) });
   const selectionIds = selectedIds();
   const selectedRecord = selectionIds.length === 1 ? controller.element(selectionIds[0]) : null;
+  const divider = (id: string): StudioMenuItem => ({ id, label: '', separator: true, execute: () => undefined });
   const arrange: StudioMenuItem[] = [
-   command('layer-front', '置于顶层', 'arrange', () => { controller.setLayerMany(selectedIds(), 'front'); renderAll(); }),
-   command('layer-forward', '上移一层', 'arrange', () => { controller.setLayerMany(selectedIds(), 'forward'); renderAll(); }),
-   command('layer-backward', '下移一层', 'arrange', () => { controller.setLayerMany(selectedIds(), 'backward'); renderAll(); }),
-   command('layer-back', '置于底层', 'arrange', () => { controller.setLayerMany(selectedIds(), 'back'); renderAll(); }),
+   command('layer-front', '置于顶层', 'bring-front', () => { controller.setLayerMany(selectedIds(), 'front'); renderAll(); }),
+   command('layer-forward', '上移一层', 'bring-forward', () => { controller.setLayerMany(selectedIds(), 'forward'); renderAll(); }),
+   command('layer-backward', '下移一层', 'send-backward', () => { controller.setLayerMany(selectedIds(), 'backward'); renderAll(); }),
+   command('layer-back', '置于底层', 'send-back', () => { controller.setLayerMany(selectedIds(), 'back'); renderAll(); }),
+   divider('layer-divider'),
    { ...command('align', '对齐', 'align', () => undefined), submenu: [
-    command('align-left', '左对齐', 'align', () => { controller.align(selectedIds(), 'left'); renderAll(); }),
-    command('align-center', '水平居中', 'align', () => { controller.align(selectedIds(), 'center'); renderAll(); }),
-    command('align-right', '右对齐', 'align', () => { controller.align(selectedIds(), 'right'); renderAll(); }),
-    command('align-top', '顶端对齐', 'align', () => { controller.align(selectedIds(), 'top'); renderAll(); }),
-    command('align-middle', '垂直居中', 'align', () => { controller.align(selectedIds(), 'middle'); renderAll(); }),
-    command('align-bottom', '底端对齐', 'align', () => { controller.align(selectedIds(), 'bottom'); renderAll(); }),
+    command('align-left', '左对齐', 'align-left', () => { controller.align(selectedIds(), 'left'); renderAll(); }),
+    command('align-center', '水平居中', 'align-center-horizontal', () => { controller.align(selectedIds(), 'center'); renderAll(); }),
+    command('align-right', '右对齐', 'align-right', () => { controller.align(selectedIds(), 'right'); renderAll(); }),
+    command('align-top', '顶端对齐', 'align-top', () => { controller.align(selectedIds(), 'top'); renderAll(); }),
+    command('align-middle', '垂直居中', 'align-middle', () => { controller.align(selectedIds(), 'middle'); renderAll(); }),
+    command('align-bottom', '底端对齐', 'align-bottom', () => { controller.align(selectedIds(), 'bottom'); renderAll(); }),
    ] },
    { ...command('distribute', '分布', 'distribute', () => undefined), submenu: [
-    command('distribute-horizontal', '水平分布', 'distribute', () => { controller.distributeHorizontal(selectedIds()); renderAll(); }, undefined, selectedIds().length < 3),
-    command('distribute-vertical', '垂直分布', 'distribute', () => { controller.distributeVertical(selectedIds()); renderAll(); }, undefined, selectedIds().length < 3),
+    command('distribute-horizontal', '水平分布', 'distribute-horizontal', () => { controller.distributeHorizontal(selectedIds()); renderAll(); }, undefined, selectedIds().length < 3),
+    command('distribute-vertical', '垂直分布', 'distribute-vertical', () => { controller.distributeVertical(selectedIds()); renderAll(); }, undefined, selectedIds().length < 3),
+   ] },
+   { ...command('group-menu', '组合', 'group', () => undefined), submenu: [
+    command('group', '组合', 'group', () => { controller.group(selectedIds()); renderAll(); }, '⌘/Ctrl+G', selectionIds.length < 2),
+    command('ungroup', '取消组合', 'ungroup', () => { if (selectionIds[0]) controller.ungroup(selectionIds[0]); renderAll(); }, '⌘/Ctrl+Shift+G', selectedRecord?.src.kind !== 'group'),
    ] },
    { ...command('rotate', '旋转', 'rotate', () => undefined), submenu: [
-    command('rotate-right', '向右旋转 90°', 'rotate', () => { controller.rotateMany(selectedIds(), 90); renderAll(); }),
-    command('rotate-left', '向左旋转 90°', 'rotate', () => { controller.rotateMany(selectedIds(), -90); renderAll(); }),
-    command('flip-h', '水平翻转', 'rotate', () => { controller.setFlipMany(selectedIds(), true); renderAll(); }),
-    command('flip-v', '垂直翻转', 'rotate', () => { controller.setFlipMany(selectedIds(), undefined, true); renderAll(); }),
+    command('rotate-right', '向右旋转 90°', 'rotate-right', () => { controller.rotateMany(selectedIds(), 90); renderAll(); }),
+    command('rotate-left', '向左旋转 90°', 'rotate-left', () => { controller.rotateMany(selectedIds(), -90); renderAll(); }),
+    command('flip-h', '水平翻转', 'flip-horizontal', () => { controller.setFlipMany(selectedIds(), true); renderAll(); }),
+    command('flip-v', '垂直翻转', 'flip-vertical', () => { controller.setFlipMany(selectedIds(), undefined, true); renderAll(); }),
    ] },
-   command('group', '组合', 'group', () => { controller.group(selectedIds()); renderAll(); }, '⌘/Ctrl+G', selectionIds.length < 2),
-   command('ungroup', '取消组合', 'group', () => { if (selectionIds[0]) controller.ungroup(selectionIds[0]); renderAll(); }, '⌘/Ctrl+Shift+G', selectedRecord?.src.kind !== 'group'),
+   divider('transform-divider'),
+   command('lock', selectedRecord?.meta.locked ? '解锁' : '锁定', selectedRecord?.meta.locked ? 'unlock' : 'lock', () => { selectedIds().forEach(id => controller.setLocked(id, !(controller.element(id)?.meta.locked === true))); renderAll(); }, undefined, !selectionIds.length),
+   command('visibility', selectedRecord?.meta.hiddenByUser ? '显示' : '隐藏', selectedRecord?.meta.hiddenByUser ? 'show' : 'hide', () => { selectedIds().forEach(id => controller.setHidden(id, !(controller.element(id)?.meta.hiddenByUser === true))); renderAll(); }, undefined, !selectionIds.length),
    command('selection-pane', '选择窗格', 'selection-pane', () => { inspectorTab = 'object'; renderAll(); }),
   ];
   const addNewSlide = (layoutId?: string): void => { const id = layoutId ? controller.addSlideWithLayout(layoutId) : controller.addSlide(); if (id) webPpt.setView({ slideId: id, mode: 'edit' }); renderAll(); };
@@ -1294,6 +1315,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  await webPpt.applyBinding({ source: next.source!.bytes, openOptions: { idPrefix: next.document.idPrefix }, mode: 'edit', textMode: 'svg' });
  webPpt.attach(editorHost);
  webPpt.attachSelectionPane(selectionPaneHost);
+ syncSelectionPaneIcons();
  webPpt.snapshot.view?.registerTextUi(toolbar);
  applyStageZoom(true);
  controller.attachEditorSubscription();
