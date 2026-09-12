@@ -532,24 +532,24 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  actions.append(button('+ 新页面', wrapAction(() => { const id = controller.addSlide();
  if (id) webPpt.setView({ slideId: id, mode: 'edit' });
  renderAll();
- }), 'primary-button'), button('复制', wrapAction(() => { const id = currentSlide();
+ }), 'primary-button', '新建页面', 'new-slide'), button('复制', wrapAction(() => { const id = currentSlide();
  if (!id) return;
  const copy = controller.duplicateSlide(id);
  if (copy) webPpt.setView({ slideId: copy, mode: 'edit' });
  renderAll();
- }), 'small-button'));
+ }), 'small-button', '复制页面', 'copy'));
  const reorder = document.createElement('div');
  reorder.className = 'scene-reorder';
  reorder.append(button('上移', wrapAction(() => { const id = currentSlide();
  if (id) controller.moveSlide(id, -1);
  renderAll();
- }), 'small-button'), button('下移', wrapAction(() => { const id = currentSlide();
+ }), 'small-button', '上移页面', 'arrange'), button('下移', wrapAction(() => { const id = currentSlide();
  if (id) controller.moveSlide(id, 1);
  renderAll();
- }), 'small-button'), button('删除页', wrapAction(() => { const id = currentSlide();
+ }), 'small-button', '下移页面', 'arrange'), button('删除页', wrapAction(() => { const id = currentSlide();
  if (id) controller.removeSlide(id);
  renderAll();
- }), 'danger-button'));
+ }), 'danger-button', '删除页面', 'delete'));
  scenePanel.append(actions, reorder);
  if (updateThumbnails) void syncThumbnails();
  }
@@ -606,21 +606,21 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   if (ribbonTab === 'start') {
    group('剪贴板', [
     createSplitButton(command('paste', '粘贴', 'paste', () => { controller.paste(); renderAll(); }, '⌘/Ctrl+V'), [command('paste-text', '仅保留文本', 'paste', () => { controller.paste(); renderAll(); })]),
-    button('剪切', wrapAction(() => { controller.cut(); }), 'tool-button'),
-    button('复制', wrapAction(() => { controller.copy(); }), 'tool-button'),
-    button('格式刷', wrapAction(() => { controller.startFormatPainter(); }), 'tool-button'),
+    button('剪切', wrapAction(() => { controller.cut(); }), 'tool-button', '剪切', 'cut'),
+    button('复制', wrapAction(() => { controller.copy(); }), 'tool-button', '复制', 'copy'),
+    button('格式刷', wrapAction(() => { controller.startFormatPainter(); }), 'tool-button', '格式刷', 'format-painter'),
    ]);
    group('幻灯片', [
     createSplitButton(command('new-slide', '新建幻灯片', 'new-slide', addNewSlide), [
      ...(currentSession()?.editor.doc.layoutOrder ?? []).map((layoutId: string) => command(`layout:${layoutId}`, currentSession()!.editor.doc.layouts[layoutId]?.name ?? '版式', 'new-slide', () => addNewSlide(layoutId))),
     ]),
-    button('复制', wrapAction(() => { const id = currentSlide(); if (id) { const copy = controller.duplicateSlide(id); if (copy) webPpt.setView({ slideId: copy, mode: 'edit' }); renderAll(); } }), 'tool-button'),
-    button('删除', wrapAction(() => { const id = currentSlide(); if (id) controller.removeSlide(id); renderAll(); }), 'danger-button'),
+    button('复制', wrapAction(() => { const id = currentSlide(); if (id) { const copy = controller.duplicateSlide(id); if (copy) webPpt.setView({ slideId: copy, mode: 'edit' }); renderAll(); } }), 'tool-button', '复制', 'copy'),
+    button('删除', wrapAction(() => { const id = currentSlide(); if (id) controller.removeSlide(id); renderAll(); }), 'danger-button', '删除', 'delete'),
    ]);
    group('排列', [createDropdown(command('arrange', '排列', 'arrange', () => undefined), arrange)]);
    group('编辑', [
-    button('查找', wrapAction(() => controller.openTextSearch({ mode: 'find' })), 'tool-button'),
-    button('替换', wrapAction(() => controller.openTextSearch({ mode: 'replace' })), 'tool-button'),
+    button('查找', wrapAction(() => controller.openTextSearch({ mode: 'find' })), 'tool-button', '查找', 'search'),
+    button('替换', wrapAction(() => controller.openTextSearch({ mode: 'replace' })), 'tool-button', '替换', 'replace'),
     createDropdown(command('select', '选择', 'selection-pane', () => undefined), [
      command('select-all', '全选', 'selection-pane', () => controller.selectAll()),
      command('selection-pane', '选择窗格', 'selection-pane', () => { inspectorTab = 'object'; renderAll(); }),
@@ -628,7 +628,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    ]);
   }
   if (ribbonTab === 'insert') {
-   group('文本', [button('文字', wrapAction(() => { const id = controller.addShape('rect'); if (id) { controller.editText(id, '输入文字'); controller.select({ kind: 'elements', ids: [id], enteredGroup: null }); } renderAll(); }), 'tool-button')]);
+   group('文本', [button('文字', wrapAction(() => { const id = controller.addShape('rect'); if (id) { controller.editText(id, '输入文字'); controller.select({ kind: 'elements', ids: [id], enteredGroup: null }); } renderAll(); }), 'tool-button', '文字', 'text')]);
    group('图片', [createSplitButton(command('image', '图片', 'image', () => chooseImage('insert')), [
     command('replace-image', '替换图片', 'replace-image', () => chooseImage('replace')),
     command('image-options', '图片选项', 'image', () => { inspectorTab = 'object'; renderAll(); }),
@@ -654,10 +654,10 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    }), 'tool-button', '插入表格…', 'table')]);
   }
   if (ribbonTab === 'design') group('设计', [
-   button('页面背景', wrapAction(() => backgroundInput.click()), 'tool-button'),
-   button('开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'),
-   button('缩小', wrapAction(() => { changeStageZoom(-.1); }), 'tool-button'),
-   button('放大', wrapAction(() => { changeStageZoom(.1); }), 'tool-button'),
+   button('页面背景', wrapAction(() => backgroundInput.click()), 'tool-button', '页面背景', 'background'),
+   button('开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button', '开启吸附', 'snapping'),
+   button('缩小', wrapAction(() => { changeStageZoom(-.1); }), 'tool-button', '缩小', 'zoom-out'),
+   button('放大', wrapAction(() => { changeStageZoom(.1); }), 'tool-button', '放大', 'zoom-in'),
   ]);
   if (ribbonTab === 'transition') group('切换', [createGallery('transition-gallery', '常用切换', [
    { ...command('transition-none', '无', 'transition', () => { controller.setTransition(null); renderAll(false); }), preview: 'preview-none' },
@@ -666,7 +666,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    { ...command('transition-wipe', '擦除', 'transition', () => { controller.setTransition({ type: 'wipe', dir: 'r' }); renderAll(false); }), preview: 'preview-wipe' },
    { ...command('transition-split', '分割', 'transition', () => { controller.setTransition({ type: 'split', dir: 'horz' }); renderAll(false); }), preview: 'preview-split' },
    { ...command('transition-zoom', '缩放', 'transition', () => { controller.setTransition({ type: 'zoom' }); renderAll(false); }), preview: 'preview-zoom' },
-  ], 6), button('预览切换', wrapAction(() => controller.previewTransition()), 'tool-button')]);
+  ], 6), button('预览切换', wrapAction(() => controller.previewTransition()), 'tool-button', '预览切换', 'preview')]);
   if (ribbonTab === 'animation') group('动画', [createGallery('animation-gallery', '动画库', [
    { ...command('animation-appear', '出现', 'animation', () => addAnimation('appear')), preview: 'preview-appear' },
    { ...command('animation-fade', '淡入', 'animation', () => addAnimation('fade')), preview: 'preview-fade' },
@@ -674,23 +674,23 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    { ...command('animation-wipe', '擦除', 'animation', () => addAnimation('wipe')), preview: 'preview-wipe' },
    { ...command('animation-zoom', '缩放', 'animation', () => addAnimation('zoom')), preview: 'preview-zoom' },
    { ...command('animation-spin', '旋转', 'animation', () => addAnimation('spin', 'emphasis')), preview: 'preview-spin' },
-  ], 6), button('动画窗格', wrapAction(() => { inspectorTab = 'animation'; renderAll(); }), 'tool-button'), button('预览', wrapAction(() => { void controller.previewAnimations(); }), 'tool-button')]);
-  if (ribbonTab === 'show') group('放映', [button('预览', wrapAction(() => togglePreview()), 'preview-button'), button('试课', wrapAction(() => rehearse()), 'show-rehearse-button'), button('发布冻结', wrapAction(() => publish()), 'show-publish-button')], 'show-toolbar-group');
+  ], 6), button('动画窗格', wrapAction(() => { inspectorTab = 'animation'; renderAll(); }), 'tool-button', '动画窗格', 'animation'), button('预览', wrapAction(() => { void controller.previewAnimations(); }), 'tool-button', '预览', 'preview')]);
+  if (ribbonTab === 'show') group('放映', [button('预览', wrapAction(() => togglePreview()), 'preview-button', '预览', 'preview'), button('试课', wrapAction(() => rehearse()), 'show-rehearse-button', '试课', 'rehearse'), button('发布冻结', wrapAction(() => publish()), 'show-publish-button', '发布冻结', 'publish')], 'show-toolbar-group');
   if (ribbonTab === 'view') group('视图', [
-   button('选择窗格', wrapAction(() => { inspectorTab = 'object'; renderAll(); }), 'tool-button'),
-   button(controller.snapshot.snapping ? '关闭吸附' : '开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button'),
-   button('适应窗口', wrapAction(() => { applyStageZoom(true); renderAll(false); }), 'tool-button'),
-   button('备注', wrapAction(() => { inspectorTab = 'page'; renderAll(); }), 'tool-button'),
+   button('选择窗格', wrapAction(() => { inspectorTab = 'object'; renderAll(); }), 'tool-button', '选择窗格', 'selection-pane'),
+   button(controller.snapshot.snapping ? '关闭吸附' : '开启吸附', wrapAction(() => { controller.setSnapping(!controller.snapshot.snapping); renderAll(false); }), 'tool-button', '吸附', 'snapping'),
+   button('适应窗口', wrapAction(() => { applyStageZoom(true); renderAll(false); }), 'tool-button', '适应窗口', 'fit'),
+   button('备注', wrapAction(() => { inspectorTab = 'page'; renderAll(); }), 'tool-button', '备注', 'notes'),
   ]);
   if (ribbonTab === 'image-format') group('图片格式', [
-   button('替换图片', wrapAction(() => chooseImage('replace')), 'tool-button'),
-   button('裁剪', wrapAction(() => { controller.startImageCrop(); }), 'tool-button'),
-   button('恢复裁剪', wrapAction(() => { controller.clearImageCrop(); }), 'tool-button'),
+   button('替换图片', wrapAction(() => chooseImage('replace')), 'tool-button', '替换图片', 'replace-image'),
+   button('裁剪', wrapAction(() => { controller.startImageCrop(); }), 'tool-button', '裁剪', 'crop'),
+   button('恢复裁剪', wrapAction(() => { controller.clearImageCrop(); }), 'tool-button', '恢复裁剪', 'crop'),
    createDropdown(command('image-arrange', '排列', 'arrange', () => undefined), arrange),
   ]);
   if (ribbonTab === 'shape-format') group('形状格式', [
-   button('形状填充', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.setFill(id, solid(rgb('#5375B8'))); renderAll(); }), 'tool-button'),
-   button('形状轮廓', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.setStroke(id, { color: rgb('#24324B'), width: 1.5, dash: null, cap: 'butt', join: 'miter', compound: 'sng' }); renderAll(); }), 'tool-button'),
+   button('形状填充', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.setFill(id, solid(rgb('#5375B8'))); renderAll(); }), 'tool-button', '形状填充', 'background'),
+   button('形状轮廓', wrapAction(() => { const id = selectedIds()[0]; if (id) controller.setStroke(id, { color: rgb('#24324B'), width: 1.5, dash: null, cap: 'butt', join: 'miter', compound: 'sng' }); renderAll(); }), 'tool-button', '形状轮廓', 'shape-outline'),
    createDropdown(command('shape-arrange', '排列', 'arrange', () => undefined), arrange),
   ]);
   if (ribbonTab === 'text-format') {
@@ -794,7 +794,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  tabs.className = 'inspector-tabs';
  (['object', 'page', 'animation'] as const).forEach(tab => { tabs.append(button(tab === 'object' ? '对象' : tab === 'page' ? '页面' : '动画', () => { inspectorTab = tab;
  renderInspector();
- }, `inspector-tab${inspectorTab === tab ? ' active' : ''}`));
+ }, `inspector-tab${inspectorTab === tab ? ' active' : ''}`, tab === 'object' ? '对象' : tab === 'page' ? '页面' : '动画', tab === 'object' ? 'selection-pane' : tab === 'page' ? 'background' : 'animation'));
  });
  inspectorBody.append(tabs);
  if (inspectorTab === 'page') { renderPageInspector();
@@ -840,7 +840,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  inspectorBody.append(labelBlock('文字', textArea));
  const textTools = document.createElement('div');
  textTools.className = 'layer-actions';
- textTools.append(button('加粗', wrapAction(() => { controller.setTextStyle(id, { b: true }); renderAll(false); }), 'small-button'), button('斜体', wrapAction(() => { controller.setTextStyle(id, { i: true }); renderAll(false); }), 'small-button'), button('下划线', wrapAction(() => { controller.setTextStyle(id, { u: true }); renderAll(false); }), 'small-button'));
+ textTools.append(button('加粗', wrapAction(() => { controller.setTextStyle(id, { b: true }); renderAll(false); }), 'small-button', '加粗', 'font'), button('斜体', wrapAction(() => { controller.setTextStyle(id, { i: true }); renderAll(false); }), 'small-button', '斜体', 'font'), button('下划线', wrapAction(() => { controller.setTextStyle(id, { u: true }); renderAll(false); }), 'small-button', '下划线', 'font'));
  inspectorBody.append(textTools);
  } if (record.src.kind === 'shape' || record.src.kind === 'image') inspectorBody.append(layerControls(id));
  }
@@ -869,7 +869,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  inspectorBody.append(labelBlock('教师备注', notes));
  inspectorBody.append(button('隐藏此页', wrapAction(() => { controller.execute({ type: 'SetHidden', id: slideId, v: true });
  renderAll();
- }), 'small-button'));
+ }), 'small-button', '隐藏此页', 'hide'));
  }
     function renderAnimationInspector(slideId: SlideId): void { const animations = (webPpt.snapshot.view?.queryAnimations().value ?? []) as readonly { effect?: string;
  kind: string;
@@ -886,9 +886,9 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  row.textContent = `${index + 1}. ${step.effect ?? step.kind} · ${step.trigger}`;
  list.append(row);
  });
- inspectorBody.append(list, button('给选中对象加入淡入', wrapAction(() => addAnimation()), 'primary-button'), button('清除本页动画', wrapAction(() => { controller.setAnimations(slideId, []);
+ inspectorBody.append(list, button('给选中对象加入淡入', wrapAction(() => addAnimation()), 'primary-button', '给选中对象加入淡入', 'animation'), button('清除本页动画', wrapAction(() => { controller.setAnimations(slideId, []);
  renderAll();
- }), 'danger-button'));
+ }), 'danger-button', '清除本页动画', 'delete'));
  }
     function addAnimation(effect: 'appear' | 'fade' | 'fly' | 'wipe' | 'zoom' | 'spin' = 'fade', kind: 'entrance' | 'emphasis' = 'entrance'): void { const slideId = currentSlide();
  const id = selectedIds()[0];
@@ -939,13 +939,13 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  group.className = 'layer-actions';
  group.append(button('上移一层', wrapAction(() => { controller.setLayer(id, 'forward');
  renderAll();
- }), 'small-button'), button('下移一层', wrapAction(() => { controller.setLayer(id, 'backward');
+ }), 'small-button', '上移一层', 'arrange'), button('下移一层', wrapAction(() => { controller.setLayer(id, 'backward');
  renderAll();
- }), 'small-button'), button('水平翻转', wrapAction(() => { controller.setFlip(id, true, undefined);
+ }), 'small-button', '下移一层', 'arrange'), button('水平翻转', wrapAction(() => { controller.setFlip(id, true, undefined);
  renderAll();
- }), 'small-button'), button('垂直翻转', wrapAction(() => { controller.setFlip(id, undefined, true);
+ }), 'small-button', '水平翻转', 'rotate'), button('垂直翻转', wrapAction(() => { controller.setFlip(id, undefined, true);
  renderAll();
- }), 'small-button'));
+ }), 'small-button', '垂直翻转', 'rotate'));
  return group;
  }
     function labelBlock(label: string, child: HTMLElement): HTMLElement { const block = document.createElement('label');
@@ -1164,7 +1164,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  } })();
  backgroundInput.value = '';
  });
- headerActions.append(button('新建', wrapAction(() => newDeck()), 'small-button'), button('打开 PPTX', wrapAction(() => fileInput.click()), 'small-button'), button('预览', wrapAction(() => togglePreview()), 'preview-button'), fileInput, imageInput, backgroundInput);
+ headerActions.append(button('新建', wrapAction(() => newDeck()), 'small-button', '新建', 'new-slide'), button('打开 PPTX', wrapAction(() => fileInput.click()), 'small-button', '打开 PPTX', 'image'), button('预览', wrapAction(() => togglePreview()), 'preview-button', '预览', 'preview'), fileInput, imageInput, backgroundInput);
  titleInput.addEventListener('change', () => { if (asset) asset = { ...asset, title: titleInput.value.trim() || '未命名公开课' };
  editGeneration += 1;
  scheduleAutosave();
