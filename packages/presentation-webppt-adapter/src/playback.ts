@@ -79,22 +79,38 @@ export class WebPptPlaybackEngineAdapter {
         const ensureLive = (): void => {
             if (disposed) throw new Error('presentation-player-disposed');
         };
+        const seekTo = (sceneId: string, step: number, mode: 'silent' | 'live' = 'silent'): void => {
+            if (!Number.isInteger(step) || step < 0) throw new Error('presentation-step-out-of-range');
+            const index = sceneIds.indexOf(sceneId);
+            if (index < 0) throw new Error('presentation-scene-not-found');
+            if (mode === 'live' && index === viewer.index && step === viewer.animationDone + 1 && viewer.playNextAnimation()) {
+                return;
+            }
+            const previousVisibility = target.style.visibility;
+            target.style.visibility = 'hidden';
+            try {
+                // Viewer.goTo(index) is deliberately a no-op when index is
+                // unchanged, so it cannot be used as a timeline reset during
+                // reconnect. Toggling animation mode reloads the upstream
+                // state machine and works for one-slide decks too.
+                viewer.setAnimate(false);
+                if (index !== viewer.index) viewer.goTo(index, 'backward');
+                viewer.setAnimate(true);
+                for (let cursor = 0; cursor < step; cursor += 1) {
+                    if (!viewer.playNextAnimation()) throw new Error('presentation-step-out-of-range');
+                }
+            }
+            finally { target.style.visibility = previousVisibility; }
+        };
         const apply = (state: PresentationPlaybackState): void => {
             if (state.deckId !== asset.deckId) throw new Error('presentation-deck-mismatch');
-            const index = sceneIds.indexOf(state.sceneId);
-            if (index < 0) throw new Error('presentation-scene-not-found');
-            viewer.goTo(index, index >= viewer.index ? 'forward' : 'backward');
-            viewer.setAnimate(true);
-            viewer.finishAnimations();
-            if (state.step < viewer.animationTotal) {
-                viewer.goTo(index, 'backward');
-                for (let step = 0; step < state.step; step += 1) viewer.playNextAnimation();
-            }
+            seekTo(state.sceneId, state.step, 'silent');
             playState = state.playState;
         };
         return {
             getState: currentState,
             applyAuthoritativeState: state => { ensureLive(); apply(state); },
+            seekTo: (sceneId, step = 0, mode = 'silent') => { ensureLive(); seekTo(sceneId, step, mode); },
             dispose: () => {
                 if (disposed) return;
                 disposed = true;

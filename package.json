@@ -25,6 +25,7 @@
     "test:unit": "NODE_ENV=test node --test tests/*.test.mjs",
     "test:e2e:presentation": "playwright test tests/e2e/presentation-studio.spec.ts",
     "test:e2e:presentation:headed": "playwright test tests/e2e/presentation-studio.spec.ts --headed",
+    "test:e2e:presentation:display": "playwright test tests/e2e/presentation-display.spec.ts",
     "test": "npm run build && npm run test:unit",
     "template:check": "node scripts/check-lesson-template.mjs",
     "check:dist": "node scripts/check-dist-runtime.mjs",

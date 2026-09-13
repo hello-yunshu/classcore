@@ -10,6 +10,8 @@ R3.10 是 **Release-Assurance Closure & Codex Mother Package**：Foundation v0.1
 
 2026-09-13 Presentation correctness/framework repair：移除表格 `editor.doc` 直接 mutation；新建形状、文本框和表格的中性默认值进入同一 web-ppt command/history；表格设计仅保留 beta.2 已公开的 `SetTableStyle`，隐藏未有真实 cell command 支撑的假控件；导出改为 `await controller.save()`，另存为副本创建独立 Library Draft；首条动画强制 `click`，bullet/auto-number 假控件移除；修复菜单键盘焦点与 submenu `aria-expanded`。Framework 关闭 instance capability union、expired rejoin fresh grant、artifact fail-closed、Transfer/Submission FSM 与 parity regressions。当前本地真实服务 Playwright 为 14/14 PASS，`npm run check` 为 154/154 PASS，reference Docker arm64 runtime gate 与 amd64 image build PASS；CI、认证课堂 Server、真实 LAN/offline、Display、XP21A 仍未验证，状态继续保持 `CAPABILITY-INTEGRATION / NOT-FROZEN`。
 
+2026-09-13 Playback-fidelity direction reset：Office authoring parity 降为非主线，PPTX import/preservation/preflight/render/playback 成为主线；RuntimeIndex 增加可信 aspect/hidden 元数据；Display 移除固定 16:9 样式；Playback Adapter 增加 silent/live explicit seek；Presentation Project 增加 immutable originalAssetId；Studio no-op rehearse/publish 跳过 web-ppt save round-trip。真实 PowerPoint fixture、reference screenshot、CompatibilityReport UI、Display Browser E2E、离线/LAN、认证课堂与 XP21A 仍为 `NOT_EVALUATED`，冻结判断保持 `PLAYBACK-FIDELITY / NOT-FROZEN`。
+
 ## 接手后的第一步
 
 ```bash

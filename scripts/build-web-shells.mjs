@@ -75,7 +75,7 @@ function displayShell() {
       .display-runtime{min-height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:24px 32px;gap:18px}
       .display-header{display:flex;align-items:center;gap:14px}.display-mark{display:grid;place-items:center;width:42px;height:42px;border:1px solid #efb37e;color:#efb37e;font:700 24px Georgia,serif}
       .display-kicker{color:#efb37e;font-size:11px;letter-spacing:.18em}.display-header h1{margin:4px 0 0;font:500 30px Georgia,serif}.display-state{margin-left:auto;color:#b8c1d1;font-size:13px}
-      .display-stage{display:grid;place-items:center;min-height:0;background:#182338;border:1px solid #34435c;box-shadow:0 24px 60px #090e18;border-radius:14px;overflow:hidden}.display-stage>*{width:min(100%,1200px);aspect-ratio:16/9}
+      .display-stage{display:grid;place-items:center;min-height:0;background:#182338;border:1px solid #34435c;box-shadow:0 24px 60px #090e18;border-radius:14px;overflow:hidden}.display-stage>*{width:min(100%,1200px);height:auto;max-height:100%;aspect-ratio:var(--display-aspect-ratio,auto);object-fit:contain}
       .display-empty{display:grid;place-items:center;align-content:center;gap:12px;color:#b8c1d1}.display-empty strong{font:500 40px Georgia,serif;color:#f7f4ee}.display-footer{color:#7e8ba1;font-size:12px;text-align:center}
       @media(max-width:680px){.display-runtime{padding:18px 14px}.display-header h1{font-size:24px}}
     </style>`;

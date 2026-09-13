@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "source": "Microsoft PowerPoint export",
+  "status": "NOT_EVALUATED",
+  "fixtures": [
+    "01-basic-text-office.pptx",
+    "02-chinese-fonts-office.pptx",
+    "03-theme-master-layout-office.pptx",
+    "04-images-svg-office.pptx",
+    "05-emf-wmf-office.pptx",
+    "06-table-office.pptx",
+    "07-chart-office.pptx",
+    "08-smartart-office.pptx",
+    "09-equation-office.pptx",
+    "10-transitions-common-office.pptx",
+    "11-transitions-advanced-office.pptx",
+    "12-animations-basic-office.pptx",
+    "13-animations-timing-office.pptx",
+    "14-motion-path-office.pptx",
+    "15-hidden-slides-office.pptx",
+    "16-hyperlinks-office.pptx",
+    "17-video-audio-office.pptx",
+    "18-large-deck-office.pptx",
+    "19-custom-aspect-office.pptx",
+    "20-real-public-lesson.pptx"
+  ],
+  "referenceDirectory": "pptx-fidelity-reference",
+  "comparison": "pixelmatch-or-ssim-with-recorded-thresholds"
+}

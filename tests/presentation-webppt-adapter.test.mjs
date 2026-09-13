@@ -6,7 +6,7 @@ import path from 'node:path';
 import JSZip from 'jszip';
 import PptxGenJS from 'pptxgenjs';
 import { openEditor } from '@web-ppt/editor';
-import { WebPptPresentationEngineAdapter } from '../packages/presentation-webppt-adapter/src/index.ts';
+import { WebPptPresentationEngineAdapter, buildWebPptCompatibilityReport } from '../packages/presentation-webppt-adapter/src/index.ts';
 import { createWebPptAdapter } from '@web-ppt/editor';
 import { PresentationStudioController } from '../dist/apps/presentation-studio/src/controller.js';
 
@@ -41,6 +41,11 @@ test('web-ppt adapter creates, validates, saves, reopens and indexes a native de
   const first = await adapter.buildRuntimeIndex(asset);
   assert.equal(first.scenes.length, 1);
   assert.equal(first.scenes[0].maxStep, 0);
+  assert.ok(first.width > 0 && first.height > 0);
+  assert.equal(first.scenes[0].hidden, false);
+  const report = await buildWebPptCompatibilityReport(asset, { availableFonts: ['Arial'] });
+  assert.notEqual(report.status, 'blocked');
+  assert.equal(report.issues.some(issue => issue.capability === 'parse' && issue.fidelity === 'SUPPORTED'), true);
 
   const session = await openEditor(asset.source.bytes, { idPrefix: asset.document.idPrefix });
   const slideId = session.editor.doc.slideOrder[0];
@@ -59,6 +64,16 @@ test('web-ppt adapter creates, validates, saves, reopens and indexes a native de
   assert.equal(indexed.scenes[0].sceneId, slideId);
   assert.equal(indexed.scenes[0].maxStep, 1);
   reopened.dispose();
+});
+
+test('compatibility preflight remains conservative when the host font inventory is absent', async () => {
+  const bytes = await templateBytes();
+  const adapter = new WebPptPresentationEngineAdapter(async () => bytes);
+  const asset = await adapter.createBlank('Preflight gate');
+  const report = await buildWebPptCompatibilityReport(asset);
+  assert.equal(report.status, 'warnings');
+  assert.equal(report.issues.some(issue => issue.capability === 'font' && issue.fidelity === 'NOT_EVALUATED'), true);
+  assert.equal(report.issues.some(issue => issue.fidelity === 'EXACT'), false);
 });
 
 test('web-ppt adapter fails closed on missing binary source', async () => {

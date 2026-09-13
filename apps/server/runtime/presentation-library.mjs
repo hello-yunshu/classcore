@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { buildTrustedWebPptRuntimeIndex, WEB_PPT_ENGINE } from './webppt-freeze.mjs';
+import { buildTrustedWebPptCompatibilityReport, buildTrustedWebPptRuntimeIndex, WEB_PPT_ENGINE } from './webppt-freeze.mjs';
 
 export const DEFAULT_PRESENTATION_QUOTA = Object.freeze({
     maxPresentationFileBytes: 100 * 1024 * 1024,
@@ -72,6 +72,7 @@ function projectFrom(row) {
         currentDraftAssetId: row.current_draft_asset_id,
         currentDraftRevision: Number(row.current_draft_revision),
         currentDraftDocument: parse(row.current_draft_document_json),
+        originalAssetId: row.original_asset_id ?? row.current_draft_asset_id,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         deletedAt: row.deleted_at,
@@ -106,6 +107,7 @@ function revisionFrom(row) {
         createdAt: row.created_at,
         expiresAt: row.expires_at,
         retained: Boolean(row.retained),
+        compatibilityReport: parse(row.compatibility_report_json),
     };
 }
 
@@ -126,6 +128,7 @@ export class PresentationLibraryStore {
             presentation_id TEXT PRIMARY KEY,
             owner_user_id TEXT NOT NULL,
             title TEXT NOT NULL,
+            original_asset_id TEXT,
             current_draft_asset_id TEXT NOT NULL,
             current_draft_revision INTEGER NOT NULL,
             current_draft_document_json TEXT NOT NULL,
@@ -172,6 +175,7 @@ export class PresentationLibraryStore {
             created_at TEXT NOT NULL,
             expires_at TEXT,
             retained INTEGER NOT NULL DEFAULT 0
+            ,compatibility_report_json TEXT
           );
           CREATE INDEX IF NOT EXISTS presentation_revisions_project_idx
             ON presentation_revisions(presentation_id, kind, created_at DESC);
@@ -217,6 +221,13 @@ export class PresentationLibraryStore {
             updated_at TEXT NOT NULL
           );
         `);
+        const projectColumns = this.db.prepare('PRAGMA table_info(presentation_projects)').all().map((row) => row.name);
+        if (!projectColumns.includes('original_asset_id'))
+            this.db.exec('ALTER TABLE presentation_projects ADD COLUMN original_asset_id TEXT');
+        this.db.exec('UPDATE presentation_projects SET original_asset_id=current_draft_asset_id WHERE original_asset_id IS NULL');
+        const revisionColumns = this.db.prepare('PRAGMA table_info(presentation_revisions)').all().map((row) => row.name);
+        if (!revisionColumns.includes('compatibility_report_json'))
+            this.db.exec('ALTER TABLE presentation_revisions ADD COLUMN compatibility_report_json TEXT');
         const claimColumns = this.db.prepare('PRAGMA table_info(presentation_asset_claims)').all().map((row) => row.name);
         if (!claimColumns.includes('staged_expires_at'))
             this.db.exec('ALTER TABLE presentation_asset_claims ADD COLUMN staged_expires_at TEXT');
@@ -303,8 +314,9 @@ export class PresentationLibraryStore {
 
     #ownerReferencesAsset(ownerUserId, assetId) {
         const direct = this.db.prepare(`SELECT 1 FROM presentation_projects WHERE owner_user_id=? AND current_draft_asset_id=?
+          UNION SELECT 1 FROM presentation_projects WHERE owner_user_id=? AND original_asset_id=?
           UNION SELECT 1 FROM presentation_revisions r JOIN presentation_projects p ON p.presentation_id=r.presentation_id WHERE p.owner_user_id=? AND r.asset_id=?
-          UNION SELECT 1 FROM presentation_checkpoints c JOIN presentation_projects p ON p.presentation_id=c.presentation_id WHERE p.owner_user_id=? AND c.asset_id=? LIMIT 1`).get(ownerUserId, assetId, ownerUserId, assetId, ownerUserId, assetId);
+          UNION SELECT 1 FROM presentation_checkpoints c JOIN presentation_projects p ON p.presentation_id=c.presentation_id WHERE p.owner_user_id=? AND c.asset_id=? LIMIT 1`).get(ownerUserId, assetId, ownerUserId, assetId, ownerUserId, assetId, ownerUserId, assetId);
         return Boolean(direct);
     }
 
@@ -328,6 +340,7 @@ export class PresentationLibraryStore {
             presentationId,
             ownerUserId: String(ownerUserId),
             title: safeTitle(title),
+            originalAssetId: asset.assetId,
             currentDraftAssetId: asset.assetId,
             currentDraftRevision: 1,
             currentDraftDocument: document ?? { format: 'unknown' },
@@ -336,8 +349,8 @@ export class PresentationLibraryStore {
             deletedAt: null,
         };
         this.db.prepare(`INSERT INTO presentation_projects
-          (presentation_id,owner_user_id,title,current_draft_asset_id,current_draft_revision,current_draft_document_json,created_at,updated_at,deleted_at)
-          VALUES(?,?,?,?,?,?,?,?,?)`).run(value.presentationId, value.ownerUserId, value.title, value.currentDraftAssetId, value.currentDraftRevision, json(value.currentDraftDocument), value.createdAt, value.updatedAt, null);
+          (presentation_id,owner_user_id,title,original_asset_id,current_draft_asset_id,current_draft_revision,current_draft_document_json,created_at,updated_at,deleted_at)
+          VALUES(?,?,?,?,?,?,?,?,?,?)`).run(value.presentationId, value.ownerUserId, value.title, value.originalAssetId, value.currentDraftAssetId, value.currentDraftRevision, json(value.currentDraftDocument), value.createdAt, value.updatedAt, null);
         return value;
     }
 
@@ -415,6 +428,18 @@ export class PresentationLibraryStore {
     loadDraft(presentationId, ownerUserId) {
         const project = this.#requireProject(presentationId, ownerUserId);
         return { project, asset: this.getAsset(project.currentDraftAssetId), bytes: this.#bytes(project.currentDraftAssetId) };
+    }
+
+    restoreOriginal(presentationId, ownerUserId, expectedRevision = undefined) {
+        const project = this.#requireProject(presentationId, ownerUserId);
+        const asset = this.getAsset(project.originalAssetId);
+        if (!asset) throw new PresentationLibraryError('original-asset-not-found');
+        return this.saveDraft(presentationId, ownerUserId, {
+            bytes: this.#bytes(project.originalAssetId),
+            mimeType: asset.mimeType,
+            document: project.currentDraftDocument,
+            expectedRevision,
+        });
     }
 
     getAsset(assetId) { return assetFrom(this.db.prepare('SELECT * FROM presentation_assets WHERE asset_id=?').get(assetId)); }
@@ -503,7 +528,7 @@ export class PresentationLibraryStore {
         }
     }
 
-    createRevision(presentationId, ownerUserId, { kind, assetId, engine, document, runtimeIndex, classroomBindings = [], fingerprint: _fingerprint, expiresAt, retained = false, trustedRuntimeIndex = false }) {
+    createRevision(presentationId, ownerUserId, { kind, assetId, engine, document, runtimeIndex, classroomBindings = [], fingerprint: _fingerprint, expiresAt, retained = false, trustedRuntimeIndex = false, compatibilityReport = null }) {
         if (kind !== 'rehearsal' && kind !== 'published') throw new PresentationLibraryError('invalid-revision-kind');
         const project = this.#requireProject(presentationId, ownerUserId);
         if (assetId != null && assetId !== project.currentDraftAssetId)
@@ -525,10 +550,18 @@ export class PresentationLibraryStore {
             createdAt: isoNow(),
             expiresAt: expiresAt ?? (kind === 'rehearsal' ? new Date(Date.now() + this.policy.rehearsalRetentionDays * 86400000).toISOString() : null),
             retained: Boolean(retained),
+            compatibilityReport,
         };
+        const revisionParams = [
+            revision.revisionId, presentationId, kind, json(revision.engine),
+            json(revision.document), revision.assetId, revision.fingerprint,
+            json(revision.runtimeIndex), json(revision.classroomBindings),
+            revision.createdAt, revision.expiresAt, revision.retained ? 1 : 0,
+            revision.compatibilityReport ? json(revision.compatibilityReport) : null,
+        ];
         this.db.prepare(`INSERT INTO presentation_revisions
-          (revision_id,presentation_id,kind,engine_json,document_json,asset_id,fingerprint,runtime_index_json,classroom_bindings_json,created_at,expires_at,retained)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).run(revision.revisionId, presentationId, kind, json(revision.engine), json(revision.document), revision.assetId, revision.fingerprint, json(revision.runtimeIndex), json(revision.classroomBindings), revision.createdAt, revision.expiresAt, revision.retained ? 1 : 0);
+          (revision_id,presentation_id,kind,engine_json,document_json,asset_id,fingerprint,runtime_index_json,classroom_bindings_json,created_at,expires_at,retained,compatibility_report_json)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(...revisionParams);
         return revision;
     }
 
@@ -542,12 +575,21 @@ export class PresentationLibraryStore {
             idPrefix: document.idPrefix,
             deckId: document.deckId,
         });
+        const compatibilityReport = await buildTrustedWebPptCompatibilityReport(draft.bytes, {
+            assetId: project.currentDraftAssetId,
+            fingerprint: draft.asset.sha256,
+            engineVersion: (options.engine ?? WEB_PPT_ENGINE).engineVersion,
+        });
+        if (compatibilityReport.status === 'blocked') throw new PresentationLibraryError('compatibility-blocked', 'compatibility-blocked', { compatibilityReport });
+        if (options.kind === 'published' && compatibilityReport.status === 'warnings' && options.acknowledgeWarnings !== true)
+            throw new PresentationLibraryError('compatibility-warnings-ack-required', 'compatibility-warnings-ack-required', { compatibilityReport });
         return this.createRevision(presentationId, ownerUserId, {
             ...options,
             assetId: project.currentDraftAssetId,
             engine: options.engine ?? WEB_PPT_ENGINE,
             document,
             runtimeIndex,
+            compatibilityReport,
             trustedRuntimeIndex: true,
         });
     }
@@ -843,15 +885,17 @@ export class PresentationLibraryStore {
               WHERE p.presentation_id=? AND s.status <> 'ended' LIMIT 1`).get(row.presentation_id);
             if (activePin) continue;
             const assets = this.db.prepare(`SELECT current_draft_asset_id AS asset_id FROM presentation_projects WHERE presentation_id=?
+              UNION SELECT original_asset_id AS asset_id FROM presentation_projects WHERE presentation_id=?
               UNION SELECT asset_id FROM presentation_revisions WHERE presentation_id=?
-              UNION SELECT asset_id FROM presentation_checkpoints WHERE presentation_id=?`).all(row.presentation_id, row.presentation_id, row.presentation_id).map(item => item.asset_id);
+              UNION SELECT asset_id FROM presentation_checkpoints WHERE presentation_id=?`).all(row.presentation_id, row.presentation_id, row.presentation_id, row.presentation_id).map(item => item.asset_id);
             this.db.prepare('DELETE FROM presentation_checkpoints WHERE presentation_id=?').run(row.presentation_id);
             this.db.prepare('DELETE FROM presentation_revisions WHERE presentation_id=?').run(row.presentation_id);
             this.db.prepare('DELETE FROM presentation_projects WHERE presentation_id=?').run(row.presentation_id);
             for (const assetId of assets) this.db.prepare(`DELETE FROM presentation_asset_claims WHERE owner_user_id=? AND asset_id=?
               AND NOT EXISTS (SELECT 1 FROM presentation_projects WHERE current_draft_asset_id=? AND owner_user_id=? )
+              AND NOT EXISTS (SELECT 1 FROM presentation_projects WHERE original_asset_id=? AND owner_user_id=? )
               AND NOT EXISTS (SELECT 1 FROM presentation_revisions r JOIN presentation_projects p ON p.presentation_id=r.presentation_id WHERE r.asset_id=? AND p.owner_user_id=? )
-              AND NOT EXISTS (SELECT 1 FROM presentation_checkpoints c JOIN presentation_projects p ON p.presentation_id=c.presentation_id WHERE c.asset_id=? AND p.owner_user_id=? )`).run(row.owner_user_id, assetId, assetId, row.owner_user_id, assetId, row.owner_user_id, assetId, row.owner_user_id);
+              AND NOT EXISTS (SELECT 1 FROM presentation_checkpoints c JOIN presentation_projects p ON p.presentation_id=c.presentation_id WHERE c.asset_id=? AND p.owner_user_id=? )`).run(row.owner_user_id, assetId, assetId, row.owner_user_id, assetId, row.owner_user_id, assetId, row.owner_user_id, assetId, row.owner_user_id);
             purged.push(row.presentation_id);
         }
         return purged;
@@ -886,6 +930,7 @@ export class PresentationLibraryStore {
         const assets = this.db.prepare('SELECT * FROM presentation_assets').all();
         const referenced = new Set();
         for (const row of this.db.prepare('SELECT current_draft_asset_id AS asset_id FROM presentation_projects').all()) referenced.add(row.asset_id);
+        for (const row of this.db.prepare('SELECT original_asset_id AS asset_id FROM presentation_projects WHERE original_asset_id IS NOT NULL').all()) referenced.add(row.asset_id);
         for (const row of this.db.prepare('SELECT asset_id FROM presentation_checkpoints').all()) referenced.add(row.asset_id);
         for (const row of this.db.prepare('SELECT asset_id FROM presentation_revisions').all()) referenced.add(row.asset_id);
         for (const row of this.db.prepare('SELECT asset_id FROM presentation_session_pins').all()) referenced.add(row.asset_id);

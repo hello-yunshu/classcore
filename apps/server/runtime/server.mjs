@@ -308,6 +308,10 @@ async function handlePresentationApi(req, res, url) {
             const expectedRevision = req.headers['if-match'] ? Number(req.headers['if-match']) : undefined;
             return sendJson(res, 200, { presentation: presentationLibrary.restoreRevision(presentationId, ownerUserId, parts[4], expectedRevision) });
         }
+        if (req.method === 'POST' && parts[3] === 'restore-original') {
+            const expectedRevision = req.headers['if-match'] ? Number(req.headers['if-match']) : undefined;
+            return sendJson(res, 200, { presentation: presentationLibrary.restoreOriginal(presentationId, ownerUserId, expectedRevision) });
+        }
         return sendJson(res, 404, { error: 'not-found' });
     } catch (error) {
         return apiError(res, error);

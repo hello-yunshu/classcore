@@ -71,10 +71,30 @@ export interface PresentationDocumentMetadata {
     thumbnailAssetId?: string | null;
     [key: string]: JsonValue | undefined;
 }
+export type PresentationCompatibilityFidelity = 'EXACT' | 'SUPPORTED' | 'APPROXIMATED' | 'FALLBACK' | 'UNSUPPORTED' | 'NOT_EVALUATED';
+export type PresentationCompatibilityCapability = 'parse' | 'static-render' | 'font' | 'transition' | 'animation' | 'media' | 'chart' | 'smartart' | 'equation' | 'image' | 'vector' | 'hyperlink' | 'auto-advance' | 'layout' | 'unknown';
+export interface PresentationCompatibilityIssue {
+    severity: 'info' | 'warning' | 'blocker';
+    capability: PresentationCompatibilityCapability;
+    fidelity: PresentationCompatibilityFidelity;
+    slideIndex?: number;
+    detail: string;
+}
+export interface PresentationCompatibilityReport {
+    version: 1;
+    assetId: string;
+    fingerprint: string;
+    engineVersion: string;
+    status: 'ready' | 'warnings' | 'blocked';
+    issues: PresentationCompatibilityIssue[];
+    createdAt: string;
+}
 export interface PresentationProject {
     presentationId: string;
     ownerUserId: string;
     title: string;
+    /** Immutable bytes imported or used to create the project. */
+    originalAssetId: string;
     currentDraftAssetId: string;
     currentDraftRevision: number;
     currentDraftDocument: PresentationDocumentMetadata;
@@ -101,6 +121,7 @@ export interface PresentationRevision {
     fingerprint: string;
     runtimeIndex: PresentationRuntimeIndex;
     classroomBindings: ClassroomWidgetBinding[];
+    compatibilityReport?: PresentationCompatibilityReport | null;
     createdAt: string;
     expiresAt?: string | null;
     retained?: boolean;
@@ -142,12 +163,18 @@ export interface PresentationRuntimeScene {
     sceneId: string;
     index: number;
     maxStep: number;
+    /** Server-derived source metadata; omitted only for legacy synthetic fixtures. */
+    hidden?: boolean;
+    autoAdvanceMs?: number | null;
 }
 export interface PresentationRuntimeIndex {
     deckId: string;
     documentFormatVersion: string;
     generatedAt: string;
     scenes: PresentationRuntimeScene[];
+    /** Original PPTX slide size in CSS pixels. */
+    width?: number;
+    height?: number;
 }
 export interface PresentationPlaybackStore {
     save(state: PresentationPlaybackState): Promise<void>;
@@ -177,6 +204,8 @@ export interface PresentationEditorSession<TDocument extends PresentationDocumen
 export interface PresentationPlayerSession {
     getState(): PresentationPlaybackState | null;
     applyAuthoritativeState(state: PresentationPlaybackState): Promise<void> | void;
+    /** Reposition the upstream viewer without conflating recovery with live playback. */
+    seekTo?(sceneId: string, step: number, mode?: 'silent' | 'live'): Promise<void> | void;
     goto?(sceneId: string, step?: number): Promise<void> | void;
     next?(): Promise<void> | void;
     previous?(): Promise<void> | void;

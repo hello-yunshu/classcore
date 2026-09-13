@@ -6,7 +6,7 @@ export const runtimeBudget = CLIENT_RUNTIME_BUDGETS.display;
 
 type RuntimeSnapshot = {
     pin: { sessionId: string; presentationId: string; revisionId: string; assetId: string };
-    revision: { fingerprint: string; document: WebPptPlaybackAsset['document']; runtimeIndex: { scenes: Array<{ sceneId: string }> } };
+    revision: { fingerprint: string; document: WebPptPlaybackAsset['document']; runtimeIndex: { width?: number; height?: number; scenes: Array<{ sceneId: string; hidden?: boolean }> } };
     state: { sessionId: string; presentationRevisionId: string; assetId: string; deckId: string; sceneId: string; step: number; playState: 'idle' | 'playing' | 'paused'; revision: number };
 };
 
@@ -49,6 +49,13 @@ async function mountDisplayRuntimeAsync(root: HTMLElement): Promise<void> {
         if (!response.ok) throw new Error(`课堂资源读取失败（${response.status}）`);
         const bytes = new Uint8Array(await response.arrayBuffer());
         const asset = await createWebPptPlaybackAssetFromBytes('课堂课件', bytes, snapshot.revision.document.idPrefix, snapshot.state.deckId);
+        if (asset.source?.sha256 !== snapshot.revision.fingerprint) throw new Error('课堂资源指纹不匹配，已阻止播放');
+        const { width, height } = snapshot.revision.runtimeIndex;
+        const aspectWidth = Number(width);
+        const aspectHeight = Number(height);
+        if (!Number.isFinite(aspectWidth) || !Number.isFinite(aspectHeight) || aspectWidth <= 0 || aspectHeight <= 0)
+            throw new Error('课堂版本缺少可信页面比例');
+        stage.style.setProperty('--display-aspect-ratio', `${aspectWidth} / ${aspectHeight}`);
         player?.dispose();
         stage.replaceChildren();
         player = await engine.mountPlayer(stage, asset, { context: { sessionId, surface: 'display' } });

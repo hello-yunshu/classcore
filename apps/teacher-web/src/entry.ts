@@ -191,7 +191,7 @@ function mountTeacherControl(root: HTMLElement, sessionId: string): void {
     const status = app.querySelector<HTMLElement>('.control-status')!;
     const actions = app.querySelector<HTMLElement>('.control-actions')!;
     let state: { presentationRevisionId: string; sceneId: string; step: number; playState: 'idle' | 'playing' | 'paused'; revision: number; deckId: string } | null = null;
-    let scenes: Array<{ sceneId: string; maxStep: number }> = [];
+    let scenes: Array<{ sceneId: string; maxStep: number; hidden?: boolean }> = [];
     let socket: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -206,7 +206,9 @@ function mountTeacherControl(root: HTMLElement, sessionId: string): void {
             const currentScene = scenes[index];
             const payload: Record<string, unknown> = { type: 'presentation.control', controlId: `presentation-control-${crypto.randomUUID()}`, action, expectedRevision: state.revision };
             if (action === 'previous' || action === 'next') {
-                const nextIndex = action === 'next' ? Math.min(scenes.length - 1, index + 1) : Math.max(0, index - 1);
+                let nextIndex = index + (action === 'next' ? 1 : -1);
+                while (nextIndex >= 0 && nextIndex < scenes.length && scenes[nextIndex]?.hidden) nextIndex += action === 'next' ? 1 : -1;
+                nextIndex = Math.max(0, Math.min(scenes.length - 1, nextIndex));
                 payload.action = 'goto'; payload.sceneId = scenes[nextIndex]?.sceneId ?? state.sceneId; payload.step = 0;
             } else if (action === 'set-step') payload.step = Math.min(currentScene?.maxStep ?? state.step + 1, state.step + 1);
             else if (action === 'finish') { payload.action = 'set-step'; payload.step = currentScene?.maxStep ?? state.step; }
@@ -217,7 +219,7 @@ function mountTeacherControl(root: HTMLElement, sessionId: string): void {
     async function load(): Promise<void> {
         const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/presentation-runtime`, { cache: 'no-store' });
         if (!response.ok) throw new Error(`课堂读取失败（${response.status}）`);
-        const runtime = await response.json() as { runtime: { state: typeof state; revision: { runtimeIndex: { scenes: Array<{ sceneId: string; maxStep: number }> } } } };
+        const runtime = await response.json() as { runtime: { state: typeof state; revision: { runtimeIndex: { scenes: Array<{ sceneId: string; maxStep: number; hidden?: boolean }> } } } };
         state = runtime.runtime.state;
         if (!state) throw new Error('课堂尚未准备课件');
         scenes = runtime.runtime.revision.runtimeIndex.scenes;

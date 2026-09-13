@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { PresentationLibraryStore, PresentationLibraryError } from '../apps/server/runtime/presentation-library.mjs';
 import { SqliteClassroomStateStore } from '../apps/server/runtime/sqlite-store.mjs';
 
@@ -48,6 +49,24 @@ test('draft saves reject stale editors and preserve bounded recovery checkpoints
         store.saveDraft(first.presentationId, 'teacher:1', { bytes: Buffer.from('d'), expectedRevision: 3, document: { format: 'test' } });
         const count = store.db.prepare('SELECT COUNT(*) AS n FROM presentation_checkpoints WHERE presentation_id=?').get(first.presentationId).n;
         assert.equal(Number(count), 2);
+    } finally {
+        store.close();
+        fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+});
+
+test('projects preserve the immutable original asset and can restore it without GC loss', () => {
+    const { dataDir, store } = makeStore({ recoveryCheckpointCount: 0, gcGracePeriodMs: 0 });
+    try {
+        const project = store.createPresentation({ ownerUserId: 'teacher:1', title: '原稿基线', bytes: Buffer.from('original'), document: { format: 'test' } });
+        const originalAssetId = project.originalAssetId;
+        const changed = store.saveDraft(project.presentationId, 'teacher:1', { bytes: Buffer.from('edited'), expectedRevision: 1, document: { format: 'test', version: 2 } });
+        assert.equal(changed.originalAssetId, originalAssetId);
+        assert.equal(store.getAsset(originalAssetId).sha256, crypto.createHash('sha256').update('original').digest('hex'));
+        const restored = store.restoreOriginal(project.presentationId, 'teacher:1', changed.currentDraftRevision);
+        assert.equal(store.loadDraft(project.presentationId, 'teacher:1').bytes.toString(), 'original');
+        assert.equal(restored.originalAssetId, originalAssetId);
+        assert.equal(store.getAsset(originalAssetId) != null, true);
     } finally {
         store.close();
         fs.rmSync(dataDir, { recursive: true, force: true });
@@ -115,18 +134,15 @@ test('session pin and prepared runtime cache stay on the exact revision', () => 
     }
 });
 
-test('unreferenced assets are marked before grace-period deletion', () => {
+test('unreferenced non-original assets are marked before grace-period deletion', () => {
     const { dataDir, store } = makeStore({ gcGracePeriodMs: 1000, recoveryCheckpointCount: 0 });
     try {
         const project = store.createPresentation({ ownerUserId: 'teacher:1', title: '课件', bytes: Buffer.from('old'), document: { format: 'test' } });
         const oldAsset = project.currentDraftAssetId;
         const next = store.saveDraft(project.presentationId, 'teacher:1', { bytes: Buffer.from('new'), expectedRevision: 1, document: { format: 'test' } });
         assert.equal(next.currentDraftAssetId === oldAsset, false);
-        const marked = store.collectGarbage(new Date('2026-09-11T00:00:00.000Z'));
-        assert.deepEqual(marked, [{ assetId: oldAsset, action: 'marked' }]);
-        const deleted = store.collectGarbage(new Date('2026-09-11T00:00:02.000Z'));
-        assert.deepEqual(deleted, [{ assetId: oldAsset, action: 'deleted' }]);
-        assert.equal(store.getAsset(oldAsset), null);
+        assert.deepEqual(store.collectGarbage(new Date('2026-09-11T00:00:02.000Z')), []);
+        assert.equal(store.getAsset(oldAsset) != null, true, 'originalAssetId is a permanent strong reference');
     } finally {
         store.close();
         fs.rmSync(dataDir, { recursive: true, force: true });

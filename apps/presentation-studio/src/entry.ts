@@ -8,6 +8,7 @@ import {
     createWebPptAdapter,
     WebPptPresentationEngineAdapter,
     createWebPptAssetFromBytes,
+    buildWebPptCompatibilityReport,
     type WebPptPresentationAsset,
 } from '@classroom/presentation-webppt-adapter';
 import type { StudioCommand, StudioMenuItem } from './command-surface.js';
@@ -1856,18 +1857,33 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     thumbnailAsset = next;
     void syncThumbnails();
    }).catch(() => { /* thumbnail refresh must not block editing */ });
-  }, 120);
+ }, 120);
+ }
+ async function assetForPlayback(): Promise<{ asset: WebPptPresentationAsset; changed: boolean }> {
+  if (!asset) throw new Error('presentation-asset-required');
+  const title = titleInput.value.trim() || asset.title;
+  // A clean imported deck already contains the authoritative original bytes.
+  // Do not parse/save it through the editor merely to rehearse or publish.
+  if (editGeneration === savedGeneration && !serverSyncPending && asset.source?.sha256)
+   return { asset: { ...asset, title }, changed: false };
+  const bytes = await controller.save();
+  return { asset: await createWebPptAssetFromBytes(title, bytes, asset.document.idPrefix), changed: true };
  }
     async function rehearse(): Promise<void> { if (!asset || busy) return;
  busy = true;
  setStatus('正在准备试课版本');
- try { const bytes = await controller.save();
- const saved = await createWebPptAssetFromBytes(titleInput.value.trim() || asset.title, bytes, asset.document.idPrefix);
+ try { const prepared = await assetForPlayback();
+ const saved = prepared.asset;
+ if (prepared.changed) savedGeneration = editGeneration;
+ const report = await buildWebPptCompatibilityReport(saved);
+ if (report.status === 'blocked') throw new Error(`试课阻断：${report.issues.filter(issue => issue.severity === 'blocker').map(issue => issue.detail).join('、')}`);
  const validation = await engine.validate(saved);
  if (!validation.valid) throw new Error(`试课阻断：${validation.errors.join('、')}`);
  const runtimeIndex = await engine.buildRuntimeIndex(saved);
- await persistWebPptDraft(saved, serverProject?.presentationId);
- await syncServerDraft(saved);
+ if (prepared.changed || !serverProject) {
+  await persistWebPptDraft(saved, serverProject?.presentationId);
+  await syncServerDraft(saved);
+ }
  const response = await serverJson(`/api/presentations/${encodeURIComponent(serverProject!.presentationId)}/rehearsal-session`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}) });
  const rehearsal = response.rehearsal;
  setStatus(`试课已准备 · ${runtimeIndex.scenes.length} 页 · session ${rehearsal.session.sessionId} · ${rehearsal.revision.expiresAt ? `有效至 ${new Date(rehearsal.revision.expiresAt).toLocaleString()}` : '临时版本'}`);
@@ -1878,14 +1894,28 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     async function publish(): Promise<void> { if (!asset || busy) return;
  busy = true;
  setStatus('正在校验并冻结');
- try { const bytes = await controller.save();
- const saved = await createWebPptAssetFromBytes(titleInput.value.trim() || asset.title, bytes, asset.document.idPrefix);
+ try { const prepared = await assetForPlayback();
+ const saved = prepared.asset;
+ if (prepared.changed) savedGeneration = editGeneration;
+ const report = await buildWebPptCompatibilityReport(saved);
+ if (report.status === 'blocked') throw new Error(`发布阻断：${report.issues.filter(issue => issue.severity === 'blocker').map(issue => issue.detail).join('、')}`);
+ if (report.status === 'warnings' && !window.confirm(`课件预检发现 ${report.issues.filter(issue => issue.severity === 'warning').length} 项风险，确认仍要发布吗？`)) throw new Error('已取消发布：请先检查兼容性风险');
  const validation = await engine.validate(saved);
  if (!validation.valid) throw new Error(`发布阻断：${validation.errors.join('、')}`);
  const runtimeIndex = await engine.buildRuntimeIndex(saved);
- await persistWebPptDraft(saved, serverProject?.presentationId);
- await syncServerDraft(saved);
- const publishedResponse = await serverJson(`/api/presentations/${encodeURIComponent(serverProject!.presentationId)}/published`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ engine: saved.engine, document: { ...saved.document, deckId: saved.deckId }, runtimeIndex }) });
+ if (prepared.changed || !serverProject) {
+  await persistWebPptDraft(saved, serverProject?.presentationId);
+  await syncServerDraft(saved);
+ }
+ const publishBody = JSON.stringify({
+  engine: saved.engine,
+  document: { ...saved.document, deckId: saved.deckId },
+  runtimeIndex,
+  acknowledgeWarnings: report.status === 'warnings',
+ });
+ const publishedResponse = await serverJson(`/api/presentations/${encodeURIComponent(serverProject!.presentationId)}/published`, {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: publishBody,
+ });
  const publishedRevision = publishedResponse.revision;
  const record: PublishedPresentationRecord = { version: 1, deckId: saved.deckId, title: saved.title, fingerprint: publishedRevision.fingerprint, publishedAt: publishedRevision.createdAt, runtimeIndex, bytes: saved.source!.bytes };
  asset = saved;
