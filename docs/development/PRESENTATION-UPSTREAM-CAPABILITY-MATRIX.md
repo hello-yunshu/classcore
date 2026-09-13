@@ -8,41 +8,41 @@ The Studio owns product orchestration and user-facing state. Editing, selection,
 
 | Capability | Upstream API | Upstream Version | ClassCore Current | ClassCore Target | Priority | Implementation | Tests | Status | Reason if Deferred |
 |---|---|---|---|---|---|---|---|---|---|
-| Slide CRUD/reorder | `Editor.exec` slide commands | beta.2 | integrated | stable | P0 | controller | adapter/unit | INTEGRATE_NOW | |
-| Clipboard / undo / redo | `copyElements`, `Editor` history | beta.2 | integrated | stable | P0 | controller | adapter/unit | INTEGRATE_NOW | |
-| Selection pane | `mountSelectionPane`, `attachSelectionPane` | beta.2 | mounted in Studio | upstream object tree | P0 | adapter/controller | browser 7/7 | INTEGRATE_NOW | |
-| Format Painter | `startFormatPainter`, `cancelFormatPainter` | beta.2 | ribbon + floating toolbar | copy/paint action | P0 | adapter/controller | browser smoke | INTEGRATE_NOW | |
-| Find / Replace | `openTextSearch`, `nextTextSearch` | beta.2 | ribbon action | search panel | P0 | adapter/controller | browser pending | INTEGRATE_NOW | |
-| Alignment | `AlignElements` | beta.2 | multi-select | six-way + single slide align | P0 | controller | unit/browser pending | INTEGRATE_NOW | |
-| Distribution | no adapter export; geometry command fallback | beta.2 | local fallback | upstream command when available | P0 | controller | unit/browser pending | INTEGRATE_IF_SAFE | beta.2 has no distribution export; fallback remains isolated in controller |
-| Layer | `SetZ` | beta.2 | integrated | four layer actions | P0 | controller | adapter/unit | INTEGRATE_NOW | |
-| Group / Ungroup | `Group`, `Ungroup` | beta.2 | available | ribbon/context action | P0 | controller | browser pending | INTEGRATE_NOW | |
-| Flip / Rotate | `SetFlip`, `SetXfrm` | beta.2 | integrated | ribbon action | P0 | controller | adapter/unit | INTEGRATE_NOW | |
-| Shape gallery | `AddShape` + upstream geometry presets | beta.2 | categorized local gallery | categorized gallery | P0 | Studio command surface | browser pending | INTEGRATE_IF_SAFE | local labels/previews only; geometry remains upstream |
-| Shape adjustments | adjustment/edit geometry APIs | beta.2 | not exposed | drag + round-trip | P1 | adapter/controller | browser pending | INTEGRATE_IF_SAFE | API surface needs final review |
-| Text run formatting | `queryRunProps`, `setRunProps`, `registerTextUi` | beta.2 | font/color/bold/italic/underline/strike toolbar | range/caret formatting | P0 | controller + view | browser 7/7 | INTEGRATE_NOW | |
-| Paragraph/body formatting | `queryParaProps`, `setParaProps`, `setBodyProps` | beta.2 | alignment/list/spacing/TextBody toolbar | paragraph toolbar | P0 | controller + view | browser 7/7 | INTEGRATE_NOW | |
-| Image insert/replace/crop | `insertImage`, `replaceImage`, `startImageCrop`, `SetCrop` | beta.2 | insert/replace/crop entry | insert/replace/crop | P0 | adapter/controller | browser pending | INTEGRATE_NOW | |
-| Background | `setBackgroundImage`, slide properties | beta.2 | solid/image | custom color + image crop | P0 | controller | adapter/browser pending | INTEGRATE_NOW | |
-| Slide layout/size | `queryLayout`, `setLayout`, `doc.meta` | beta.2 | real layout gallery + dynamic aspect ratio | stable layout selection | P1 | adapter/controller | static/unit; browser pending | INTEGRATE_IF_SAFE | custom slide-size writer is not exposed; current source size is read dynamically |
-| Transitions | `queryTransition`, `setTransition`, `previewTransition` | beta.2 | gallery + direction/duration/auto-advance/apply-all/preview | gallery + timing/options | P0 | adapter/controller | browser 7/7 | INTEGRATE_NOW | |
-| Animations | `SetAnimations`, `ANIMATION_EFFECTS`, `previewAnimations` | beta.2 | multi-effect gallery + append/clear + trigger/duration/order | catalog + timing/order | P0 | controller | unit/browser smoke | INTEGRATE_NOW | sourceReadonly remains fail-closed for unsupported source timing |
-| Animation pane | `querySlideAnimations` | beta.2 | editable trigger/duration/order/delete list | select/order/delete/edit | P1 | controller | browser pending | INTEGRATE_NOW | |
-| Notes | `SetNotes` | beta.2 | bottom notes bar + page inspector | bottom notes bar | P1 | controller | browser 7/7 | INTEGRATE_NOW | |
-| Hyperlinks | `SetLink` / link adapter | beta.2 | inspector external-link field + restore-source action | safe protocol links | P2 | adapter/controller | build/browser smoke | INTEGRATE_NOW | core normalization remains authority |
-| Alt text | name/accessibility metadata APIs | beta.2 | not exposed | image alt text editor | P1 | adapter/controller | browser pending | INTEGRATE_IF_SAFE | |
-| Snapping/guides | `setSnapping`, snap APIs | beta.2 | editor default | explicit toggle | P1 | adapter/controller | browser pending | INTEGRATE_NOW | |
-| Zoom | `setZoom` | beta.2 | status-bar slider + view tab +/-/fit | status-bar controls | P1 | controller/view | browser 7/7 | INTEGRATE_NOW | |
-| Sections | no adapter seam in beta.2 | beta.2 | absent | bounded slide grouping | P2 | capability probe | none | DEFER_WITH_REASON | integrate only after a round-trip adapter seam is verified |
-| Built-in templates | no adapter seam in beta.2 | beta.2 | blank local template | template gallery | P2 | capability probe | none | DEFER_WITH_REASON | verify package export before adding a product dependency |
-| Theme/master/design | design APIs not yet validated | beta.2 | absent | optional design panel | P2 | deferred | none | INTEGRATE_IF_SAFE | requires round-trip proof |
-| Charts | chart APIs not yet validated in Studio | beta.2 | absent | optional chart editor | P2 | deferred | none | INTEGRATE_IF_SAFE | lazy-load and round-trip proof required |
-| Media | media APIs not yet validated in Studio | beta.2 | absent | offline media insert | P2 | deferred | none | INTEGRATE_IF_SAFE | offline asset policy and bundle budget |
-| Comments | no confirmed public export | beta.2 | absent | review comments | P2 | deferred | none | DEFER_WITH_REASON | no stable public API confirmed |
-| PPTX export | `Editor.save` | beta.2 | integrated | download without draft mutation | P1 | adapter | adapter/unit | INTEGRATE_NOW | |
-| PDF/image export | no confirmed public export | beta.2 | absent | optional export | P2 | deferred | none | UNSUPPORTED_UPSTREAM | no stable public API confirmed |
+| Slide CRUD/reorder | `Editor.exec` slide commands | beta.2 | integrated | stable | P0 | controller | adapter/unit | CLOSED | |
+| Clipboard / undo / redo | `copyElements`, `Editor` history | beta.2 | integrated | stable | P0 | controller | adapter/unit | CLOSED | |
+| Selection pane | `mountSelectionPane`, `attachSelectionPane` | beta.2 | mounted in Studio | upstream object tree | P0 | adapter/controller | browser smoke | PARTIAL | current browser coverage is local smoke, not CI freeze evidence |
+| Format Painter | `startFormatPainter`, `cancelFormatPainter` | beta.2 | ribbon + floating toolbar | copy/paint action | P0 | adapter/controller | browser smoke | PARTIAL | round-trip and broader browser coverage remain |
+| Find / Replace | `openTextSearch`, `nextTextSearch` | beta.2 | ribbon action | search panel | P0 | adapter/controller | browser pending | PARTIAL | panel-level browser evidence remains |
+| Alignment | `AlignElements` | beta.2 | multi-select | six-way + single slide align | P0 | controller | unit/browser pending | PARTIAL | product path exists; full browser matrix remains |
+| Distribution | no adapter export; geometry command fallback | beta.2 | local fallback | upstream command when available | P0 | controller | unit/browser pending | PARTIAL | beta.2 has no distribution export; fallback remains isolated in controller |
+| Layer | `SetZ` | beta.2 | integrated | four layer actions | P0 | controller | adapter/unit | CLOSED | |
+| Group / Ungroup | `Group`, `Ungroup` | beta.2 | available | ribbon/context action | P0 | controller | browser pending | PARTIAL | broader browser coverage remains |
+| Flip / Rotate | `SetFlip`, `SetXfrm` | beta.2 | integrated | ribbon action | P0 | controller | adapter/unit | CLOSED | |
+| Shape gallery | `AddShape` + upstream geometry presets | beta.2 | categorized local gallery | categorized gallery | P0 | Studio command surface | browser smoke | PARTIAL | local labels/previews only; geometry remains upstream |
+| Shape adjustments | adjustment/edit geometry APIs | beta.2 | not exposed | drag + round-trip | P1 | adapter/controller | none | BLOCKED-UPSTREAM | no pinned beta.2 public seam confirmed |
+| Text run formatting | `queryRunProps`, `setRunProps`, `registerTextUi` | beta.2 | font/color/bold/italic/underline/strike toolbar | range/caret formatting | P0 | controller + view | browser smoke | PARTIAL | full save/reopen browser proof remains |
+| Paragraph/body formatting | `queryParaProps`, `setParaProps`, `setBodyProps` | beta.2 | alignment/spacing/TextBody toolbar | paragraph toolbar | P0 | controller + view | browser smoke | PARTIAL | bullet and auto-number commands are absent in beta.2 and therefore hidden |
+| Image insert/replace/crop | `insertImage`, `replaceImage`, `startImageCrop`, `SetCrop` | beta.2 | insert/replace/crop entry | insert/replace/crop | P0 | adapter/controller | browser pending | PARTIAL | image workflow browser proof remains |
+| Background | `setBackgroundImage`, slide properties | beta.2 | solid/image | custom color + image crop | P0 | controller | adapter/browser pending | PARTIAL | browser round-trip remains |
+| Slide layout/size | `queryLayout`, `setLayout`, `doc.meta` | beta.2 | real layout gallery + dynamic aspect ratio | stable layout selection | P1 | adapter/controller | static/unit; browser pending | PARTIAL | custom slide-size writer is not exposed; current source size is read dynamically |
+| Transitions | `queryTransition`, `setTransition`, `previewTransition` | beta.2 | gallery + effect-aware direction/duration/auto-advance/apply-all/preview | gallery + timing/options | P0 | adapter/controller | browser smoke | PARTIAL | full round-trip browser evidence remains |
+| Animations | `SetAnimations`, `ANIMATION_EFFECTS`, `previewAnimations` | beta.2 | multi-effect gallery + append/clear + trigger/duration/order | catalog + timing/order | P0 | controller | unit/browser smoke | PARTIAL | first-step click invariant is covered locally; CI freeze evidence remains |
+| Animation pane | `querySlideAnimations` | beta.2 | editable trigger/duration/order/delete list | select/order/delete/edit | P1 | controller | browser smoke | PARTIAL | broader round-trip coverage remains |
+| Notes | `SetNotes` | beta.2 | bottom notes bar + page inspector | bottom notes bar | P1 | controller | browser smoke | PARTIAL | full workflow evidence remains |
+| Hyperlinks | `SetLink` / link adapter | beta.2 | inspector external-link field + restore-source action | safe protocol links | P2 | adapter/controller | build/browser smoke | PARTIAL | protocol and round-trip coverage remains; core normalization remains authority |
+| Alt text | name/accessibility metadata APIs | beta.2 | not exposed | image alt text editor | P1 | adapter/controller | none | BLOCKED-UPSTREAM | no pinned beta.2 public alt-text seam confirmed |
+| Snapping/guides | `setSnapping`, snap APIs | beta.2 | editor default | explicit toggle | P1 | adapter/controller | browser pending | PARTIAL | browser interaction proof remains |
+| Zoom | `setZoom` | beta.2 | status-bar slider + view tab +/-/fit | status-bar controls | P1 | controller/view | browser smoke | PARTIAL | short-wide and responsive proof is local only |
+| Sections | no adapter seam in beta.2 | beta.2 | absent | bounded slide grouping | P2 | capability probe | none | BLOCKED-UPSTREAM | integrate only after a round-trip adapter seam is verified |
+| Built-in templates | no adapter seam in beta.2 | beta.2 | blank local template | template gallery | P2 | capability probe | none | BLOCKED-UPSTREAM | verify package export before adding a product dependency |
+| Theme/master/design | design APIs not yet validated | beta.2 | absent | optional design panel | P2 | deferred | none | NOT-EVALUATED | requires capability and round-trip probe |
+| Charts | chart APIs not yet validated in Studio | beta.2 | absent | optional chart editor | P2 | deferred | none | NOT-EVALUATED | requires capability and round-trip probe |
+| Media | media APIs not yet validated in Studio | beta.2 | absent | offline media insert | P2 | deferred | none | NOT-EVALUATED | requires capability, offline policy and bundle proof |
+| Comments | no confirmed public export | beta.2 | absent | review comments | P2 | deferred | none | BLOCKED-UPSTREAM | no stable public API confirmed |
+| PPTX export | `Editor.save` | beta.2 | current editor bytes + download | download without draft mutation | P1 | controller | unit + browser export | PARTIAL | local browser proof is required before closure |
+| PDF/image export | no confirmed public export | beta.2 | absent | optional export | P2 | deferred | none | BLOCKED-UPSTREAM | no stable public API confirmed |
 
-No row is deferred solely for schedule. Deferred rows name the missing public API, round-trip, offline, or bundle evidence required to promote them.
+Each status is evidence-based: `CLOSED`, `PARTIAL`, `BLOCKED-UPSTREAM`, `DEFERRED`, or `NOT-EVALUATED`. No row is deferred solely for schedule. Deferred rows name the missing public API, round-trip, offline, or bundle evidence required to promote them.
 
 ## 2026-09-12 closure log
 
@@ -79,3 +79,11 @@ No row is deferred solely for schedule. Deferred rows name the missing public AP
 - Local `npm run check`: PASS; 146/146 unit tests plus build, formal lesson validation, distribution/display boundaries, load simulation, WebSocket/SQLite reference gate, and smoke.
 - Local Chromium: `CLASSCORE_PRESENTATION_URL=http://127.0.0.1:28788 npm run test:e2e:presentation`: 7/7 PASS, including file/text/transition controls, notes/zoom, object context menu, and slide context menu.
 - GitHub Actions final-head run: [34681175908](https://github.com/hello-yunshu/classcore/actions/runs/34681175908); `full-check (x64)`, `full-check (arm64)`, `native-arm64-docker-build`, and `presentation-browser-e2e` all PASS.
+
+## 2026-09-13 correctness closure
+
+- `npm run check`: PASS, 154/154 unit tests, including Framework capability/rejoin/artifact/Transfer/Submission parity and Presentation controller regressions.
+- Local real-server Chromium: PASS, 14/14. Added coverage proves the first animation remains `click` after changing the default to `afterPrev`, and immediate PPTX export contains the latest edited text after reopen of the downloaded OOXML.
+- Docker: `npm run docker:gate` PASS for native `linux/arm64` with restart/serverSeq evidence; `TARGET_PLATFORM=linux/amd64 bash deploy/docker/build-current.sh classroom-runtime:gate-amd64-20260913` PASS with `arch=amd64`, `user=node` image inspection. The amd64 result is a build/metadata gate, not a native runtime soak.
+- Truth boundary: pinned beta.2 has `SetTableStyle` and `InsertRow`, but no confirmed public cell fill/border, merge/split, column, row-height, or column-width command. Those controls remain hidden or marked `BLOCKED-UPSTREAM`; the generated blank deck removes only PptxGenJS's blue default table-style declaration so neutral insertion does not require document mutation.
+- Freeze decision: remain `CAPABILITY-INTEGRATION / NOT-FROZEN`. `npm run d7:product` still fails closed on authenticated classroom Server, Student TransformBoard target-browser evidence, classroom Join/Presence/Submission integration, Teacher/Display/Observer flow, and physical XP21A/LAN rehearsal.

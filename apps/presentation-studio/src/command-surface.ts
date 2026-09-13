@@ -58,7 +58,10 @@ export function createCommandButton(command: StudioCommand, density: CommandDens
 }
 
 function focusableItems(menu: HTMLElement): HTMLButtonElement[] {
-    return [...menu.querySelectorAll<HTMLButtonElement>(':scope > .command-menu-item:not(:disabled)')];
+    // Menu items are wrapped in `.command-menu-entry`; the direct-child
+    // selector keeps arrow navigation scoped to this menu level and excludes
+    // nested submenu items.
+    return [...menu.querySelectorAll<HTMLButtonElement>(':scope > .command-menu-entry > .command-menu-item:not(:disabled)')];
 }
 
 function closeMenu(menu: HTMLElement, restore: HTMLElement | null): void {
@@ -109,7 +112,10 @@ function makeMenuItem(item: StudioMenuItem, owner: HTMLButtonElement): HTMLDivEl
         submenu.setAttribute('role', 'menu');
         item.submenu.forEach(child => submenu.append(makeMenuItem(child, owner)));
         const open = () => {
-            wrapper.parentElement?.querySelectorAll<HTMLElement>(':scope > .command-menu-entry > .command-submenu.is-open').forEach(other => other.classList.remove('is-open'));
+            wrapper.parentElement?.querySelectorAll<HTMLElement>(':scope > .command-menu-entry > .command-submenu.is-open').forEach(other => {
+                other.classList.remove('is-open');
+                other.previousElementSibling?.setAttribute('aria-expanded', 'false');
+            });
             submenu.classList.add('is-open');
             button.setAttribute('aria-expanded', 'true');
             submenu.querySelector<HTMLButtonElement>('.command-menu-item')?.focus();

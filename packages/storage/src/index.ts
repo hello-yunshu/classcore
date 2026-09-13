@@ -126,8 +126,7 @@ function submissionContext(value: Submission): string {
 }
 
 function submissionTransitionAllowed(from: Submission['status'], to: Submission['status']): boolean {
-    const order: Submission['status'][] = ['draft', 'submitted', 'accepted'];
-    return order.indexOf(to) >= order.indexOf(from);
+    return from === 'draft' ? to === 'draft' || to === 'submitted' : from === 'submitted' ? to === 'submitted' || to === 'accepted' : to === 'accepted';
 }
 
 /** Complete deterministic in-memory adapter used by unit/integration/rehearsal paths. */
@@ -216,7 +215,11 @@ export class InMemoryClassroomStorage extends InMemoryRuntimeRecoveryStorage imp
     async getSubmission(submissionId: string): Promise<Submission | null> { const value = this.#submissions.get(submissionId); return value ? structuredClone(value) : null; }
     async saveTransfer(transfer: ArtifactTransfer): Promise<void> {
         const existing = this.#transfers.get(transfer.transferId);
-        if (existing && !isTransferTransitionAllowed(existing.status, transfer.status)) throw new Error('transfer-state-regression');
+        if (existing) {
+            if (canonical(existing) === canonical(transfer)) return;
+            if (!isTransferTransitionAllowed(existing.status, transfer.status)) throw new Error('transfer-state-regression');
+            if (existing.status === transfer.status) throw new Error('transfer-state-immutable');
+        }
         this.#transfers.set(transfer.transferId, structuredClone(transfer));
     }
     async getTransfer(transferId: string): Promise<ArtifactTransfer | null> { const value = this.#transfers.get(transferId); return value ? structuredClone(value) : null; }
@@ -224,11 +227,15 @@ export class InMemoryClassroomStorage extends InMemoryRuntimeRecoveryStorage imp
 }
 
 export function isTransferTransitionAllowed(from: ArtifactTransfer['status'], to: ArtifactTransfer['status']): boolean {
-    if (from === to) return true;
-    if (from === 'failed') return false;
-    if (to === 'failed') return true;
-    const order: ArtifactTransfer['status'][] = ['queued', 'sent', 'received', 'opened', 'completed'];
-    return order.indexOf(to) >= order.indexOf(from);
+    const allowed: Record<ArtifactTransfer['status'], readonly ArtifactTransfer['status'][]> = {
+        queued: ['queued', 'sent', 'failed'],
+        sent: ['sent', 'received', 'failed'],
+        received: ['received', 'opened', 'failed'],
+        opened: ['opened', 'completed', 'failed'],
+        completed: ['completed'],
+        failed: ['failed'],
+    };
+    return allowed[from].includes(to);
 }
 /** Content-addressed lesson store used by Session pinning/restart recovery. */
 export interface ImmutableLessonPackageStore {

@@ -8,6 +8,8 @@ R3.10 是 **Release-Assurance Closure & Codex Mother Package**：Foundation v0.1
 
 2026-09-12 Presentation capability integration：Studio 已接入 Office-like command surface、local SVG icons、split/dropdown/gallery、contextual tabs、真实 upstream Selection Pane host、beta.2 text/paragraph/image/crop/effects/hyperlink/animation/transition adapters 与 presentation-scoped pending metadata；本地真实服务上的 Studio Browser E2E 7/7 已通过。Full reference-server readiness、Docker/LAN、save/reopen/offline/Display/XP21A 仍未闭合，状态继续保持 `CAPABILITY-INTEGRATION / NOT-FROZEN`。
 
+2026-09-13 Presentation correctness/framework repair：移除表格 `editor.doc` 直接 mutation；新建形状、文本框和表格的中性默认值进入同一 web-ppt command/history；表格设计仅保留 beta.2 已公开的 `SetTableStyle`，隐藏未有真实 cell command 支撑的假控件；导出改为 `await controller.save()`，另存为副本创建独立 Library Draft；首条动画强制 `click`，bullet/auto-number 假控件移除；修复菜单键盘焦点与 submenu `aria-expanded`。Framework 关闭 instance capability union、expired rejoin fresh grant、artifact fail-closed、Transfer/Submission FSM 与 parity regressions。当前本地真实服务 Playwright 为 14/14 PASS，`npm run check` 为 154/154 PASS，reference Docker arm64 runtime gate 与 amd64 image build PASS；CI、认证课堂 Server、真实 LAN/offline、Display、XP21A 仍未验证，状态继续保持 `CAPABILITY-INTEGRATION / NOT-FROZEN`。
+
 ## 接手后的第一步
 
 ```bash
@@ -70,7 +72,7 @@ npm run bootstrap
 - TransformBoard 与真实课堂 Server 的 Join/Activity/Submission 链接入；
 - 认证账号服务器接入、真实身份 owner authorization、Studio Library 的完整版本历史 UI；reference API/Picker/Prepare/设计绑定的模型级路径已存在，但不是认证产品能力；
 - Presentation PlaybackState 与 Teacher lease 的正式课堂授权、Display player/reconnect 的真实浏览器闭环；reference transport 已有 pinned revision + SQLite sync 接缝，仍未宣称 D7；
-- Playwright Browser E2E、offline-after-prepare、真实 Docker/LAN/XP21A 证据仍未完成；reference runtime snapshot/asset API 与 Prepare/Pin 接缝已存在，不能替代认证课堂能力；
+- Playwright Browser E2E 已在当前工作树本地真实服务通过 14/14；offline-after-prepare、真实认证课堂 Docker/LAN/XP21A 证据仍未完成；reference runtime snapshot/asset API 与 Prepare/Pin 接缝已存在，不能替代认证课堂能力；
 - `selected-artifact` 等 Widget selector 与真实课堂 Stage/Artifact public/teacher projection 的正式接线；通用 Widget Registry primitive 已完成，但尚未替代 reference transport。
 - 浏览器 mount 的长期 soak、Server restart/Display reconnect、真实 Docker/LAN/XP21A evidence；
 - 完整 Join / Presence / Outbox / Submission / Artifact Exchange 产品链；
@@ -80,7 +82,7 @@ npm run bootstrap
 - 真实路由器 + XP21A LAN rehearsal（自动 host LAN-interface probe 不能替代）；
 - XP21A 小规模真机 smoke（若设备可得）。
 
-本轮主线验证状态：`npm run check` 通过，136/136 tests、50 Student + 40 Observer simulation、真实 WebSocket + SQLite load、arm64 reference Docker gate 通过；Playwright、认证 owner、正式课堂 LAN 与 XP21A 仍为 `NOT_EVALUATED`。
+本轮主线验证状态：`npm run check` 通过，154/154 tests、50 Student + 40 Observer simulation、真实 WebSocket + SQLite load、arm64 reference Docker runtime gate 与 amd64 image build 通过；本地 Playwright 14/14 通过；认证 owner、正式课堂 LAN/offline 与 XP21A 仍为 `NOT_EVALUATED`。
 
 ## 开发优先级
 

@@ -45,8 +45,8 @@ function submission(status, patch = {}) {
     return { submissionId: 'submission:one', sessionId, activityId, submitterScope: ownerScope, submittedBy: 'student:one', artifacts: [{ artifactId: 'artifact:one', revision: 1 }], status, submittedAt: status === 'draft' ? null : '2026-09-12T00:00:00.000Z', ...patch };
 }
 
-function transfer(status) {
-    return { transferId: 'transfer:one', sessionId, activityId, senderId: 'student:one', recipientScope: { type: 'participant', id: 'student:two' }, artifact: { artifactId: 'artifact:one', revision: 1 }, status, createdAt: '2026-09-12T00:00:00.000Z', updatedAt: '2026-09-12T00:00:00.000Z' };
+function transfer(status, transferId = 'transfer:one') {
+    return { transferId, sessionId, activityId, senderId: 'student:one', recipientScope: { type: 'participant', id: 'student:two' }, artifact: { artifactId: 'artifact:one', revision: 1 }, status, createdAt: '2026-09-12T00:00:00.000Z', updatedAt: '2026-09-12T00:00:00.000Z' };
 }
 
 test('in-memory and SQLite classroom stores share idempotency and revision semantics', async () => {
@@ -99,9 +99,11 @@ test('submission and transfer state machines are identical and terminal-safe', a
         }
         assert.equal(await errorCode(() => memory.saveTransfer(transfer('received'))), 'transfer-state-regression');
         assert.equal(await errorCode(() => sqlite.saveTransfer(transfer('received'))), 'transfer-state-regression');
-        await memory.saveTransfer(transfer('failed')); sqlite.saveTransfer(transfer('failed'));
-        assert.equal(await errorCode(() => memory.saveTransfer(transfer('completed'))), 'transfer-state-regression');
-        assert.equal(await errorCode(() => sqlite.saveTransfer(transfer('completed'))), 'transfer-state-regression');
+        await memory.saveTransfer(transfer('failed', 'transfer:failed')); sqlite.saveTransfer(transfer('failed', 'transfer:failed'));
+        assert.equal(await errorCode(() => memory.saveTransfer(transfer('completed', 'transfer:failed'))), 'transfer-state-regression');
+        assert.equal(await errorCode(() => sqlite.saveTransfer(transfer('completed', 'transfer:failed'))), 'transfer-state-regression');
+        assert.equal(await errorCode(() => memory.saveTransfer({ ...transfer('completed'), updatedAt: '2026-09-12T00:00:01.000Z' })), 'transfer-state-immutable');
+        assert.equal(await errorCode(() => sqlite.saveTransfer({ ...transfer('completed'), updatedAt: '2026-09-12T00:00:01.000Z' })), 'transfer-state-immutable');
     });
 });
 

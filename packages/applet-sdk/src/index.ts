@@ -122,7 +122,11 @@ export class AppletHostRuntime<TConfig extends Record<string, unknown> = Record<
 
     constructor(private readonly options: AppletHostRuntimeOptions<TConfig, TState>) {
         const entry = options.registry.resolve(options.instance.appletTypeId);
-        const missing = (entry.manifest.requiredPlatformCapabilities ?? []).filter(capability => !(options.availableCapabilities ?? new Set()).has(capability));
+        const requiredCapabilities = new Set([
+            ...(entry.manifest.requiredPlatformCapabilities ?? []),
+            ...(options.instance.requiredCapabilities ?? []),
+        ]);
+        const missing = [...requiredCapabilities].filter(capability => !(options.availableCapabilities ?? new Set()).has(capability));
         if (missing.length)
             throw new Error(`platform-capability-missing:${missing.join(',')}`);
         this.manifest = entry.manifest;

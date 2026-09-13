@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AppletEventRuntime, AuthorizationService, InMemoryClassroomAuthority } from '../dist/packages/runtime/src/index.js';
+import { AppletEventRuntime, AuthorizationService, InMemoryClassroomAuthority, LearningResourceRuntime } from '../dist/packages/runtime/src/index.js';
 import { AppletHostRuntime, AppletRegistry, GENERIC_COUNTER_MANIFEST, createGenericCounterApplet } from '../dist/packages/applet-sdk/src/index.js';
 import { InMemoryClassroomStorage } from '../dist/packages/storage/src/index.js';
 import { LiveStateBroker } from '../dist/packages/realtime/src/index.js';
@@ -15,7 +15,8 @@ const session = {
 };
 
 test('authenticated classroom spine resolves credential to membership, token and presence', () => {
-    const authority = new InMemoryClassroomAuthority(() => 'fixed');
+  let grantId = 0;
+  const authority = new InMemoryClassroomAuthority(() => `fixed-${++grantId}`);
     authority.createSession({ session, sessionLocator: 'class:demo', credentials: [{ sessionLocator: 'class:demo', role: 'student', credentialType: 'class-code', credentialValue: 'S17', participantId: 'student:S17' }] });
     assert.equal(authority.transitionSession(session.sessionId, 'system.session.ready').status, 'ready');
     const grant = authority.join({ joinRequestId: 'join:1', runtimeApiVersion: 1, sessionLocator: 'class:demo', requestedRole: 'student', participantHint: 'S17', credential: { type: 'class-code', value: 'S17' } });
@@ -48,6 +49,39 @@ test('registry and host own generic applet lifecycle and restore snapshot', asyn
     assert.equal(events.length, 1);
     await host.destroy();
     assert.equal(host.status, 'destroyed');
+});
+
+test('applet instance capabilities are part of mount compatibility', () => {
+    const registry = new AppletRegistry();
+    registry.register(GENERIC_COUNTER_MANIFEST, createGenericCounterApplet);
+    assert.throws(() => new AppletHostRuntime({
+        registry,
+        instance: { appletInstanceId: 'instance:camera', appletTypeId: 'generic-counter', requiredCapabilities: ['camera'] },
+        config: {},
+        context: { viewer: { participantId: 'student:S17', role: 'student', connectionId: 'connection:1' }, subject: { type: 'participant', id: 'student:S17' }, accessMode: 'interactive', sessionId: 'session:synthetic', lessonId: 'synthetic', activityId: 'activity:one', appletInstanceId: 'instance:camera', appletTypeId: 'generic-counter' },
+        host: { emitEvent: async () => ({ clientEventId: 'event:1', accepted: true, eventId: 'event:1', serverSeq: 1, duplicate: false }), publishLiveState() {}, requestAction: async () => null, saveSnapshot: async () => {}, getAsset: async () => '' },
+        availableCapabilities: new Set(),
+    }), /platform-capability-missing:camera/);
+});
+
+test('rejoin keeps membership identity but mints a fresh grant after expiry', () => {
+    let grantId = 0;
+    const authority = new InMemoryClassroomAuthority(() => `fixed-${++grantId}`);
+    authority.createSession({ session, sessionLocator: 'class:expiry', credentials: [{ sessionLocator: 'class:expiry', role: 'student', credentialType: 'class-code', credentialValue: 'S17', participantId: 'student:S17' }] });
+    const first = authority.join({ joinRequestId: 'join:first', runtimeApiVersion: 1, sessionLocator: 'class:expiry', requestedRole: 'student', credential: { type: 'class-code', value: 'S17' } }, 0);
+    const second = authority.join({ joinRequestId: 'join:second', runtimeApiVersion: 1, sessionLocator: 'class:expiry', requestedRole: 'student', credential: { type: 'class-code', value: 'S17' } }, 8 * 60 * 60 * 1000 + 1);
+    assert.equal(second.membershipId, first.membershipId);
+    assert.notEqual(second.accessToken, first.accessToken);
+    assert.ok(Date.parse(second.expiresAt) > 8 * 60 * 60 * 1000 + 1);
+    assert.equal(authority.authenticate(second.accessToken, 8 * 60 * 60 * 1000 + 1).membershipId, first.membershipId);
+});
+
+test('artifact transfer fails closed when its authoritative artifact is missing', async () => {
+    const authorization = { isActivityInSession: () => true, authorize: () => ({ allowed: true }) };
+    const runtime = new LearningResourceRuntime({ saveArtifact: async () => {}, saveSubmission: async () => {}, saveTransfer: async () => { throw new Error('transfer-should-not-persist'); }, getArtifact: async () => null }, authorization);
+    const connection = { connectionId: 'connection:1', sessionId: session.sessionId, membershipId: 'membership:1', participantId: 'student:S17', role: 'student' };
+    const transfer = { transferId: 'transfer:missing', sessionId: session.sessionId, activityId: 'activity:one', senderId: 'student:S17', recipientScope: { type: 'participant', id: 'student:S23' }, artifact: { artifactId: 'artifact:missing', revision: 1 }, status: 'queued', createdAt: '2026-09-12T00:00:00.000Z', updatedAt: '2026-09-12T00:00:00.000Z' };
+    await assert.rejects(() => runtime.transfer(connection, transfer, { type: 'participant', id: 'student:S17' }), /artifact-not-found/);
 });
 
 test('event, snapshot, artifact, submission and transfer remain durable and idempotent', async () => {

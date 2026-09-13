@@ -14,7 +14,8 @@ import type {
     TextPosition,
     VectorFill,
 } from '@web-ppt/edit-core';
-import { copyElements, queryElementEffects, queryElementLink, textBodyEditText, textPositionAtIndex } from '@web-ppt/edit-core';
+import { copyElements, listTableStyles, queryElementEffects, queryElementLink, queryTableStyle, textBodyEditText, textPositionAtIndex } from '@web-ppt/edit-core';
+type TableStyleSwitches = { firstRow: boolean; lastRow: boolean; bandRow: boolean; firstCol: boolean; lastCol: boolean; bandCol: boolean };
 import type { WebPptAdapter } from '@web-ppt/editor';
 import type { WebPptPresentationAsset } from '@classroom/presentation-webppt-adapter';
 
@@ -99,15 +100,16 @@ export class PresentationStudioController {
     addShape(preset: string = 'roundRect'): ElementId | null {
         const slideId = this.requireSlide();
         const editor = this.requireEditor();
-        editor.exec({ type: 'AddShape', slideId, preset, rect: { x: 320, y: 220, w: 240, h: 128 } });
-        const id = editor.selection.kind === 'elements' ? editor.selection.ids[0] ?? null : null;
-        if (id) {
-            // The headless package's generic preset defaults are intentionally
-            // blue. Studio insertion starts with a neutral outline and lets
-            // users choose a fill or stronger visual treatment themselves.
-            this.setFill(id, { type: 'none' });
-            this.setStroke(id, { color: 'rgb(107,114,128)', width: 1, dash: null, cap: 'butt', join: 'miter', compound: 'sng' });
-        }
+        // AddShape allocates the next stable element id during command
+        // execution. Predicting that id lets the neutral defaults travel in
+        // the same upstream transaction, so one insertion remains one undo.
+        const id = `${editor.doc.identity.prefix}e${editor.doc.identity.nextElement.toString(36)}`;
+        editor.exec(
+            { type: 'AddShape', slideId, preset, rect: { x: 320, y: 220, w: 240, h: 128 } },
+            { type: 'SetFill', id, fill: { type: 'none' } },
+            { type: 'SetStroke', id, stroke: { color: 'rgb(107,114,128)', width: 1, dash: null, cap: 'butt', join: 'miter', compound: 'sng' } },
+        );
+        this.select({ kind: 'elements', ids: [id], enteredGroup: null });
         return id;
     }
 
@@ -124,20 +126,23 @@ export class PresentationStudioController {
             this.execute({ type: 'PasteElements', payload, at: { parentId: slideId, x: 320, y: 220 } });
             id = editor.selection.kind === 'elements' ? editor.selection.ids[0] ?? null : null;
         } else {
-            id = this.addShape('rect');
-            if (id) {
-                this.setStroke(id, { type: 'none' });
-                editor.exec({ type: 'SetBodyProps', id, props: { anchor: 'middle' } });
-                editor.exec({
-                    type: 'EditText',
-                    id,
-                    ops: [{ type: 'replace', from: { p: 0, r: 0, off: 0 }, to: { p: 0, r: 0, off: 0 }, text: '' }],
-                });
-            }
+            // Keep a standalone text-box insertion as one upstream history
+            // entry too. The id is deterministic for this command batch.
+            id = `${editor.doc.identity.prefix}e${editor.doc.identity.nextElement.toString(36)}`;
+            editor.exec(
+                { type: 'AddShape', slideId, preset: 'rect', rect: { x: 320, y: 220, w: 320, h: 128 } },
+                { type: 'SetFill', id, fill: { type: 'none' } },
+                { type: 'SetStroke', id, stroke: { type: 'none' } },
+                { type: 'SetBodyProps', id, props: { anchor: 'middle' } },
+                { type: 'EditText', id, ops: [{ type: 'replace', from: { p: 0, r: 0, off: 0 }, to: { p: 0, r: 0, off: 0 }, text: '' }] },
+            );
+            this.select({ kind: 'elements', ids: [id], enteredGroup: null });
         }
         if (!id) return null;
-        this.setTransform(id, { x: 320, y: 220, w: 320, h: 128 });
-        this.editText(id, '');
+        if (sourceId) {
+            this.setTransform(id, { x: 320, y: 220, w: 320, h: 128 });
+            this.editText(id, '');
+        }
         return id;
     }
 
@@ -160,27 +165,18 @@ export class PresentationStudioController {
 
     addTable(rows: number, cols: number): ElementId {
         const slideId = this.requireSlide();
-        this.neutralizeTableDefaults(slideId);
-        const view = this.adapter.snapshot.view;
-        if (view?.insertTable) return view.insertTable(rows, cols, { rect: { x: 180, y: 180, w: 600, h: 300 } });
         const editor = this.requireEditor();
-        editor.exec({ type: 'AddTable', slideId, rows, cols, rect: { x: 180, y: 180, w: 600, h: 300 } });
-        const id = editor.selection.kind === 'elements' ? editor.selection.ids[0] : null;
-        if (!id) throw new Error('web-ppt-table-id-missing');
+        // SetTableStyle(null) is the beta.2 upstream command for the
+        // documented neutral fallback. It replaces the old direct
+        // `editor.doc.slides[slideId].defaultTable` mutation and is recorded
+        // atomically with AddTable.
+        const id = `${editor.doc.identity.prefix}e${editor.doc.identity.nextElement.toString(36)}`;
+        editor.exec(
+            { type: 'AddTable', slideId, rows, cols, rect: { x: 180, y: 180, w: 600, h: 300 } },
+            { type: 'SetTableStyle', id, styleId: null },
+        );
+        this.select({ kind: 'elements', ids: [id], enteredGroup: null });
         return id;
-    }
-
-    private neutralizeTableDefaults(slideId: SlideId): void {
-        const slide = this.requireEditor().doc.slides[slideId];
-        const defaults = slide?.defaultTable;
-        if (!defaults) return;
-        const neutralCell = (cell: typeof defaults.firstRow) => ({ ...cell, fill: { type: 'none' as const } });
-        slide.defaultTable = {
-            ...defaults,
-            styleId: undefined,
-            firstRow: neutralCell(defaults.firstRow),
-            bandRows: [neutralCell(defaults.bandRows[0]), neutralCell(defaults.bandRows[1])],
-        };
     }
 
     async addImage(file: Blob): Promise<ElementId> {
@@ -230,6 +226,11 @@ export class PresentationStudioController {
     setLink(id: ElementId, target: LinkTarget | { kind: 'none' } | null): void { this.execute({ type: 'SetLink', id, target }); }
     queryLink(ids = this.selectedIds()): ReturnType<typeof queryElementLink> | null { return this.editor && ids.length ? queryElementLink(this.editor.doc, ids) : null; }
     setSlideBackground(id: SlideId, fill: VectorFill | null): void { this.execute({ type: 'SetBackground', id, fill }); }
+    listTableStyles(slideId = this.requireSlide()): ReturnType<typeof listTableStyles> { return listTableStyles(this.requireEditor().doc, slideId); }
+    queryTableStyle(id: ElementId): ReturnType<typeof queryTableStyle> | null { return this.editor ? queryTableStyle(this.editor.doc, id) : null; }
+    setTableStyle(id: ElementId, styleId: string | null, switches: TableStyleSwitches = { firstRow: false, lastRow: false, bandRow: false, firstCol: false, lastCol: false, bandCol: false }): void {
+        this.execute(styleId === null ? { type: 'SetTableStyle', id, styleId: null } : { type: 'SetTableStyle', id, styleId, ...switches });
+    }
     setAnimations(slideId: SlideId, steps: readonly EditAnimationStep[] | null): void { this.execute({ type: 'SetAnimations', slideId, steps }); }
     appendAnimations(slideId: SlideId, steps: readonly EditAnimationStep[]): void {
         if (!steps.length) return;

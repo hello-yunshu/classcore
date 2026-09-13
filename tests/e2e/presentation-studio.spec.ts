@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import fs from 'node:fs';
+import JSZip from 'jszip';
 
 test.describe('Presentation Studio command surface', () => {
     test.beforeEach(async ({ page }) => {
@@ -92,10 +94,13 @@ test.describe('Presentation Studio command surface', () => {
     test('provides an editable animation timeline with classroom-friendly timing controls', async ({ page }) => {
         await page.getByRole('treeitem', { name: /文本/ }).click();
         await page.getByRole('tab', { name: '动画' }).click();
+        await page.getByRole('button', { name: '打开动画窗格' }).click();
+        await page.getByRole('combobox', { name: '默认触发方式' }).selectOption('afterPrev');
         await page.locator('.gallery-item').filter({ hasText: '淡入' }).click();
         await expect(page.getByText('1 个步骤', { exact: true })).toBeVisible();
         await expect(page.getByRole('button', { name: '选择对象：文本' })).toBeVisible();
         await expect(page.getByRole('combobox', { name: '效果' })).toHaveValue('fade');
+        await expect(page.getByRole('combobox', { name: '触发方式', exact: true })).toHaveValue('click');
         await expect(page.getByRole('spinbutton', { name: '时长', exact: true })).toHaveValue('0.30');
         await expect(page.getByRole('spinbutton', { name: '延迟', exact: true })).toHaveValue('0.00');
         await page.getByRole('combobox', { name: '触发方式', exact: true }).selectOption('afterPrev');
@@ -105,6 +110,25 @@ test.describe('Presentation Studio command surface', () => {
         await expect(page.getByRole('spinbutton', { name: '时长', exact: true })).toHaveValue('0.75');
         await page.getByRole('button', { name: '清除本页动画' }).click();
         await expect(page.getByText('还没有动画步骤')).toBeVisible();
+    });
+
+    test('exports the latest editor state without waiting for autosave', async ({ page }) => {
+        await page.getByRole('tab', { name: '插入' }).click();
+        await page.getByRole('button', { name: '文本框', exact: true }).click();
+        const editor = page.getByRole('textbox', { name: '编辑文本框内容' });
+        await editor.fill('立即导出的最新内容');
+        await editor.press('Escape');
+
+        await page.getByRole('tab', { name: '文件' }).click();
+        await page.getByRole('button', { name: '文件' }).click();
+        const downloadPromise = page.waitForEvent('download');
+        await page.getByRole('menuitem', { name: '导出 PPTX' }).click();
+        const download = await downloadPromise;
+        const downloadPath = await download.path();
+        expect(downloadPath).not.toBeNull();
+        const exported = await JSZip.loadAsync(fs.readFileSync(downloadPath!));
+        const slideXml = await exported.file('ppt/slides/slide1.xml')?.async('string');
+        expect(slideXml).toContain('立即导出的最新内容');
     });
 
     test('groups selected-object inspector controls into clear, responsive sections', async ({ page }) => {

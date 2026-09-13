@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build as bundle } from 'esbuild';
+import JSZip from 'jszip';
 import pptxgen from 'pptxgenjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -123,6 +124,17 @@ async function buildBlankPresentationTemplate() {
         x: 1, y: 1, w: 8, h: 0.6, fontFace: 'Arial', fontSize: 24, color: '24324B',
     });
     await pptx.writeFile({ fileName: path.join(assetsDir, 'presentation-webppt-blank.pptx') });
+    // PptxGenJS emits PowerPoint's blue default table style even for a blank
+    // deck. Remove only that default declaration so AddTable + SetTableStyle
+    // with null remains visibly neutral without editing the engine document.
+    const filename = path.join(assetsDir, 'presentation-webppt-blank.pptx');
+    const zip = await JSZip.loadAsync(fs.readFileSync(filename));
+    const tableStyles = zip.file('ppt/tableStyles.xml');
+    if (tableStyles) {
+        const xml = await tableStyles.async('string');
+        zip.file('ppt/tableStyles.xml', xml.replace(/ def="[^"]+"/, ''));
+        fs.writeFileSync(filename, await zip.generateAsync({ type: 'nodebuffer' }));
+    }
 }
 
 function neutralShell({ app, label }) {

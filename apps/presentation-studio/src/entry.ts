@@ -1,5 +1,6 @@
 import { getSurfaceDescriptor, CLIENT_RUNTIME_BUDGETS } from '@classroom/surfaces';
 import type { PresentationEngineAdapter } from '@classroom/presentation';
+import { transitionDirections } from '@web-ppt/edit-core';
 import type { EditAnimationStep, ElementId, ElementRecord, SlideId } from '@web-ppt/edit-core';
 import type { VectorFill } from '@web-ppt/edit-core';
 import { textBodyEditText } from '@web-ppt/edit-core';
@@ -824,16 +825,46 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  serverProject.currentDraftRevision = result.presentation.currentDraftRevision;
  saveServerProjectMetadata(serverProject);
  }
- function downloadCurrentPresentation(): void {
-  if (!asset?.source) { setStatus('当前没有可导出的课件', true); return; }
-  const bytes = new Uint8Array(asset.source.bytes);
-  const url = URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer], { type: asset.source.mimeType }));
+ async function currentPresentationBytes(): Promise<{ bytes: Uint8Array; mimeType: string; title: string; document: WebPptPresentationAsset['document']; deckId: string } | null> {
+  if (!asset?.source) { setStatus('当前没有可用的课件', true); return null; }
+  const bytes = await controller.save();
+  return { bytes, mimeType: asset.source.mimeType, title: titleInput.value.trim() || asset.title || '课件', document: asset.document, deckId: asset.deckId };
+ }
+ function downloadBytes(bytes: Uint8Array, mimeType: string, title: string): void {
+  const url = URL.createObjectURL(new Blob([bytes.buffer as ArrayBuffer], { type: mimeType }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = `${(titleInput.value.trim() || asset.title || '课件').replace(/[\\/:*?"<>|]/g, '_')}.pptx`;
+  link.download = `${title.replace(/[\\/:*?"<>|]/g, '_')}.pptx`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);
-  setStatus('已导出 PPTX');
+ }
+ async function exportCurrentPresentation(): Promise<void> {
+  const current = await currentPresentationBytes();
+  if (!current) return;
+  downloadBytes(current.bytes, current.mimeType, current.title);
+  setStatus('已导出当前编辑状态 PPTX');
+ }
+ async function duplicateCurrentPresentation(): Promise<void> {
+  const current = await currentPresentationBytes();
+  if (!current) return;
+  if (!serverProject) {
+   const uploaded = await fetch('/api/presentation-assets', { method: 'POST', headers: serverHeaders({ 'content-type': current.mimeType }), body: current.bytes as unknown as BodyInit });
+   if (!uploaded.ok) throw new Error(`presentation-server-http-${uploaded.status}`);
+   const { asset: uploadedAsset } = await uploaded.json();
+   const created = await serverJson('/api/presentations', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title: `${current.title} 副本`, assetId: uploadedAsset.assetId, document: { ...current.document, deckId: current.deckId } }),
+   });
+   window.location.href = `/authoring?presentationId=${encodeURIComponent(created.presentation.presentationId)}`;
+   return;
+  }
+  const result = await serverJson(`/api/presentations/${encodeURIComponent(serverProject.presentationId)}/duplicate`, {
+   method: 'POST',
+   headers: { 'content-type': 'application/json' },
+   body: JSON.stringify({ title: `${current.title} 副本`, bytesBase64: bytesToBase64(current.bytes), mimeType: current.mimeType, document: { ...current.document, deckId: current.deckId } }),
+  });
+  window.location.href = `/authoring?presentationId=${encodeURIComponent(result.presentation.presentationId)}`;
  }
     async function syncThumbnails(): Promise<void> { const generation = ++thumbnailGeneration;
  for (const session of thumbnailSessions.values()) session.dispose();
@@ -995,8 +1026,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    command('new', '新建', 'new-slide', () => newDeck()),
    command('open', '打开 PPTX', 'image', () => fileInput.click()),
    command('save', '保存', 'save', () => persist(), '⌘/Ctrl+S'),
-   command('save-copy', '另存为副本', 'duplicate', () => downloadCurrentPresentation()),
-   command('export-pptx', '导出 PPTX', 'publish', () => downloadCurrentPresentation()),
+   command('save-copy', '另存为副本', 'duplicate', () => duplicateCurrentPresentation()),
+   command('export-pptx', '导出 PPTX', 'publish', () => exportCurrentPresentation()),
    command('rehearse', '试课', 'rehearse', () => rehearse()),
    command('publish', '发布课堂版本', 'publish', () => publish()),
   ])]);
@@ -1064,10 +1095,17 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    const transitionState = controller.queryTransition();
    const currentTransition = transitionState?.value;
    const transitionType = currentTransition?.type ?? 'fade';
+   const transitionDirs: readonly string[] = transitionDirections(transitionType);
+   const transitionDir = currentTransition?.dir ?? transitionDirs[0];
+   const transitionTiming = (): { durationMs: number; dir?: string; advanceAfterMs?: number } => ({
+    durationMs: currentTransition?.durationMs ?? 750,
+    ...(transitionDir ? { dir: transitionDir } : {}),
+    ...(currentTransition?.advanceAfterMs === undefined ? {} : { advanceAfterMs: currentTransition.advanceAfterMs }),
+   });
    const transitionAdvance = input('自动换页毫秒', currentTransition?.advanceAfterMs === undefined ? '' : String(currentTransition.advanceAfterMs), value => {
     const advanceAfterMs = value.trim() === '' ? undefined : Number(value);
     if (advanceAfterMs === undefined || (Number.isFinite(advanceAfterMs) && advanceAfterMs >= 0)) {
-     controller.setTransition({ type: transitionType, durationMs: currentTransition?.durationMs ?? 750, dir: currentTransition?.dir, advanceAfterMs });
+     controller.setTransition({ type: transitionType, ...transitionTiming(), advanceAfterMs });
      renderAll(false);
     }
    }, 'number');
@@ -1075,8 +1113,8 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    transitionAdvance.className = 'toolbar-select';
    const transitionDuration = input('切换时长毫秒', String(currentTransition?.durationMs ?? 750), value => {
     const durationMs = Number(value);
-    if (Number.isFinite(durationMs) && durationMs >= 0) {
-     controller.setTransition({ type: transitionType, durationMs, dir: currentTransition?.dir });
+   if (Number.isFinite(durationMs) && durationMs >= 0) {
+     controller.setTransition({ type: transitionType, ...transitionTiming(), durationMs });
      renderAll(false);
     }
    }, 'number');
@@ -1089,16 +1127,20 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    { ...command('transition-split', '分割', 'transition', () => { controller.setTransition({ type: 'split', dir: 'horz' }); renderAll(false); }), preview: 'preview-split' },
    { ...command('transition-zoom', '缩放', 'transition', () => { controller.setTransition({ type: 'zoom' }); renderAll(false); }), preview: 'preview-zoom' },
    ], 6);
-   const transitionDirection = createDropdown(command('transition-direction', '方向', 'arrange', () => undefined), ['l', 'r', 'u', 'd'].map(dir => command(`transition-dir:${dir}`, dir === 'l' ? '向左' : dir === 'r' ? '向右' : dir === 'u' ? '向上' : '向下', 'arrange', () => {
-    controller.setTransition({ type: transitionType, dir, durationMs: currentTransition?.durationMs ?? 750 });
-    renderAll(false);
-   })));
+   const directionLabel: Record<string, string> = { l: '向左', r: '向右', u: '向上', d: '向下', horz: '水平', vert: '垂直', in: '向内', out: '向外' };
+   const transitionDirection = transitionDirs.length ? createDropdown(command('transition-direction', '方向', 'arrange', () => undefined), transitionDirs.map((dir: string) => ({
+    ...command(`transition-dir:${dir}`, directionLabel[dir] ?? dir, 'arrange', () => {
+     controller.setTransition({ type: transitionType, ...transitionTiming(), dir });
+     renderAll(false);
+    }),
+    checked: dir === transitionDir,
+   }))) : null;
    const applyAllTransitions = button('应用到全部页面', wrapAction(() => {
     const slides = currentSession()?.editor.doc.slideOrder ?? [];
-    controller.setTransitionForSlides(slides, { type: transitionType, dir: currentTransition?.dir, durationMs: currentTransition?.durationMs ?? 750 });
+    controller.setTransitionForSlides(slides, { type: transitionType, ...transitionTiming() });
     renderAll(false);
    }), 'tool-button', '应用到全部页面', 'duplicate');
-   group('切换', [transitionGallery, transitionDirection, transitionDuration, transitionAdvance, applyAllTransitions, button('预览切换', wrapAction(() => controller.previewTransition()), 'tool-button', '预览切换', 'preview')]);
+   group('切换', [transitionGallery, ...(transitionDirection ? [transitionDirection] : []), transitionDuration, transitionAdvance, applyAllTransitions, button('预览切换', wrapAction(() => controller.previewTransition()), 'tool-button', '预览切换', 'preview')]);
   }
   if (ribbonTab === 'animation') {
    const animationGallery = createGallery('animation-gallery', '添加动画', [
@@ -1160,11 +1202,9 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     commandSurface!.createCommandButton({ id: 'para-left', label: '左对齐', icon: 'align', checked: paraState?.align.value === 'left', disabled: textDisabled, execute: () => { controller.setParagraph({ align: 'left' }); renderAll(false); } }, 'compact'),
     commandSurface!.createCommandButton({ id: 'para-center', label: '居中', icon: 'align', checked: paraState?.align.value === 'center', disabled: textDisabled, execute: () => { controller.setParagraph({ align: 'center' }); renderAll(false); } }, 'compact'),
     commandSurface!.createCommandButton({ id: 'para-right', label: '右对齐', icon: 'align', checked: paraState?.align.value === 'right', disabled: textDisabled, execute: () => { controller.setParagraph({ align: 'right' }); renderAll(false); } }, 'compact'),
-    createDropdown({ id: 'para-list', label: '列表', icon: 'bullet-list', disabled: textDisabled, execute: () => undefined }, [
-     command('para-bullet', '项目符号层级 1', 'bullet-list', () => { controller.setParagraph({ level: 1 }); renderAll(false); }),
-     command('para-number', '编号层级 1', 'number-list', () => { controller.setParagraph({ level: 1 }); renderAll(false); }),
-     command('para-reset-list', '清除列表层级', 'paragraph', () => { controller.setParagraph({ level: 0 }); renderAll(false); }),
-    ]),
+    // beta.2 exposes paragraph level/indent but not a bullet/numbering
+    // command. Keep the surface honest until the upstream paragraph seam can
+    // round-trip bullet and auto-number metadata.
     createDropdown({ id: 'para-spacing', label: '段落间距', icon: 'line-spacing', disabled: textDisabled, execute: () => undefined }, [
      command('para-spacing-tight', '紧凑 1.0', 'line-spacing', () => { controller.setParagraph({ lineHeight: 1 }); renderAll(false); }),
      command('para-spacing-normal', '标准 1.15', 'line-spacing', () => { controller.setParagraph({ lineHeight: 1.15 }); renderAll(false); }),
@@ -1195,11 +1235,19 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     selectControl('文本列数', String(bodyState?.columns ?? 1), [['1', '单列'], ['2', '两列'], ['3', '三列']], value => { controller.setBodyProps({ columns: Number(value) }); renderAll(false); }),
    ]);
   }
-  if (ribbonTab === 'table-design') group('表格设计', [
-   button('表格底纹', wrapAction(() => { const id = selectedId(); if (id) controller.setFill(id, solid(rgb('#E7ECF7'))); renderAll(false); }), 'tool-button', '表格底纹', 'background'),
-   button('无底纹', wrapAction(() => { const id = selectedId(); if (id) controller.setFill(id, { type: 'none' }); renderAll(false); }), 'tool-button', '无底纹', 'background'),
-   button('边框', wrapAction(() => { const id = selectedId(); if (id) controller.setStroke(id, { color: rgb('#24324B'), width: 1, dash: null, cap: 'butt', join: 'miter', compound: 'sng' }); renderAll(false); }), 'tool-button', '边框', 'shape-outline' as IconId),
-  ]);
+  if (ribbonTab === 'table-design') {
+   const id = selectedId();
+   const styles = id ? controller.listTableStyles().slice(0, 8) : [];
+   const currentStyle = id ? controller.queryTableStyle(id)?.value?.styleId : null;
+   const gallery = createGallery('table-design-gallery', '表格样式', styles.map((style: ReturnType<typeof controller.listTableStyles>[number]) => ({
+    ...command(`table-style:${style.styleId}`, style.name, 'table', () => { controller.setTableStyle(id!, style.styleId); renderAll(false); }),
+    checked: style.styleId === currentStyle,
+    preview: `preview-table-style-${style.styleId.replace(/[^a-z0-9-]/gi, '')}`,
+   })), 4);
+   const reset = button('恢复默认样式', wrapAction(() => { if (id) controller.setTableStyle(id, null); renderAll(false); }), 'tool-button', '恢复默认表格样式', 'table');
+   reset.disabled = !id;
+   group('表格设计', [gallery, reset]);
+  }
   if (ribbonTab === 'table-layout') group('表格布局', [
    button('插入行', wrapAction(() => { const id = selectedId(); if (id) controller.execute({ type: 'InsertRow', id }); renderAll(false); }), 'tool-button', '在末尾插入一行', 'table'),
   ]);
@@ -1298,7 +1346,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  inspectorBody.append(transformSection);
  if (record.src.kind === 'shape') inspectorBody.append(shapeStyleControls(id));
  if (record.src.kind === 'image') inspectorBody.append(imageStyleControls(id));
- if (record.src.kind === 'table') inspectorBody.append(tableStyleControls(id));
+ if (record.src.kind === 'table') inspectorBody.append(tableStyleControls());
  if (record.src.kind !== 'table') inspectorBody.append(effectStyleControls(id));
  inspectorBody.append(linkControls(id));
  if (record.src.kind === 'shape' || record.src.kind === 'table') { const textSection = document.createElement('div');
@@ -1420,11 +1468,11 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  if (readonlySource) {
   const readonlyNote = document.createElement('div');
   readonlyNote.className = 'animation-readonly-note';
-  readonlyNote.textContent = '来源动画仅支持预览；另存为可编辑版本后可修改。';
+  readonlyNote.textContent = '当前页面包含复杂原始动画。继续编辑将使用新的动画时间线替换原有动画。';
   inspectorBody.append(readonlyNote);
  }
  const updateStep = (index: number, patch: Record<string, unknown>): void => {
-  if (readonlySource) { setStatus('来源动画只读，请先另存为可编辑版本', true); return; }
+  if (readonlySource) { setStatus('来源动画只读，请先另存为副本', true); return; }
   const next = animations.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item);
   controller.setAnimations(slideId, next as readonly EditAnimationStep[]);
   renderAll(false);
@@ -1507,7 +1555,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   actions.className = 'animation-row-actions';
   const up = button('上移', wrapAction(() => { if (index === 0 || readonlySource) return; const next = [...animations]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; controller.setAnimations(slideId, next as readonly EditAnimationStep[]); renderAll(false); }), 'small-button', '动画上移', 'arrange');
   const down = button('下移', wrapAction(() => { if (index >= animations.length - 1 || readonlySource) return; const next = [...animations]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; controller.setAnimations(slideId, next as readonly EditAnimationStep[]); renderAll(false); }), 'small-button', '动画下移', 'arrange');
-  const remove = button('删除', wrapAction(() => { if (readonlySource) { setStatus('来源动画只读，请先另存为可编辑版本', true); return; } controller.setAnimations(slideId, animations.filter((_item, itemIndex) => itemIndex !== index) as readonly EditAnimationStep[]); renderAll(false); }), 'danger-button', '删除动画', 'delete');
+  const remove = button('删除', wrapAction(() => { if (readonlySource) { setStatus('来源动画只读，请先另存为副本', true); return; } controller.setAnimations(slideId, animations.filter((_item, itemIndex) => itemIndex !== index) as readonly EditAnimationStep[]); renderAll(false); }), 'danger-button', '删除动画', 'delete');
   actions.append(up, down, remove);
   row.append(rowHead, effectLine, controls, actions);
   list.append(row);
@@ -1525,7 +1573,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const paneActions = document.createElement('div');
  paneActions.className = 'animation-pane-actions';
  const addButton = button('添加到选中对象', wrapAction(() => addAnimation()), 'primary-button', '添加到选中对象', 'animation');
- const clearButton = button('清除本页动画', wrapAction(() => { if (readonlySource) { setStatus('来源动画只读，请先另存为可编辑版本', true); return; } controller.setAnimations(slideId, []); renderAll(); }), 'danger-button', '清除本页动画', 'delete');
+ const clearButton = button('清除本页动画', wrapAction(() => { if (readonlySource) { setStatus('来源动画只读，请先另存为副本', true); return; } controller.setAnimations(slideId, []); renderAll(); }), 'danger-button', '清除本页动画', 'delete');
  paneActions.append(addButton, clearButton);
  inspectorBody.append(list, defaults, paneActions);
  }
@@ -1533,9 +1581,12 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const id = selectedIds()[0];
  if (!slideId || !id) { setStatus('先选择一个对象再添加动画', true);
  return;
- } const step = kind === 'emphasis'
-  ? { target: id, kind: 'emphasis' as const, effect: (effect === 'spin' ? 'spin' : 'grow') as 'spin' | 'grow', trigger: animationTrigger, delayMs: 0, durationMs: animationDurationMs }
- : { target: id, kind: 'entrance' as const, effect: effect === 'spin' ? 'fade' as const : effect, trigger: animationTrigger, delayMs: 0, durationMs: animationDurationMs };
+ }
+ const hasExistingAnimations = (webPpt.snapshot.view?.queryAnimations().value.length ?? 0) > 0;
+ const trigger = hasExistingAnimations ? animationTrigger : 'click';
+ const step = kind === 'emphasis'
+  ? { target: id, kind: 'emphasis' as const, effect: (effect === 'spin' ? 'spin' : 'grow') as 'spin' | 'grow', trigger, delayMs: 0, durationMs: animationDurationMs }
+  : { target: id, kind: 'entrance' as const, effect: effect === 'spin' ? 'fade' as const : effect, trigger, delayMs: 0, durationMs: animationDurationMs };
  controller.appendAnimations(slideId, [step]);
  inspectorTab = 'animation';
  renderAll();
@@ -1594,15 +1645,15 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  group.append(label, link, button('恢复来源链接', wrapAction(() => { controller.setLink(id, null); renderAll(false); }), 'small-button', '恢复来源链接', 'link'));
  return group;
  }
-    function tableStyleControls(id: ElementId): HTMLElement { const group = document.createElement('div');
+    function tableStyleControls(): HTMLElement { const group = document.createElement('div');
  group.className = 'inspector-section';
  const label = document.createElement('span');
  label.className = 'section-label';
  label.textContent = '表格样式';
- const swatches = document.createElement('div');
- swatches.className = 'swatch-row';
- [['浅蓝', '#E7ECF7'], ['白色', '#FFFFFF'], ['珊瑚', '#F4E1DA']].forEach(([name, color]) => swatches.append(button(name, wrapAction(() => { controller.setFill(id, solid(rgb(color))); renderAll(false); }), 'swatch-button', name, 'background')));
- group.append(label, swatches, button('无边框', wrapAction(() => { controller.setStroke(id, { type: 'none' }); renderAll(false); }), 'small-button', '无边框', 'shape-outline'));
+ const note = document.createElement('p');
+ note.className = 'page-section-hint';
+ note.textContent = '表格样式使用 web-ppt 的表格样式命令；单元格底纹与边框细化将在 pinned beta.2 提供公开命令后接入。';
+ group.append(label, note, button('打开表格设计', wrapAction(() => { ribbonTab = 'table-design'; renderRibbonTabs(); renderToolbar(); }), 'small-button', '打开表格设计', 'table'));
  return group;
  }
  function layerControls(id: ElementId): HTMLElement { const group = document.createElement('div');
@@ -1738,7 +1789,17 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
   fitButton.dataset.atDefault = String(atDefault);
  };
  syncFitButtonState(controller.snapshot.zoom);
- zoomSlider.addEventListener('input', () => { const nextZoom = Number(zoomSlider.value) / 100; const anchor = captureStageViewportAnchor(); fitZoom = readStageFitZoom(); stageZoomFactor = nextZoom / Math.max(.01, fitZoom); controller.setZoom(nextZoom); sizeStageViewport(nextZoom); layoutStageViewport(nextZoom, anchor); zoomLabel.textContent = `${zoomSlider.value}%`; syncFitButtonState(nextZoom); });
+ zoomSlider.addEventListener('input', () => {
+  const nextZoom = Number(zoomSlider.value) / 100;
+  const anchor = captureStageViewportAnchor();
+  fitZoom = readStageFitZoom();
+  stageZoomFactor = nextZoom / Math.max(.01, fitZoom);
+  controller.setZoom(nextZoom);
+  sizeStageViewport(nextZoom);
+  layoutStageViewport(nextZoom, anchor);
+  zoomLabel.textContent = `${zoomSlider.value}%`;
+  syncFitButtonState(nextZoom);
+ });
  zoomControls.append(zoomSlider, zoomLabel, fitButton);
  statusBar.append(statusText, zoomControls);
  if (!thumbnails) thumbnailGeneration += 1;

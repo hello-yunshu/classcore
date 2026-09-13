@@ -362,11 +362,9 @@ export class InMemoryClassroomAuthority {
         if (record.participantId.startsWith('student:') && request.participantHint && record.participantId !== request.participantHint && `student:${request.participantHint}` !== record.participantId)
             throw new Error('participant-hint-mismatch');
         const existing = [...this.#memberships.values()].find(item => item.sessionId === session.sessionId && item.participantId === record.participantId && item.status === 'active');
-        if (existing) {
-            const previous = [...this.#tokens.values()].find(item => item.membershipId === existing.membershipId);
-            if (previous) return structuredClone(previous);
-        }
-        const membership: SessionMembership = {
+        const previous = existing ? [...this.#tokens.values()].find(item => item.membershipId === existing.membershipId) : undefined;
+        if (previous && Date.parse(previous.expiresAt) > now) return structuredClone(previous);
+        const membership: SessionMembership = existing ?? {
             membershipId: `membership:${this.idFactory()}`,
             sessionId: session.sessionId,
             participantId: record.participantId,
@@ -432,7 +430,7 @@ export interface AppletRuntimePorts extends DurableEventPort {
     saveArtifact(artifact: import('@classroom/contracts').LearningArtifact): Promise<void>;
     saveSubmission(submission: import('@classroom/contracts').Submission): Promise<void>;
     saveTransfer(transfer: import('@classroom/contracts').ArtifactTransfer): Promise<void>;
-    getArtifact?(artifactId: string, revision?: number): Promise<import('@classroom/contracts').LearningArtifact | null>;
+    getArtifact(artifactId: string, revision?: number): Promise<import('@classroom/contracts').LearningArtifact | null>;
     getSubmission?(submissionId: string): Promise<import('@classroom/contracts').Submission | null>;
 }
 
@@ -447,7 +445,7 @@ export class AppletEventRuntime {
 }
 
 export class LearningResourceRuntime {
-    constructor(private readonly ports: Pick<AppletRuntimePorts, 'saveArtifact' | 'saveSubmission' | 'saveTransfer'> & Partial<Pick<AppletRuntimePorts, 'getArtifact' | 'getSubmission'>>, private readonly authorization: AuthorizationService, private readonly clock: () => string = () => new Date().toISOString()) {}
+    constructor(private readonly ports: Pick<AppletRuntimePorts, 'saveArtifact' | 'saveSubmission' | 'saveTransfer' | 'getArtifact'> & Partial<Pick<AppletRuntimePorts, 'getSubmission'>>, private readonly authorization: AuthorizationService, private readonly clock: () => string = () => new Date().toISOString()) {}
     async saveArtifact(connection: AuthenticatedConnectionContext, artifact: import('@classroom/contracts').LearningArtifact): Promise<import('@classroom/contracts').LearningArtifact> {
         this.assertSessionAndActivity(connection, artifact.sessionId, artifact.activityId);
         const decision = this.authorization.authorize(connection, 'submission.submit', { activityId: artifact.activityId, submitterScope: artifact.ownerScope });
@@ -497,11 +495,10 @@ export class LearningResourceRuntime {
         this.assertSessionAndActivity(connection, transfer.sessionId, transfer.activityId);
         const decision = this.authorization.authorize(connection, 'artifact.transfer', { activityId: transfer.activityId, artifactOwnerScope: ownerScope, recipientScope: transfer.recipientScope });
         if (!decision.allowed) throw new Error(decision.reason ?? 'transfer-forbidden');
-        const artifact = await this.ports.getArtifact?.(transfer.artifact.artifactId, transfer.artifact.revision);
-        if (artifact) {
-            if (artifact.sessionId !== connection.sessionId || artifact.activityId !== transfer.activityId) throw new Error('artifact-session-mismatch');
-            if (JSON.stringify(artifact.ownerScope) !== JSON.stringify(ownerScope)) throw new Error('artifact-owner-scope-mismatch');
-        }
+        const artifact = await this.ports.getArtifact(transfer.artifact.artifactId, transfer.artifact.revision);
+        if (!artifact) throw new Error('artifact-not-found');
+        if (artifact.sessionId !== connection.sessionId || artifact.activityId !== transfer.activityId) throw new Error('artifact-session-mismatch');
+        if (JSON.stringify(artifact.ownerScope) !== JSON.stringify(ownerScope)) throw new Error('artifact-owner-scope-mismatch');
         const next = { ...transfer, sessionId: connection.sessionId, senderId: connection.participantId, createdAt: transfer.createdAt || this.clock(), updatedAt: this.clock() };
         await this.ports.saveTransfer(next);
         return structuredClone(next);

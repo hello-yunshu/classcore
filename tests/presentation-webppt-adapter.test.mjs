@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import JSZip from 'jszip';
 import PptxGenJS from 'pptxgenjs';
 import { openEditor } from '@web-ppt/editor';
 import { WebPptPresentationEngineAdapter } from '../packages/presentation-webppt-adapter/src/index.ts';
@@ -17,7 +18,13 @@ async function templateBytes() {
   const slide = pptx.addSlide();
   slide.addText('ClassCore web-ppt gate', { x: 1, y: 1, w: 6, h: 0.5, fontSize: 22, color: '24324B' });
   await pptx.writeFile({ fileName: filename });
-  const bytes = new Uint8Array(fs.readFileSync(filename));
+  const zip = await JSZip.loadAsync(fs.readFileSync(filename));
+  const tableStyles = zip.file('ppt/tableStyles.xml');
+  if (tableStyles) {
+    const xml = await tableStyles.async('string');
+    zip.file('ppt/tableStyles.xml', xml.replace(/ def="[^"]+"/, ''));
+  }
+  const bytes = await zip.generateAsync({ type: 'uint8array' });
   fs.rmSync(directory, { recursive: true, force: true });
   return bytes;
 }
@@ -97,15 +104,20 @@ test('Studio insertion keeps new shapes and tables neutral until styled explicit
   const webPpt = createWebPptAdapter();
   await webPpt.applyBinding({ source: asset.source.bytes, openOptions: { idPrefix: asset.document.idPrefix }, mode: 'edit' });
   const controller = new PresentationStudioController(webPpt);
+  const undoBeforeShape = controller.editor.history.undoCount;
   const shapeId = controller.addShape('roundRect');
   assert.ok(shapeId);
+  assert.equal(controller.editor.history.undoCount, undoBeforeShape + 1, 'shape insertion and neutral defaults must be one undo unit');
   assert.deepEqual(controller.editor.effectiveElement(shapeId).fill, { type: 'none' });
   assert.equal(controller.editor.effectiveElement(shapeId).stroke?.color, 'rgb(107,114,128)');
+  const undoBeforeTable = controller.editor.history.undoCount;
   const tableId = controller.addTable(2, 2);
+  assert.equal(controller.editor.history.undoCount, undoBeforeTable + 1, 'table insertion and neutral style must be one undo unit');
   const table = controller.editor.effectiveElement(tableId);
   assert.equal(table.kind, 'table');
   assert.deepEqual(table.rows.flatMap(row => row.cells.map(cell => cell.fill)), [
-    { type: 'none' }, { type: 'none' }, { type: 'none' }, { type: 'none' },
+    { type: 'solid', color: 'rgb(255,255,255)' }, { type: 'solid', color: 'rgb(255,255,255)' },
+    { type: 'solid', color: 'rgb(255,255,255)' }, { type: 'solid', color: 'rgb(255,255,255)' },
   ]);
   controller.dispose();
 });

@@ -25,15 +25,11 @@ function submissionContext(value) {
     return canonicalJson({ sessionId: value.sessionId, activityId: value.activityId, submitterScope: value.submitterScope, submittedBy: value.submittedBy });
 }
 function submissionTransitionAllowed(from, to) {
-    const order = ['draft', 'submitted', 'accepted'];
-    return order.indexOf(to) >= order.indexOf(from);
+    return from === 'draft' ? to === 'draft' || to === 'submitted' : from === 'submitted' ? to === 'submitted' || to === 'accepted' : to === 'accepted';
 }
 function transferTransitionAllowed(from, to) {
-    if (from === to) return true;
-    if (from === 'failed') return false;
-    if (to === 'failed') return true;
-    const order = ['queued', 'sent', 'received', 'opened', 'completed'];
-    return order.indexOf(to) >= order.indexOf(from);
+    const allowed = { queued: ['queued', 'sent', 'failed'], sent: ['sent', 'received', 'failed'], received: ['received', 'opened', 'failed'], opened: ['opened', 'completed', 'failed'], completed: ['completed'], failed: ['failed'] };
+    return allowed[from]?.includes(to) ?? false;
 }
 export class SqliteClassroomStateStore {
     constructor(filename) {
@@ -401,7 +397,12 @@ export class SqliteClassroomStateStore {
     getSubmission(submissionId) { const row = this.classroomSubmissionGetStmt.get(submissionId); return row ? JSON.parse(row.json) : null; }
     saveTransfer(transfer) {
         const existing = this.classroomTransferGetStmt.get(transfer.transferId);
-        if (existing && !transferTransitionAllowed(JSON.parse(existing.json).status, transfer.status)) throw new Error('transfer-state-regression');
+        if (existing) {
+            const current = JSON.parse(existing.json);
+            if (canonicalJson(current) === canonicalJson(transfer)) return;
+            if (!transferTransitionAllowed(current.status, transfer.status)) throw new Error('transfer-state-regression');
+            if (current.status === transfer.status) throw new Error('transfer-state-immutable');
+        }
         this.db.prepare('INSERT OR REPLACE INTO classroom_transfers(transfer_id,json,updated_at) VALUES(?,?,?)').run(transfer.transferId, JSON.stringify(transfer), now());
     }
     getTransfer(transferId) { const row = this.classroomTransferGetStmt.get(transferId); return row ? JSON.parse(row.json) : null; }
