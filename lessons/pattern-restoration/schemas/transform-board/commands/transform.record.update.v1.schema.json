@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["recordTokens","attemptState","timerState"],"properties":{"recordTokens":{"type":"array"},"attemptState":{"enum":["idle","running","success","failure"]},"timerState":{"type":"object"}},"additionalProperties":false}

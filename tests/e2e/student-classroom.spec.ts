@@ -28,23 +28,22 @@ test.afterAll(async () => {
 });
 
 test('Student classroom flow restores after refresh and resends after offline', async ({ page, context }) => {
-    await page.goto(`${baseUrl}/student/index.html?mode=classroom&session=class:authenticated-demo`);
-    await page.getByRole('textbox', { name: '课堂地址' }).fill('class:authenticated-demo');
-    await page.getByRole('textbox', { name: '课堂码' }).fill('A17');
+    await page.goto(`${baseUrl}/student/index.html?mode=classroom&session=class:authenticated-demo&code=A17`);
+    await page.getByRole('textbox', { name: '学号' }).fill('17');
     await page.getByRole('button', { name: '加入课堂' }).click();
-    await expect(page.getByRole('heading', { name: '图案的还原' })).toBeVisible();
-    await expect(page.getByText('学生 S17')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '方格图案还原' })).toBeVisible();
+    await expect(page.getByText('课堂服务已连接')).toBeVisible();
 
     await page.getByRole('button', { name: '对象 A' }).click();
     await page.getByRole('button', { name: '→ 1格' }).click();
     await page.getByRole('button', { name: '↻ 90°' }).click();
     await page.getByRole('button', { name: '平移' }).click();
-    await page.getByRole('button', { name: '提交答案' }).click();
+    await page.getByRole('button', { name: '提交' }).click();
     await expect(page.getByText(/课堂服务已确认|提交已被课堂服务确认/)).toBeVisible();
 
     await page.reload();
-    await expect(page.getByRole('heading', { name: '图案的还原' })).toBeVisible();
-    await expect(page.getByText('学生 S17')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '方格图案还原' })).toBeVisible();
+    await expect(page.getByText('课堂服务已连接')).toBeVisible();
     await expect(page.getByRole('button', { name: '对象 A' })).toBeVisible();
 
     await page.getByRole('button', { name: '对象 A' }).click();

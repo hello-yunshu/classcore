@@ -208,6 +208,15 @@ export class AuthenticatedClassroomRuntime {
         return next;
     }
 
+    async setCurrentActivity(context: AuthenticatedConnectionContext, activityId: string, expectedRevision?: number): Promise<ClassroomActivityProjection> {
+        const decision = this.authorization.authorize(context, 'activity.advance', { activityId });
+        if (!decision.allowed) throw new Error(decision.reason ?? 'activity-advance-forbidden');
+        this.authority.setCurrentActivity(context.sessionId, activityId, expectedRevision);
+        const next = this.currentActivity(context.sessionId);
+        if (!next) throw new Error('current-activity-not-found');
+        return next;
+    }
+
     async teacherStudents(sessionId: string): Promise<TeacherStudentProjection[]> {
         const session = this.authority.getSession(sessionId);
         if (!session) throw new Error('session-not-found');

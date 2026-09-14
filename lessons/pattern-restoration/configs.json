@@ -1,18 +1,121 @@
 {
+  "config:restore-stage-one-board": {
+    "configRef": "config:restore-stage-one-board",
+    "appletTypeId": "applet:transform-board",
+    "configSchemaVersion": 1,
+    "payload": {
+      "studentSurfaceLayout": "two-fragment",
+      "targetAssetId": "asset:target",
+      "board": { "columns": 16, "rows": 8, "coordinateUnit": "grid-cell" },
+      "judgementMode": "STRICT_CONTENT",
+      "strictContent": true,
+      "allowedRotationDegrees": [0, 90, 180, 270],
+      "snapDegrees": 90,
+      "contentBounds": { "x": 0, "y": 0, "width": 16, "height": 8 },
+      "objects": [
+        {
+          "objectId": "piece-bl-mouth", "label": "左下嘴巴碎片", "shape": "quarter-sector", "movable": true,
+          "vertices": [{ "id": "A", "x": 0, "y": 0 }, { "id": "B", "x": 0, "y": 2 }, { "id": "C", "x": -2, "y": 0 }],
+          "path": "M 0 0 L 0 2 A 2 2 0 0 1 -2 0 Z", "boundarySamples": [{ "x": 0, "y": 0 }, { "x": 0, "y": 2 }, { "x": -0.765, "y": 1.848 }, { "x": -1.414, "y": 1.414 }, { "x": -1.848, "y": 0.765 }, { "x": -2, "y": 0 }],
+          "internalElements": [{ "type": "path", "d": "M -0.875 0.80 C -0.65 1.175 -0.40 1.35 0 1.35", "fill": "none", "stroke": "#000000", "strokeWidth": 0.08 }],
+          "visual": { "color": "#FFD54A" }, "x": 2, "y": 2, "width": 2, "height": 2, "rotation": 90,
+          "pivots": { "A": { "x": 0, "y": 0 }, "B": { "x": 0, "y": 2 }, "C": { "x": -2, "y": 0 } }, "initialPivotId": "A",
+          "initialState": { "gridX": 2, "gridY": 2, "rotation": 90 }, "targetState": { "gridX": 8, "gridY": 4, "rotation": 0 }
+        },
+        {
+          "objectId": "piece-br-mouth", "label": "右下嘴巴碎片", "shape": "quarter-sector", "movable": true,
+          "vertices": [{ "id": "A", "x": 0, "y": 0 }, { "id": "B", "x": 2, "y": 0 }, { "id": "C", "x": 0, "y": 2 }],
+          "path": "M 0 0 L 2 0 A 2 2 0 0 1 0 2 Z", "boundarySamples": [{ "x": 0, "y": 0 }, { "x": 2, "y": 0 }, { "x": 1.848, "y": 0.765 }, { "x": 1.414, "y": 1.414 }, { "x": 0.765, "y": 1.848 }, { "x": 0, "y": 2 }],
+          "internalElements": [{ "type": "path", "d": "M 0 1.35 C 0.40 1.35 0.65 1.175 0.875 0.80", "fill": "none", "stroke": "#000000", "strokeWidth": 0.08 }],
+          "visual": { "color": "#FFD54A" }, "x": 16, "y": 8, "width": 2, "height": 2, "rotation": 180,
+          "pivots": { "A": { "x": 0, "y": 0 }, "B": { "x": 2, "y": 0 }, "C": { "x": 0, "y": 2 } }, "initialPivotId": "A",
+          "initialState": { "gridX": 16, "gridY": 8, "rotation": 180 }, "targetState": { "gridX": 8, "gridY": 4, "rotation": 0 }
+        }
+      ],
+      "fixedObjects": [
+        {
+          "objectId": "piece-top-left", "label": "左上固定碎片", "shape": "quarter-sector", "fixed": true,
+          "x": 8, "y": 4, "width": 2, "height": 2, "rotation": 0,
+          "vertices": [{ "x": 0, "y": 0 }, { "x": -2, "y": 0 }, { "x": 0, "y": -2 }],
+          "path": "M 0 0 L -2 0 A 2 2 0 0 1 0 -2 Z", "boundarySamples": [{ "x": 0, "y": 0 }, { "x": -2, "y": 0 }, { "x": -1.848, "y": -0.765 }, { "x": -1.414, "y": -1.414 }, { "x": -0.765, "y": -1.848 }, { "x": 0, "y": -2 }],
+          "internalElements": [{ "type": "circle", "cx": -0.6375, "cy": -0.8125, "r": 0.155, "fill": "#000000" }], "visual": { "color": "#FFD54A" }
+        },
+        {
+          "objectId": "piece-top-right", "label": "右上固定碎片", "shape": "quarter-sector", "fixed": true,
+          "x": 8, "y": 4, "width": 2, "height": 2, "rotation": 0,
+          "vertices": [{ "x": 0, "y": 0 }, { "x": 0, "y": -2 }, { "x": 2, "y": 0 }],
+          "path": "M 0 0 L 0 -2 A 2 2 0 0 1 2 0 Z", "boundarySamples": [{ "x": 0, "y": 0 }, { "x": 0, "y": -2 }, { "x": 0.765, "y": -1.848 }, { "x": 1.414, "y": -1.414 }, { "x": 1.848, "y": -0.765 }, { "x": 2, "y": 0 }],
+          "internalElements": [{ "type": "circle", "cx": 0.6625, "cy": -0.8125, "r": 0.155, "fill": "#000000" }], "visual": { "color": "#FFD54A" }
+        },
+        {
+          "objectId": "fixed-circle", "label": "中间固定圆", "shape": "circle", "fixed": true, "x": 8, "y": 4, "width": 4, "height": 4, "rotation": 0,
+          "geometry": { "vertices": [{ "x": 8, "y": 4 }], "boundarySamples": [{ "x": 0, "y": 2 }, { "x": 0.586, "y": 1.414 }, { "x": 2, "y": 0 }, { "x": 1.414, "y": -0.586 }, { "x": 0, "y": -2 }] }, "visual": { "color": "none" }
+        }
+      ],
+      "rules": {
+        "rotationCenterPolicy": "lesson-configured-vertex",
+        "recordVocabulary": { "label": "记录路径：", "figurePrefix": "图形", "vertexPrefix": "顶点", "tokens": [
+          { "kind": "word", "value": "向", "display": "向" }, { "kind": "word", "value": "平移", "display": "平移" }, { "kind": "direction", "value": "right", "display": "右" }, { "kind": "unit", "value": "格", "display": "格" }, { "kind": "word", "value": "绕点", "display": "绕点" }, { "kind": "word", "value": "旋转", "display": "旋转" }, { "kind": "rotation", "value": "clockwise", "display": "顺时针" }, { "kind": "unit", "value": "度", "display": "度" }, { "kind": "digit", "value": "90", "display": "90" }, { "kind": "separator", "value": "，", "display": "，" }
+        ] }
+      }
+    }
+  },
   "config:restore-board": {
     "configRef": "config:restore-board",
     "appletTypeId": "applet:transform-board",
     "configSchemaVersion": 1,
     "payload": {
+      "studentSurfaceLayout": "four-fragment",
       "targetAssetId": "asset:target",
       "board": { "columns": 16, "rows": 8, "coordinateUnit": "grid-cell" },
-      "allowedRotationDegrees": [90, 180, 270],
+      "judgementMode": "STRICT_CONTENT",
+      "strictContent": true,
+      "allowedRotationDegrees": [0, 90, 180, 270],
+      "snapDegrees": 90,
+      "contentBounds": { "x": 0, "y": 0, "width": 16, "height": 8 },
       "objects": [
-        { "objectId": "piece:a", "label": "A", "shape": "triangle", "visual": { "color": "#897E70", "clipPath": "polygon(50% 0%, 100% 100%, 0% 100%)" }, "x": 2, "y": 1, "width": 2, "height": 2, "rotation": 0, "pivots": { "vertex-a": { "x": 0, "y": 0 }, "center": { "x": 0.5, "y": 0.5 } }, "initialPivotId": "vertex-a", "targetTransform": { "x": 6, "y": 2, "rotation": 90 } },
-        { "objectId": "piece:b", "label": "B", "shape": "quadrilateral", "visual": { "color": "#5575B8", "clipPath": "none" }, "x": 5, "y": 4, "width": 2, "height": 2, "rotation": 0, "pivots": { "vertex-b": { "x": 1, "y": 0 }, "center": { "x": 0.5, "y": 0.5 } }, "initialPivotId": "vertex-b", "targetTransform": { "x": 8, "y": 2, "rotation": 180 } },
-        { "objectId": "piece:c", "label": "C", "shape": "arch", "visual": { "color": "#C96B55", "clipPath": "polygon(0% 100%, 0% 38%, 18% 12%, 50% 0%, 82% 12%, 100% 38%, 100% 100%, 70% 100%, 70% 50%, 50% 34%, 30% 50%, 30% 100%)" }, "x": 9, "y": 1, "width": 2, "height": 2, "rotation": 0, "pivots": { "vertex-c": { "x": 0, "y": 1 }, "center": { "x": 0.5, "y": 0.5 } }, "initialPivotId": "vertex-c", "targetTransform": { "x": 10, "y": 4, "rotation": 270 } },
-        { "objectId": "piece:d", "label": "D", "shape": "quarter-circle", "visual": { "color": "#7A9A73", "clipPath": "polygon(0% 0%, 100% 0%, 100% 100%, 78% 100%, 60% 96%, 44% 88%, 30% 76%, 18% 60%, 8% 42%, 0% 20%)" }, "x": 12, "y": 4, "width": 2, "height": 2, "rotation": 0, "pivots": { "vertex-d": { "x": 1, "y": 1 }, "center": { "x": 0.5, "y": 0.5 } }, "initialPivotId": "vertex-d", "targetTransform": { "x": 5, "y": 4, "rotation": 90 } }
+        {
+          "objectId": "piece-ul-eye", "label": "左上眼睛碎片", "shape": "quarter-sector", "movable": true,
+          "vertices": [{ "id": "A", "x": 0, "y": 0 }, { "id": "B", "x": -2, "y": 0 }, { "id": "C", "x": 0, "y": -2 }],
+          "path": "M 0 0 L -2 0 A 2 2 0 0 1 0 -2 Z", "boundarySamples": [{ "x": 0, "y": 0 }, { "x": -2, "y": 0 }, { "x": -1.848, "y": -0.765 }, { "x": -1.414, "y": -1.414 }, { "x": -0.765, "y": -1.848 }, { "x": 0, "y": -2 }],
+          "internalElements": [{ "type": "circle", "cx": -0.6375, "cy": -0.8125, "r": 0.155, "fill": "#000000" }],
+          "visual": { "color": "#FFD54A" }, "x": 2, "y": 2, "width": 2, "height": 2, "rotation": 0,
+          "pivots": { "A": { "x": 0, "y": 0 }, "B": { "x": -2, "y": 0 }, "C": { "x": 0, "y": -2 } }, "initialPivotId": "A",
+          "initialState": { "gridX": 2, "gridY": 2, "rotation": 0 }, "targetState": { "gridX": 8, "gridY": 4, "rotation": 0 }
+        },
+        {
+          "objectId": "piece-ur-eye", "label": "右上眼睛碎片", "shape": "quarter-sector", "movable": true,
+          "vertices": [{ "id": "A", "x": 0, "y": 0 }, { "id": "B", "x": 0, "y": -2 }, { "id": "C", "x": 2, "y": 0 }],
+          "path": "M 0 0 L 0 -2 A 2 2 0 0 1 2 0 Z", "boundarySamples": [{ "x": 0, "y": 0 }, { "x": 0, "y": -2 }, { "x": 0.765, "y": -1.848 }, { "x": 1.414, "y": -1.414 }, { "x": 1.848, "y": -0.765 }, { "x": 2, "y": 0 }],
+          "internalElements": [{ "type": "circle", "cx": 0.6625, "cy": -0.8125, "r": 0.155, "fill": "#000000" }],
+          "visual": { "color": "#FFD54A" }, "x": 14, "y": 2, "width": 2, "height": 2, "rotation": 270,
+          "pivots": { "A": { "x": 0, "y": 0 }, "B": { "x": 0, "y": -2 }, "C": { "x": 2, "y": 0 } }, "initialPivotId": "A",
+          "initialState": { "gridX": 14, "gridY": 2, "rotation": 270 }, "targetState": { "gridX": 8, "gridY": 4, "rotation": 0 }
+        },
+        {
+          "objectId": "piece-bl-mouth", "label": "左下嘴巴碎片", "shape": "quarter-sector", "movable": true,
+          "vertices": [{ "id": "A", "x": 0, "y": 0 }, { "id": "B", "x": 0, "y": 2 }, { "id": "C", "x": -2, "y": 0 }],
+          "path": "M 0 0 L 0 2 A 2 2 0 0 1 -2 0 Z", "boundarySamples": [{ "x": 0, "y": 0 }, { "x": 0, "y": 2 }, { "x": -0.765, "y": 1.848 }, { "x": -1.414, "y": 1.414 }, { "x": -1.848, "y": 0.765 }, { "x": -2, "y": 0 }],
+          "internalElements": [{ "type": "path", "d": "M -0.875 0.80 C -0.65 1.175 -0.40 1.35 0 1.35", "fill": "none", "stroke": "#000000", "strokeWidth": 0.08 }],
+          "visual": { "color": "#FFD54A" }, "x": 2, "y": 6, "width": 2, "height": 2, "rotation": 90,
+          "pivots": { "A": { "x": 0, "y": 0 }, "B": { "x": 0, "y": 2 }, "C": { "x": -2, "y": 0 } }, "initialPivotId": "A",
+          "initialState": { "gridX": 2, "gridY": 6, "rotation": 90 }, "targetState": { "gridX": 8, "gridY": 4, "rotation": 0 }
+        },
+        {
+          "objectId": "piece-br-mouth", "label": "右下嘴巴碎片", "shape": "quarter-sector", "movable": true,
+          "vertices": [{ "id": "A", "x": 0, "y": 0 }, { "id": "B", "x": 2, "y": 0 }, { "id": "C", "x": 0, "y": 2 }],
+          "path": "M 0 0 L 2 0 A 2 2 0 0 1 0 2 Z", "boundarySamples": [{ "x": 0, "y": 0 }, { "x": 2, "y": 0 }, { "x": 1.848, "y": 0.765 }, { "x": 1.414, "y": 1.414 }, { "x": 0.765, "y": 1.848 }, { "x": 0, "y": 2 }],
+          "internalElements": [{ "type": "path", "d": "M 0 1.35 C 0.40 1.35 0.65 1.175 0.875 0.80", "fill": "none", "stroke": "#000000", "strokeWidth": 0.08 }],
+          "visual": { "color": "#FFD54A" }, "x": 14, "y": 6, "width": 2, "height": 2, "rotation": 180,
+          "pivots": { "A": { "x": 0, "y": 0 }, "B": { "x": 2, "y": 0 }, "C": { "x": 0, "y": 2 } }, "initialPivotId": "A",
+          "initialState": { "gridX": 14, "gridY": 6, "rotation": 180 }, "targetState": { "gridX": 8, "gridY": 4, "rotation": 0 }
+        }
       ],
+      "fixedObjects": [{
+        "objectId": "fixed-circle", "label": "", "shape": "circle", "fixed": true, "x": 8, "y": 4, "width": 4, "height": 4, "rotation": 0,
+        "geometry": { "vertices": [{ "x": 8, "y": 4 }], "boundarySamples": [{ "x": 0, "y": 2 }, { "x": 0.586, "y": 1.414 }, { "x": 2, "y": 0 }, { "x": 1.414, "y": -0.586 }, { "x": 0, "y": -2 }] },
+        "visual": { "color": "none" }
+      }],
       "rules": {
         "rotationCenterPolicy": "lesson-configured-vertex",
         "recordVocabularyRef": "analytics/path-record-vocabulary",

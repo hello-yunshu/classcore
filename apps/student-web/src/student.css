@@ -4,18 +4,18 @@
   --ink-soft: #697386;
   --muted: #7d8490;
   --muted-strong: #697386;
-  --line: #d9d6cc;
-  --line-strong: #d2d0ca;
-  --paper: #f6f3ec;
-  --panel: #fbfaf7;
-  --panel-wash: #faf9f5;
-  --canvas: #e7e3d9;
+  --line: #dbe3ec;
+  --line-strong: #d2dce8;
+  --paper: #f4f7fb;
+  --panel: #ffffff;
+  --panel-wash: #f8fafc;
+  --canvas: #eef3f9;
   --focus: #5575b8;
-  --focus-wash: #e3eaf7;
+  --focus-wash: #eef3ff;
   --signal: #c96b55;
   --signal-wash: #fff8f6;
-  --gold: #897e70;
-  --success: #6b776c;
+  --gold: #315efb;
+  --success: #18845f;
 }
 * { box-sizing: border-box; }
 html, body {
@@ -45,7 +45,7 @@ h1 { margin-top: 7px; font: 650 clamp(24px, 3vw, 36px)/1.12 Georgia, "Songti SC"
 .target-card { margin-top: 30px; padding: 17px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 8px 20px rgba(110, 102, 86, .08); }
 .target-title { color: var(--gold); font-size: 11px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
 .target-caption { color: var(--muted); font-size: 11px; line-height: 1.7; }
-.tip { margin-top: 22px; padding: 13px 15px; border-left: 2px solid var(--gold); color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
+.tip { margin-top: 22px; padding: 13px 15px; border: 1px solid #ead8cf; border-radius: 10px; background: var(--signal-wash); color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
 .tip strong { display: block; color: var(--ink); margin-bottom: 3px; }
 .student-workspace { min-width: 0; }
 .board-toolbar, .selection-bar { display: flex; align-items: center; gap: 10px; min-height: 42px; }
@@ -81,6 +81,7 @@ h1 { margin-top: 7px; font: 650 clamp(24px, 3vw, 36px)/1.12 Georgia, "Songti SC"
 .classroom-copy { color: var(--muted); font-size: 14px; line-height: 1.7; }
 .classroom-join-form { display: grid; gap: 14px; margin-top: 24px; }
 .classroom-join-form label { display: grid; gap: 6px; color: var(--ink); font-size: 13px; font-weight: 650; }
+.classroom-join-form label[hidden] { display: none; }
 .classroom-join-form input { width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
 .classroom-join-form .primary-button { min-height: 44px; margin-top: 4px; font-size: 14px; }
 .classroom-status { min-height: 24px; margin-top: 18px; color: var(--muted); font-size: 13px; }
@@ -96,3 +97,212 @@ h1 { margin-top: 7px; font: 650 clamp(24px, 3vw, 36px)/1.12 Georgia, "Songti SC"
   .board-toolbar { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+
+/* Reference-first Pattern Restoration classroom surface. The math object colors
+   stay yellow/black; only the product chrome uses the ClassCore paper tokens. */
+.student-reference-app { min-height: 100vh; padding: 24px 34px 34px; background: var(--paper); color: var(--ink); }
+.student-reference-header { display: flex; justify-content: space-between; align-items: center; gap: 24px; max-width: 1480px; margin: 0 auto; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.reference-title-wrap { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.reference-logo { display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 auto; border-radius: 14px; background: linear-gradient(145deg, #ffe982, #ffc93c); box-shadow: 0 6px 18px rgba(255, 198, 49, .24); font-size: 24px; }
+.student-reference-header h1 { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; font-size: clamp(21px, 2.05vw, 28px); font-weight: 800; letter-spacing: .01em; }
+.reference-subtitle { margin-top: 8px; color: var(--ink-soft); font-size: 14px; }
+.reference-status { display: flex; flex-wrap: wrap; justify-content: end; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.reference-identity { border: 1px solid var(--line); border-radius: 10px; min-height: 40px; padding: 0 12px; color: var(--ink); background: var(--panel); font-size: 13px; font-weight: 700; }
+.reference-layout { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 18px; max-width: 1480px; margin: 18px auto 0; }
+.workspace-panel, .record-panel { min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: 0 14px 34px rgba(110,102,86,.08); }
+.reference-panel-head { display: flex; justify-content: space-between; align-items: start; gap: 12px; margin: 0 2px 12px; }
+.reference-panel-head h2 { margin: 0; font: 800 17px/1.3 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; }
+.reference-panel-head p { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.reference-panel-head .panel-hint { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.timer-row, .feedback-row, .math-actions, .record-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.timer-row { justify-content: space-between; color: var(--ink-soft); font-size: 14px; }
+.timer-row strong { color: var(--ink); font-size: 20px; font-variant-numeric: tabular-nums; }
+.feedback-row { justify-content: space-between; min-height: 38px; margin-top: 12px; color: var(--muted); font-size: 12px; }
+.feedback-row strong { color: var(--ink); font-size: 15px; }
+.reference-workspace-wrap { position: relative; }
+.reference-board-frame { margin-top: 12px; padding: 14px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--canvas); }
+.reference-board { display: block; width: 100%; height: auto; min-height: 0; max-height: none; overflow: visible; border-radius: 4px; background: var(--panel); touch-action: none; }
+.submit-message { position: absolute; inset: 14px; display: none; place-items: center; z-index: 4; pointer-events: none; }
+.submit-message.show { display: grid; }
+.submit-card { min-width: 210px; max-width: 70%; padding: 18px 26px; border: 2px solid var(--line); border-radius: 16px; background: rgba(251, 250, 247, .96); box-shadow: 0 18px 42px rgba(36, 50, 75, .2); text-align: center; }
+.submit-card strong { display: block; font-size: 28px; font-weight: 900; }
+.submit-card span { display: block; margin-top: 7px; color: var(--ink-soft); font-size: 16px; font-weight: 750; }
+.submit-card.success { border-color: #9fcdb5; color: #356146; }
+.submit-card.fail { border-color: #e3b2aa; color: #9d4c40; }
+.reference-board [data-testid^="piece-"] { cursor: grab; }
+.reference-board [data-testid^="piece-"]:active { cursor: grabbing; }
+.reference-board g.is-selected path:first-child { stroke: var(--focus); stroke-width: .075; }
+.reference-board .vertex-handle { fill: var(--panel); stroke: var(--focus); stroke-width: .05; cursor: crosshair; }
+.reference-board .vertex-handle.is-active, .reference-board .rotation-pivot { fill: var(--signal); stroke: var(--panel); stroke-width: .06; }
+.reference-board .piece-caption { fill: var(--ink); font: 700 .28px ui-sans-serif, sans-serif; cursor: pointer; user-select: none; }
+.math-actions { justify-content: end; padding-top: 4px; }
+.reference-accessibility-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.reference-accessibility-controls button { border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; color: var(--ink-soft); background: var(--panel-wash); cursor: pointer; font-size: 11px; }
+.math-actions button, .record-controls button, .record-key { border: 1px solid var(--line-strong); border-radius: 7px; padding: 8px 12px; color: var(--ink); background: var(--panel-wash); cursor: pointer; }
+.math-actions button:hover, .record-controls button:hover, .record-key:hover { border-color: var(--focus); background: var(--focus-wash); }
+.record-heading h2 { margin: 8px 0 14px; font: 650 26px/1.15 Georgia, "Songti SC", serif; }
+.record-box { min-height: 64px; padding: 12px 14px; border: 2px solid var(--line-strong); border-radius: 8px; color: var(--ink); background: #fff; font-size: 18px; line-height: 1.8; overflow-wrap: anywhere; }
+.record-box:empty { color: var(--muted); }
+.record-vertices { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 800; }
+.record-vertices > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.vertex-key { min-width: 38px; padding-inline: 10px; color: var(--focus) !important; background: var(--focus-wash) !important; }
+.record-submit-area { display: flex; flex-direction: column; gap: 5px; align-items: stretch; margin-top: 8px; padding: 8px 9px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-wash); }
+.record-submit-area .submit-route { color: var(--muted); font-size: 11px; line-height: 1.4; text-align: center; }
+.record-submit-area [data-field="record-submit-status"] { min-height: 15px; color: var(--success); font-size: 11px; text-align: center; }
+.record-submit-button { width: 100%; min-height: 36px; padding: 0 16px; border: 0; border-radius: 8px; color: var(--paper); background: var(--focus); font-size: 13px; font-weight: 800; }
+.record-controls { justify-content: end; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.record-keypad, .record-direction, .record-rotation, .record-numbers { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; padding: 12px 0; }
+.record-direction { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, 38px); justify-content: center; align-items: center; }
+.record-direction .record-key:nth-child(1) { grid-column: 2; grid-row: 1; }
+.record-direction .record-key:nth-child(2) { grid-column: 2; grid-row: 3; }
+.record-direction .record-key:nth-child(3) { grid-column: 1; grid-row: 2; }
+.record-direction .record-key:nth-child(4) { grid-column: 3; grid-row: 2; }
+.record-rotation { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; padding-top: 4px; }
+.record-numbers { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.record-numbers .record-key:nth-child(10) { grid-column: 2; }
+.record-section { border-bottom: 1px solid var(--line); }
+.record-section:last-child { border-bottom: 0; }
+.record-section-title { padding-top: 10px; color: var(--muted); font-size: 11px; font-weight: 800; }
+.input-workbench { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 7px; }
+.input-card { min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-wash); }
+.input-card-title { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; color: var(--ink-soft); font-size: 11.5px; font-weight: 900; }
+.input-card-title.rotation-title { margin-top: 8px; }
+.record-units, .record-punctuation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; padding: 0 0 12px; }
+.punctuation-row { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--line); }
+.punctuation-label { color: var(--muted); font-size: 11px; font-weight: 900; white-space: nowrap; }
+.record-key { min-height: 38px; padding: 7px 5px; font-size: 13px; }
+@media (min-width: 901px) {
+  html, body { min-height: 100%; overflow-x: hidden; }
+  .student-reference-app { min-height: 100vh; overflow: visible; }
+  .reference-layout { width: 100%; align-items: start; }
+  .record-panel { position: sticky; top: 14px; max-height: calc(100vh - 28px); overflow: auto; }
+}
+@media (max-width: 1080px) and (min-width: 901px) {
+  .reference-layout { grid-template-columns: minmax(0, 1fr); }
+  .record-panel { position: static; max-height: none; overflow: visible; }
+}
+@media (max-width: 900px) {
+  .student-reference-app { padding: 18px 14px; }
+  .student-reference-header { align-items: start; display: block; }
+  .reference-status { justify-content: start; margin-top: 12px; }
+  .reference-layout { grid-template-columns: 1fr; }
+  .reference-board-frame { width: 100%; }
+}
+
+/* Stage 1 keeps the intentionally spare two-fragment page from the supplied
+   reference. The runtime config decides when this surface is mounted; the
+   math canvas remains a 16:8 viewport and is never stretched by the shell. */
+.student-two-fragment-app { width: min(1180px, calc(100% - 28px)); margin: 20px auto 32px; color: var(--ink); }
+.two-fragment-topbar { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; margin-bottom:14px; }
+.two-fragment-title { min-width:0; }
+.two-fragment-title h1 { margin:0; font:760 clamp(20px, 2.2vw, 30px)/1.2 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; letter-spacing:.01em; }
+.two-fragment-title p { margin:8px 0 0; color:var(--muted-strong); font-size:14px; line-height:1.65; }
+.two-fragment-toolbar { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:9px; flex:0 0 auto; }
+.two-fragment-btn { border:1px solid var(--line-strong); border-radius:10px; min-height:42px; padding:0 16px; background:var(--panel); color:var(--ink); font-size:15px; font-weight:650; cursor:pointer; transition:background .14s ease,border-color .14s ease,transform .14s ease; }
+.two-fragment-btn:hover { background:var(--panel-wash); border-color:#b8c3d2; }
+.two-fragment-btn:active { transform:translateY(1px); }
+.two-fragment-btn.primary-button { color:#fff; background:var(--focus); border-color:var(--focus); }
+.two-fragment-card { position:relative; padding:clamp(12px,2vw,22px); border:1px solid var(--line); border-radius:16px; background:var(--panel); box-shadow:0 8px 28px rgba(34,48,70,.08); }
+.two-fragment-board-shell { position:relative; display:grid; place-items:center; width:100%; padding:4px; }
+.two-fragment-board { display:block; width:100%; height:auto; aspect-ratio:2/1; overflow:visible; border-radius:4px; background:#fff; touch-action:none; user-select:none; }
+.two-fragment-board .grid-line { stroke:#69727d; stroke-width:1.15; stroke-dasharray:5 4; opacity:.86; vector-effect:non-scaling-stroke; pointer-events:none; }
+.two-fragment-board .grid-border { fill:none; stroke:#101214; stroke-width:1.8; vector-effect:non-scaling-stroke; shape-rendering:geometricPrecision; pointer-events:none; }
+.two-fragment-board [data-testid^="piece-"] { cursor:grab; }
+.two-fragment-board [data-testid^="piece-"]:active { cursor:grabbing; }
+.two-fragment-board g.is-selected path:first-child { stroke:var(--focus); stroke-width:.075; }
+.two-fragment-board .vertex-handle { fill:#fff; stroke:#28323f; stroke-width:.05; cursor:crosshair; }
+.two-fragment-board .vertex-handle.is-active, .two-fragment-board .rotation-pivot { fill:var(--signal); stroke:#fff; stroke-width:.06; }
+.two-fragment-board .piece-caption { fill:var(--ink); font:700 .28px ui-sans-serif,sans-serif; }
+.two-fragment-submit { inset:4px; }
+.two-fragment-below { display:flex; justify-content:space-between; align-items:center; gap:14px; min-height:48px; margin-top:14px; }
+.two-fragment-below strong { color:var(--ink); font-size:14px; }
+.two-fragment-below span { min-width:176px; padding:9px 12px; border-radius:10px; color:#1e4f96; background:#edf4ff; text-align:center; font-size:13px; font-weight:700; }
+.two-fragment-accessibility { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; padding-top:10px; border-top:1px dashed var(--line); }
+.two-fragment-accessibility button { border:1px solid var(--line); border-radius:6px; padding:6px 9px; color:var(--ink-soft); background:var(--panel-wash); cursor:pointer; font-size:11px; }
+@media (max-width:760px) {
+  .student-two-fragment-app { width:min(100% - 16px,1180px); margin-top:10px; }
+  .two-fragment-topbar { flex-direction:column; }
+  .two-fragment-toolbar { width:100%; justify-content:flex-start; }
+  .two-fragment-btn { flex:1 1 120px; }
+  .two-fragment-card { padding:10px; border-radius:12px; }
+  .two-fragment-below { align-items:flex-start; flex-direction:column; }
+  .two-fragment-below span { width:100%; }
+}
+
+/* Supplied four-fragment HTML baseline: keep its shell, spacing and control
+   grouping intact while the applet below supplies the authoritative state. */
+.student-reference-app.app { max-width:1520px; min-height:100vh; margin:0 auto; padding:18px 18px 28px; background:var(--paper); }
+.student-reference-app .topbar { display:flex; gap:16px; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.student-reference-app .title-wrap { display:flex; align-items:center; gap:12px; min-width:0; }
+.student-reference-app .logo { width:44px; height:44px; border-radius:14px; background:linear-gradient(145deg,#ffe982,#ffc93c); display:grid; place-items:center; box-shadow:0 6px 18px rgba(255,198,49,.28); font-size:24px; }
+.student-reference-app .topbar h1 { margin:0; font:800 21px/1.2 "PingFang SC","Microsoft YaHei",system-ui,sans-serif; letter-spacing:.2px; }
+.student-reference-app .subtitle { margin-top:3px; color:var(--muted); font-size:13px; }
+.student-reference-app .top-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; align-items:center; }
+.student-reference-app .btn { border:1px solid var(--line); background:#fff; color:var(--ink); padding:9px 14px; border-radius:11px; cursor:pointer; font-weight:700; box-shadow:0 2px 4px rgba(22,34,51,.03); transition:.15s ease; }
+.student-reference-app .btn:hover { transform:translateY(-1px); border-color:#c8d2df; }
+.student-reference-app .btn.primary { background:var(--focus); color:#fff; border-color:var(--focus); }
+.student-reference-app .btn.danger-lite { color:#9c3d3d; background:#fff7f7; border-color:#f0d0d0; }
+.student-reference-app .btn.identity { background:#f5f8ff; color:#34518e; border-color:#cfdbef; }
+.student-reference-app .layout { display:grid; grid-template-columns:minmax(0,1fr) 420px; gap:16px; align-items:start; }
+.student-reference-app .panel { background:var(--panel); border:1px solid #e6ebf1; border-radius:18px; box-shadow:0 10px 28px rgba(24,39,75,.08); }
+.student-reference-app .workspace-panel { padding:14px; }
+.student-reference-app .panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 2px 12px; }
+.student-reference-app .panel-title { font-size:17px; font-weight:800; }
+.student-reference-app .panel-hint { font-size:12px; color:var(--muted); }
+.student-reference-app .timer-row { display:flex; justify-content:flex-end; align-items:center; gap:10px; margin:-2px 4px 8px; min-height:36px; }
+.student-reference-app .timer { position:static; display:inline-flex; align-items:center; justify-content:center; background:rgba(255,255,255,.96); border:1px solid #d8e0e8; border-radius:12px; padding:8px 12px; font-variant-numeric:tabular-nums; box-shadow:0 4px 14px rgba(25,37,60,.08); font-weight:800; font-size:14px; color:#243047; }
+.student-reference-app .workspace-wrap { position:relative; width:100%; background:#fff; border-radius:4px; overflow:visible; border:0; padding:4px; }
+.student-reference-app #board { display:block; width:100%; height:auto; aspect-ratio:2/1; overflow:visible; touch-action:none; user-select:none; -webkit-user-select:none; background:#fff; border-radius:4px; }
+.student-reference-app .reference-board-frame { margin-top:0; padding:0; border:0; background:#fff; }
+.student-reference-app .control-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; align-items:center; }
+.student-reference-app .control-sep { height:24px; width:1px; background:#dbe2ea; margin:0 2px; }
+.student-reference-app .teacher-tools-inline { display:flex; align-items:center; gap:7px; padding:4px 6px 4px 9px; border:1px solid #e3eaf5; border-radius:12px; background:#f8fbff; }
+.student-reference-app .teacher-tools-label { font-size:11px; font-weight:900; color:#516582; white-space:nowrap; }
+.student-reference-app .teacher-tools-inline .btn { padding:8px 12px; min-height:36px; }
+.student-reference-app .teacher-tools-inline .btn.teacher { background:#f3efff; color:#5930aa; border-color:#d9cdf5; }
+.student-reference-app .legend { margin-left:auto; color:var(--muted); font-size:12px; display:flex; align-items:center; gap:8px; }
+.student-reference-app .dot { width:9px; height:9px; border-radius:50%; background:var(--focus); display:inline-block; }
+.student-reference-app .classroom-submit-row { justify-content:space-between; color:var(--muted); font-size:12px; }
+.student-reference-app .classroom-submit-row [data-action="submit"] { margin-left:auto; }
+.student-reference-app .record-panel { padding:12px 13px; position:sticky; top:12px; max-height:none; overflow:visible; }
+.student-reference-app .record-title { font-size:17px; font-weight:900; margin:0; }
+.student-reference-app .record-box { margin-top:8px; min-height:82px; max-height:108px; overflow-y:auto; border:2px solid #d9e4f0; border-radius:12px; background:linear-gradient(180deg,#fbfdff,#f7faff); padding:9px 10px; display:flex; align-content:flex-start; flex-wrap:wrap; gap:5px; line-height:1.55; }
+.student-reference-app .record-submit-area { margin-top:7px; padding:8px 9px; border:1px solid #dce7f4; border-radius:11px; background:linear-gradient(180deg,#f8fbff,#f3f8ff); }
+.student-reference-app .record-submit-button, .student-reference-app .record-submit-btn { width:100%; min-height:39px; border:0; border-radius:10px; background:#2563eb; color:#fff; font-size:14px; font-weight:900; cursor:pointer; box-shadow:0 4px 12px rgba(37,99,235,.16); }
+.student-reference-app .record-submit-area [data-field="record-submit-status"] { min-height:15px; margin-top:4px; text-align:center; font-size:10.5px; font-weight:750; color:#5e6e82; }
+.student-reference-app .record-utils { display:flex; gap:6px; margin-top:6px; justify-content:flex-end; }
+.student-reference-app .mini-btn { border:1px solid #dbe3ed; background:#fff; color:#506078; border-radius:8px; padding:5px 8px; font-size:11px; font-weight:700; cursor:pointer; }
+.student-reference-app .key-section { margin-top:7px; padding-top:6px; border-top:1px solid #edf1f5; }
+.student-reference-app .section-label { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:900; color:#415066; margin-bottom:5px; }
+.student-reference-app .record-keypad, .student-reference-app .record-direction, .student-reference-app .record-rotation, .student-reference-app .record-numbers { padding:0; }
+.student-reference-app .record-key { border:1px solid #dbe3ed; background:#fff; min-height:34px; border-radius:9px; font-size:13px; font-weight:850; color:#263549; cursor:pointer; box-shadow:0 1px 2px rgba(25,38,58,.03); transition:.12s ease; display:flex; align-items:center; justify-content:center; gap:3px; padding:4px 5px; }
+.student-reference-app .record-key:hover { transform:translateY(-1px); border-color:#bfcce0; background:#fbfdff; }
+.student-reference-app .record-keypad { grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; }
+.student-reference-app .record-direction { grid-template-columns:repeat(3,42px); grid-template-rows:repeat(3,38px); justify-content:center; align-items:center; gap:4px; }
+.student-reference-app .record-direction .record-key { min-height:38px; padding:0; font-size:28px; line-height:1; border-radius:10px; }
+.student-reference-app .record-direction .record-key:nth-child(1) { grid-column:2; grid-row:1; }
+.student-reference-app .record-direction .record-key:nth-child(2) { grid-column:2; grid-row:3; }
+.student-reference-app .record-direction .record-key:nth-child(3) { grid-column:1; grid-row:2; }
+.student-reference-app .record-direction .record-key:nth-child(4) { grid-column:3; grid-row:2; }
+.student-reference-app .record-rotation { grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; margin-top:7px; }
+.student-reference-app .record-numbers { grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+.student-reference-app .record-numbers .record-key:nth-child(10) { grid-column:2; }
+.student-reference-app .record-units, .student-reference-app .record-punctuation { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin-top:7px; }
+.student-reference-app .punctuation-row { display:grid; grid-template-columns:auto 1fr; gap:8px; align-items:center; margin-top:7px; padding-top:7px; border-top:1px solid #edf1f5; }
+.student-reference-app .punctuation-label { font-size:11px; font-weight:900; color:#59677a; white-space:nowrap; }
+@media (max-width:1120px) {
+  .student-reference-app .layout { grid-template-columns:1fr; }
+  .student-reference-app .record-panel { position:static; max-height:none; overflow:visible; }
+}
+@media (max-width:760px) {
+  .student-reference-app.app { padding:10px; }
+  .student-reference-app .topbar { align-items:flex-start; flex-direction:column; }
+  .student-reference-app .top-actions { width:100%; justify-content:flex-start; }
+  .student-reference-app .control-row > .btn { flex:1 1 auto; }
+  .student-reference-app .teacher-tools-inline { width:100%; justify-content:flex-start; }
+  .student-reference-app .teacher-tools-inline .btn { flex:1 1 0; }
+  .student-reference-app .legend { width:100%; margin-left:0; }
+  .student-reference-app .record-panel { padding:13px; }
+  .student-reference-app .record-keypad { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .student-reference-app .input-workbench { grid-template-columns:1fr 1fr; }
+}

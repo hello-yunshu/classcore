@@ -35,7 +35,8 @@
       "transform.translate",
       "transform.rotate",
       "transform.select-pivot",
-      "transform.undo"
+      "transform.undo",
+      "transform.record.update"
     ],
     "requiredPlatformCapabilities": [
       "pointer-events",
@@ -67,7 +68,8 @@
       "transform.translate": "schemas/transform-board/commands/transform.translate.v1.schema.json",
       "transform.rotate": "schemas/transform-board/commands/transform.rotate.v1.schema.json",
       "transform.select-pivot": "schemas/transform-board/commands/transform.select-pivot.v1.schema.json",
-      "transform.undo": "schemas/transform-board/commands/transform.undo.v1.schema.json"
+      "transform.undo": "schemas/transform-board/commands/transform.undo.v1.schema.json",
+      "transform.record.update": "schemas/transform-board/commands/transform.record.update.v1.schema.json"
     },
     "commandSchemaVersion": 1
   },

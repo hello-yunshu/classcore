@@ -1,0 +1,1269 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>方格图案运动与还原教学系统｜笑脸还原（五年级输入优化）</title>
+<style>
+  :root{
+    --bg:#f4f7fb;
+    --panel:#ffffff;
+    --ink:#162233;
+    --muted:#66758a;
+    --line:#dbe3ec;
+    --grid:#93a0ae;
+    --brand:#315efb;
+    --brand-soft:#eef3ff;
+    --teacher:#7a4bd8;
+    --teacher-soft:#f3efff;
+    --success:#18845f;
+    --danger:#c44848;
+    --yellow:#FFD54A;
+    --shadow:0 10px 28px rgba(24,39,75,.08);
+    --radius:18px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  button{font:inherit}
+  button:focus-visible{outline:3px solid rgba(49,94,251,.25);outline-offset:2px}
+  .app{max-width:1520px;margin:0 auto;padding:18px 18px 28px}
+  .topbar{display:flex;gap:16px;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .title-wrap{display:flex;align-items:center;gap:12px;min-width:0}
+  .logo{width:44px;height:44px;border-radius:14px;background:linear-gradient(145deg,#ffe982,#ffc93c);display:grid;place-items:center;box-shadow:0 6px 18px rgba(255,198,49,.28);font-size:24px}
+  h1{font-size:21px;margin:0;font-weight:800;letter-spacing:.2px}
+  .subtitle{margin-top:3px;color:var(--muted);font-size:13px}
+  .top-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  .btn{border:1px solid var(--line);background:#fff;color:var(--ink);padding:9px 14px;border-radius:11px;cursor:pointer;font-weight:700;box-shadow:0 2px 4px rgba(22,34,51,.03);transition:.15s ease}
+  .btn:hover{transform:translateY(-1px);border-color:#c8d2df}
+  .btn.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .btn.teacher{background:var(--teacher-soft);color:#5930aa;border-color:#d9cdf5}
+  .btn.teacher.active{background:var(--teacher);color:#fff;border-color:var(--teacher)}
+  .btn.danger-lite{color:#9c3d3d;background:#fff7f7;border-color:#f0d0d0}
+
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:16px;align-items:start}
+  .panel{background:var(--panel);border:1px solid #e6ebf1;border-radius:var(--radius);box-shadow:var(--shadow)}
+  .workspace-panel{padding:14px}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 2px 12px}
+  .panel-title{font-size:17px;font-weight:800}
+  .panel-hint{font-size:12px;color:var(--muted)}
+  /* 方格纸区域：严格参考用户提供的学生端版本。
+     SVG 使用固定 16:8 数学比例，页面尺寸变化只影响视觉缩放，不改变逻辑坐标。 */
+  .workspace-wrap{position:relative;width:100%;background:#fff;border-radius:4px;overflow:visible;border:0;padding:4px}
+  #board{display:block;width:100%;height:auto;aspect-ratio:2/1;overflow:visible;touch-action:none;user-select:none;-webkit-user-select:none;background:#fff;border-radius:4px}
+  #board *{outline:none}
+  .timer-row{display:flex;justify-content:flex-end;align-items:center;margin:-2px 4px 8px;min-height:36px}
+  .timer{position:static;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.96);border:1px solid #d8e0e8;border-radius:12px;padding:8px 12px;font-variant-numeric:tabular-nums;box-shadow:0 4px 14px rgba(25,37,60,.08);font-weight:800;font-size:14px;color:#243047}
+  .submit-message{position:absolute;inset:0;display:none;place-items:center;z-index:20;pointer-events:none}
+  .submit-message.show{display:grid}
+  .submit-card{min-width:260px;max-width:70%;padding:22px 28px;text-align:center;border-radius:18px;background:rgba(255,255,255,.97);box-shadow:0 18px 42px rgba(27,37,57,.23);border:2px solid #dce5ef;backdrop-filter:blur(6px)}
+  .submit-card.success{border-color:#9fd9c6}
+  .submit-card.fail{border-color:#efb9b9}
+  .submit-title{font-size:31px;font-weight:900;letter-spacing:1px}
+  .submit-card.success .submit-title{color:var(--success)}
+  .submit-card.fail .submit-title{color:var(--danger)}
+  .submit-time{margin-top:8px;font-size:20px;font-weight:800;color:#415066}
+  .teacher-prompt{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:100;display:none;min-width:430px;max-width:min(720px,88vw);padding:26px 34px;background:rgba(255,255,255,.985);border:3px solid #8f73dc;border-radius:20px;box-shadow:0 22px 60px rgba(43,29,86,.32),0 0 0 7px rgba(143,115,220,.10);font-size:clamp(28px,3vw,36px);line-height:1.35;font-weight:950;letter-spacing:.02em;text-align:center;color:#4b258f;pointer-events:none}
+  .teacher-prompt.show{display:block}
+  .control-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center}
+  .control-sep{height:24px;width:1px;background:#dbe2ea;margin:0 2px}
+  .teacher-tools-inline{display:flex;align-items:center;gap:7px;padding:4px 6px 4px 9px;border:1px solid #e3daf8;border-radius:12px;background:#fbf9ff}
+  .teacher-tools-label{font-size:11px;font-weight:900;color:#7450b9;white-space:nowrap}
+  .teacher-tools-inline .btn{padding:8px 12px;min-height:36px}
+  .legend{margin-left:auto;color:var(--muted);font-size:12px;display:flex;align-items:center;gap:8px}
+  .dot{width:9px;height:9px;border-radius:50%;background:#315efb;display:inline-block}
+
+  .record-panel{padding:12px 13px;position:sticky;top:12px;max-height:none;overflow:visible}
+  .record-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .record-title{font-size:17px;font-weight:900;margin:0}
+  .record-box{margin-top:8px;min-height:82px;max-height:108px;overflow-y:auto;border:2px solid #d9e4f0;border-radius:12px;background:linear-gradient(180deg,#fbfdff,#f7faff);padding:9px 10px;display:flex;align-content:flex-start;flex-wrap:wrap;gap:5px;line-height:1.55;cursor:text}
+  .record-box:empty::before{content:""}
+  .record-token{display:inline-flex;align-items:center;min-height:25px;padding:1px 5px;border-radius:7px;background:#fff;border:1px solid #edf1f5;font-weight:700;font-size:15px}
+  .record-token.symbol{font-size:19px;padding:0 4px}
+  .record-utils{display:flex;gap:6px;margin-top:6px;justify-content:flex-end}
+  .mini-btn{border:1px solid #dbe3ed;background:#fff;color:#506078;border-radius:8px;padding:5px 8px;font-size:11px;font-weight:700;cursor:pointer}
+  .mini-btn:hover{background:#f8fafc}
+  /* 五年级输入区：按“表达词 → 方向/数字 → 单位 → 分隔”组织，减少横向搜索。 */
+  .key-section{margin-top:7px;padding-top:6px;border-top:1px solid #edf1f5}
+  .key-section:first-of-type{border-top:0}
+  .section-label{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:900;color:#415066;margin-bottom:5px}
+  .key-grid{display:grid;gap:5px}
+  .key-grid.words{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .key-grid.numbers{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.key-grid.numbers .key:nth-child(10){grid-column:2}
+  .key-grid.units{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:7px}
+  .key-grid.rotation{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin-top:7px}
+  .key-grid.punctuation{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .key{border:1px solid #dbe3ed;background:#fff;min-height:34px;border-radius:9px;font-size:13px;font-weight:850;color:#263549;cursor:pointer;box-shadow:0 1px 2px rgba(25,38,58,.03);transition:.12s ease;display:flex;align-items:center;justify-content:center;gap:3px;padding:4px 5px}
+  .key:hover{transform:translateY(-1px);border-color:#bfcce0;background:#fbfdff}
+  .key:active{transform:translateY(0);background:#f0f5ff}
+  .key.word{background:#f4f7ff;border-color:#d8e1fb;color:#2f4fa9;font-size:13px}
+  .key.number{background:#fff;font-size:16px;min-height:38px}
+  .key.symbol{font-size:20px;background:#fffaf0;border-color:#f1dfb3;color:#8b5b00}
+  .key.unit{background:#f2faf6;border-color:#cde8dc;color:#246f55;font-size:14px}
+  .key.rotation-choice{background:#fff8ed;border-color:#f1ddb6;color:#7f5400;font-size:12px;min-height:34px}
+  .key.punctuation{background:#f7f8fa;border-color:#dde3ea;color:#586779;font-size:18px}
+  .input-workbench{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:7px}
+  .input-card{border:1px solid #e2e8f1;border-radius:12px;background:#fbfcfe;padding:8px}
+  .input-card-title{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px;font-size:11.5px;font-weight:900;color:#415066}
+  .dpad{display:grid;grid-template-columns:repeat(3,42px);grid-template-rows:repeat(3,38px);justify-content:center;align-items:center;gap:4px;position:relative}
+  .dpad .key{min-height:38px;padding:0;font-size:28px;line-height:1;border-radius:10px}
+  .dpad .key:nth-child(1){grid-column:2;grid-row:1}
+  .dpad .key:nth-child(2){grid-column:2;grid-row:3}
+  .dpad .key:nth-child(3){grid-column:1;grid-row:2}
+  .dpad .key:nth-child(4){grid-column:3;grid-row:2}
+  .punctuation-row{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:center;margin-top:7px;padding-top:7px;border-top:1px solid #edf1f5}
+  .punctuation-label{font-size:11px;font-weight:900;color:#59677a;white-space:nowrap}
+  .rot-icon{font-size:22px;line-height:1;color:#ef9b2f;text-shadow:0 1px 0 #a65521}
+
+
+  .btn.identity{background:#f5f8ff;color:#34518e;border-color:#cfdbef}
+  .btn.identity.unset{background:#fff8eb;color:#8a5a00;border-color:#eed7a5}
+  .record-submit-area{margin-top:7px;padding:8px 9px;border:1px solid #dce7f4;border-radius:11px;background:linear-gradient(180deg,#f8fbff,#f3f8ff)}
+  .submit-route{font-size:11px;line-height:1.35;color:#66758a;margin-bottom:5px;text-align:center}
+  .record-submit-btn{width:100%;min-height:39px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-size:14px;font-weight:900;cursor:pointer;box-shadow:0 4px 12px rgba(37,99,235,.16);transition:.14s ease}
+  .record-submit-btn:hover{transform:translateY(-1px);background:#1f57cd}
+  .record-submit-btn:active{transform:translateY(0)}
+  .record-submit-btn.leader{background:#6f42c1;box-shadow:0 5px 14px rgba(111,66,193,.18)}
+  .record-submit-btn.leader:hover{background:#6037aa}
+  .record-submit-status{min-height:15px;margin-top:4px;text-align:center;font-size:10.5px;font-weight:750;color:#5e6e82}
+  .record-submit-status.success{color:#157347}.record-submit-status.error{color:#b33b3b}
+  .group-inbox{display:none;margin-top:16px;padding:15px 16px 16px;border:1px solid #e0e7f2;border-radius:14px;background:linear-gradient(180deg,#fbfcff,#f7f9fe);box-shadow:0 3px 12px rgba(35,50,76,.05)}
+  .group-inbox.show{display:block}
+  .group-inbox-title{font-size:15px;font-weight:900;color:#51318d;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .group-inbox-note{font-size:11px;color:#8995a5;font-weight:650}
+  .group-submissions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+  .member-submission{border:1px solid #e2e8f1;border-radius:11px;background:#fff;padding:10px 11px;min-width:0}
+  .member-submission-head{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:11px;color:#6e7c8e;margin-bottom:6px}
+  .member-no{font-size:13px;font-weight:900;color:#4e2c8a}
+  .member-record{font-size:13px;line-height:1.6;color:#263549;word-break:break-word;min-height:42px}
+  .member-record.waiting{color:#9aa5b2}
+  .student-modal{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(25,33,46,.42);backdrop-filter:blur(6px)}
+  .student-modal.show{display:flex}
+  .student-dialog{width:min(410px,94vw);background:#fff;border:1px solid #dce4ee;border-radius:22px;box-shadow:0 24px 70px rgba(20,30,45,.30);padding:24px}
+  .student-dialog h2{margin:0;font-size:25px;text-align:center;font-weight:950;color:#253247}
+  .student-dialog p{margin:8px 0 14px;text-align:center;color:#6c798a;font-size:13px;line-height:1.55}
+  .student-no-display{width:100%;height:58px;border:2px solid #cfd9e7;border-radius:14px;padding:0 14px;font-size:28px;font-weight:950;text-align:center;color:#1e2d40;background:#f9fbfe;display:flex;align-items:center;justify-content:center;letter-spacing:.06em}
+  .student-no-display.empty{color:#9ca8b7;font-size:18px;font-weight:800;letter-spacing:0}
+  .student-keypad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+  .student-key{height:56px;border:1px solid #d3dce8;border-radius:13px;background:#fff;color:#263549;font-size:23px;font-weight:900;cursor:pointer;box-shadow:0 2px 6px rgba(35,50,76,.05);transition:.12s ease}
+  .student-key:hover{background:#f5f8ff;border-color:#b9c8df;transform:translateY(-1px)}
+  .student-key:active{transform:translateY(0);background:#edf3ff}
+  .student-key.action{font-size:15px;background:#f7f9fc;color:#586779}
+  .student-key.confirm{background:#2563eb;color:#fff;border-color:#2563eb;font-size:17px}
+  .student-key.confirm:hover{background:#1f57cd}
+  .student-error{min-height:20px;margin-top:9px;text-align:center;color:#b13a3a;font-size:12px;font-weight:750}
+  .student-range{margin-top:5px;text-align:center;font-size:11px;color:#9aa5b2}
+
+  .piece{cursor:grab}
+  .piece:active{cursor:grabbing}
+  .piece.rotation-mode{cursor:crosshair}
+  .fixed-piece{pointer-events:none}
+  .vertex-handle{cursor:pointer;fill:#fff;stroke:#315efb;stroke-width:.045;vector-effect:non-scaling-stroke}
+  .vertex-handle.selected{fill:#315efb;stroke:#fff;stroke-width:.055}
+  .number-label{font-weight:950;font-size:.54px;fill:#3a2c18;paint-order:stroke;stroke:#fff;stroke-width:.075px;stroke-linejoin:round;pointer-events:none}
+  .vertex-label{font-weight:950;font-size:.46px;fill:#5b2eb5;paint-order:stroke;stroke:#fff;stroke-width:.075px;stroke-linejoin:round;pointer-events:none}
+  [data-layer="annotations"]{pointer-events:none}
+  /* 教学标注本身不抢占SVG交互；只有透明点击区接收记录点击。这样字母靠近顶点时也不会挡住旋转手柄。 */
+  .annotation-input{pointer-events:none;cursor:pointer}
+  .annotation-input .annotation-hit{fill:rgba(255,255,255,.001);stroke:none;pointer-events:all;cursor:pointer}
+  .annotation-input:hover .number-label,.annotation-input:hover .vertex-label{filter:drop-shadow(0 0 2px rgba(49,94,251,.42))}
+  .annotation-input:active .number-label,.annotation-input:active .vertex-label{opacity:.72}
+  /* 与参考文件一致：内部网格清晰、规则，外框完整闭合且不会出现四角缺口。 */
+  .grid-line{stroke:#69727d;stroke-width:1.15;stroke-dasharray:5 4;opacity:.86;vector-effect:non-scaling-stroke;pointer-events:none}
+  .grid-border{fill:none;stroke:#101214;stroke-width:1.8;vector-effect:non-scaling-stroke;shape-rendering:geometricPrecision;pointer-events:none}
+
+
+  @media(min-width:1121px) and (max-height:820px){
+    .record-panel{padding:10px 11px}
+    .record-desc{font-size:10.8px;line-height:1.32}
+    .record-box{min-height:70px;max-height:88px;margin-top:6px}
+    .record-submit-area{margin-top:6px;padding:7px 8px}
+    .record-utils{margin-top:5px}
+    .input-guide{margin-top:6px;padding:5px 7px}
+    .key-section{margin-top:5px;padding-top:4px}
+    .section-label{margin-bottom:4px}
+    .key{min-height:30px;font-size:12px}
+    .key.number{min-height:34px;font-size:15px}
+    .dpad{grid-template-columns:repeat(3,36px);grid-template-rows:repeat(3,32px);gap:3px}
+    .dpad .key{min-height:32px;font-size:20px}
+    .input-card{padding:6px}
+    .input-workbench{gap:6px;margin-top:5px}
+    .key-grid.rotation{margin-top:5px}
+    .punctuation-row{margin-top:5px;padding-top:5px}
+    .footer-note{display:none}
+  }
+
+  @media(max-width:1120px){
+    .layout{grid-template-columns:1fr}
+    .record-panel{position:static;max-height:none}
+  }
+  @media(max-width:760px){
+    .app{padding:10px}
+    .topbar{align-items:flex-start;flex-direction:column}
+    .top-actions{width:100%;justify-content:flex-start}
+    .control-row>.btn{flex:1 1 auto}
+    .teacher-tools-inline{width:100%;justify-content:flex-start}
+    .teacher-tools-inline .btn{flex:1 1 0}
+    .legend{width:100%;margin-left:0}
+    .record-panel{padding:13px}
+    .key-grid.words{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .input-workbench{grid-template-columns:1fr 1fr}
+    .group-submissions{grid-template-columns:1fr}
+    .student-dialog{padding:18px}
+    .student-key{height:52px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="title-wrap">
+      <div class="logo">🙂</div>
+      <div>
+        <h1>方格图案运动与还原教学系统</h1>
+        <div class="subtitle">观察图形运动，用准确的数学语言记录还原路径</div>
+      </div>
+    </div>
+    <div class="top-actions" aria-label="学生身份">
+      <button id="studentIdentityBtn" class="btn identity unset" type="button">学号：未设置</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel workspace-panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">图案还原操作区</div>
+          <div class="panel-hint">拖动时一次只沿一个方向平移；点击顶点后可绕该点连续旋转。</div>
+        </div>
+      </div>
+      <div class="timer-row" aria-label="计时">
+        <div id="timer" class="timer">用时 00:00</div>
+      </div>
+      <div class="workspace-wrap" id="workspaceWrap">
+        <svg id="board" viewBox="0 0 16 8" preserveAspectRatio="xMidYMid meet" role="application" aria-label="16列8行方格纸上的图案还原操作区" focusable="false"></svg>
+        <div id="submitMessage" class="submit-message" aria-live="polite">
+          <div id="submitCard" class="submit-card">
+            <div id="submitTitle" class="submit-title"></div>
+            <div id="submitTime" class="submit-time"></div>
+          </div>
+        </div>
+      </div>
+      <div class="control-row">
+        <button id="undoBtn" class="btn" type="button">返回上一步</button>
+        <button id="resetBtn" class="btn danger-lite" type="button">重新开始</button>
+        <span class="control-sep"></span>
+        <div class="teacher-tools-inline" aria-label="教师工具">
+          <span class="teacher-tools-label">教师工具</span>
+          <button id="numberingBtn" class="btn teacher" type="button">编号</button>
+          <button id="labelBtn" class="btn teacher" type="button">标字母</button>
+        </div>
+        <div class="legend"><span class="dot"></span> 点击蓝色顶点可选择旋转中心</div>
+      </div>
+      <div id="groupInbox" class="group-inbox" aria-live="polite">
+        <div class="group-inbox-title"><span>组员提交内容</span><span class="group-inbox-note">组长端 · 自动更新</span></div>
+        <div id="groupSubmissions" class="group-submissions"></div>
+      </div>
+    </section>
+
+    <aside class="panel record-panel" aria-label="还原路径记录框">
+      <div class="record-title-row">
+        <div>
+          <h2 class="record-title">还原路径记录框</h2>
+        </div>
+      </div>
+      <div id="recordBox" class="record-box" role="textbox" aria-label="还原路径记录内容" aria-readonly="true"></div>
+      <div class="record-submit-area">
+        <div id="submitRoute" class="submit-route">请先输入学号（1—48）</div>
+        <button id="recordSubmitBtn" class="record-submit-btn" type="button">提交</button>
+        <div id="recordSubmitStatus" class="record-submit-status" aria-live="polite"></div>
+      </div>
+      <div class="record-utils">
+        <button id="recordUndo" class="mini-btn" type="button">⌫ 删除上一个</button>
+        <button id="recordClear" class="mini-btn" type="button">清空记录</button>
+      </div>
+
+      <div class="key-section">
+        <div class="section-label">表达词</div>
+        <div id="wordKeys" class="key-grid words"></div>
+      </div>
+
+      <div class="input-workbench">
+        <div class="input-card">
+          <div class="input-card-title"><span>方向</span></div>
+          <div id="directionKeys" class="dpad" aria-label="上下左右方向键"></div>
+          <div class="input-card-title" style="margin-top:8px;margin-bottom:0"><span>旋转方向</span></div>
+          <div id="rotationKeys" class="key-grid rotation"></div>
+        </div>
+
+        <div class="input-card">
+          <div class="input-card-title"><span>数字</span></div>
+          <div id="numberKeys" class="key-grid numbers"></div>
+          <div id="unitKeys" class="key-grid units"></div>
+        </div>
+      </div>
+
+      <div class="punctuation-row">
+        <div class="punctuation-label">分隔步骤</div>
+        <div id="punctuationKeys" class="key-grid punctuation"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+<div id="studentModal" class="student-modal" role="dialog" aria-modal="true" aria-labelledby="studentModalTitle">
+  <div class="student-dialog">
+    <h2 id="studentModalTitle">请选择你的序号</h2>
+    <p>使用下方数字键盘输入1—48。系统会自动确定你的组长以及提交对象。</p>
+    <input id="studentNoInput" type="hidden" value="">
+    <div id="studentNoDisplay" class="student-no-display empty" aria-live="polite">请输入1—48</div>
+    <div id="studentKeypad" class="student-keypad" aria-label="学生序号数字键盘">
+      <button class="student-key" type="button" data-student-key="1">1</button>
+      <button class="student-key" type="button" data-student-key="2">2</button>
+      <button class="student-key" type="button" data-student-key="3">3</button>
+      <button class="student-key" type="button" data-student-key="4">4</button>
+      <button class="student-key" type="button" data-student-key="5">5</button>
+      <button class="student-key" type="button" data-student-key="6">6</button>
+      <button class="student-key" type="button" data-student-key="7">7</button>
+      <button class="student-key" type="button" data-student-key="8">8</button>
+      <button class="student-key" type="button" data-student-key="9">9</button>
+      <button class="student-key action" type="button" data-student-action="clear">清空</button>
+      <button class="student-key" type="button" data-student-key="0">0</button>
+      <button class="student-key action" type="button" data-student-action="backspace">删除</button>
+      <button id="studentConfirmBtn" class="student-key confirm" type="button" style="grid-column:1 / -1">确定</button>
+    </div>
+    <div id="studentNoError" class="student-error"></div>
+    <div class="student-range">每4人为一组：4、8、12……48号为组长</div>
+  </div>
+</div>
+<div id="teacherPrompt" class="teacher-prompt">请选择需要标注字母的图形</div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ============================================================
+   * 1. CONFIG：题目与页面配置
+   * ============================================================ */
+  const PUZZLE_CONFIG = {
+    id: 'smile-grid-001',
+    name: '笑脸还原（4张碎片）',
+    version: '2.4.0-grade5-input-optimized',
+    grid: { cols: 16, rows: 8 },
+    judgementMode: 'STRICT_CONTENT',
+    pieces: [
+      {
+        id:'piece-ul-eye', name:'左上眼睛碎片', type:'quarter-sector', movable:true, hasInternalPattern:true,
+        vertices:[{x:0,y:0},{x:-2,y:0},{x:0,y:-2}],
+        boundarySamples:[{x:0,y:0},{x:-2,y:0},{x:-1.8478,y:-0.7654},{x:-1.4142,y:-1.4142},{x:-0.7654,y:-1.8478},{x:0,y:-2}],
+        path:'M 0 0 L -2 0 A 2 2 0 0 1 0 -2 Z',
+        keyVertices:[0,1,2],
+        initialState:{gridX:2,gridY:2,rotation:0},
+        targetState:{gridX:8,gridY:4,rotation:0},
+        defaultRotationCenter:{vertexIndex:0},
+        internalElements:[{kind:'circle',cx:-0.6375,cy:-0.8125,r:0.155,fill:'#050505'}],
+        contentAnchors:[{x:-0.6375,y:-0.8125},{x:-0.48,y:-0.8125}],
+        metadata:{figureNumber:null}
+      },
+      {
+        id:'piece-ur-eye', name:'右上眼睛碎片', type:'quarter-sector', movable:true, hasInternalPattern:true,
+        vertices:[{x:0,y:0},{x:0,y:-2},{x:2,y:0}],
+        boundarySamples:[{x:0,y:0},{x:0,y:-2},{x:0.7654,y:-1.8478},{x:1.4142,y:-1.4142},{x:1.8478,y:-0.7654},{x:2,y:0}],
+        path:'M 0 0 L 0 -2 A 2 2 0 0 1 2 0 Z',
+        keyVertices:[0,1,2],
+        initialState:{gridX:16,gridY:2,rotation:270},
+        targetState:{gridX:8,gridY:4,rotation:0},
+        defaultRotationCenter:{vertexIndex:0},
+        internalElements:[{kind:'circle',cx:0.6625,cy:-0.8125,r:0.155,fill:'#050505'}],
+        contentAnchors:[{x:0.6625,y:-0.8125},{x:0.82,y:-0.8125}],
+        metadata:{figureNumber:null}
+      },
+      {
+        id:'piece-bl-mouth', name:'左下嘴巴碎片', type:'quarter-sector', movable:true, hasInternalPattern:true,
+        vertices:[{x:0,y:0},{x:0,y:2},{x:-2,y:0}],
+        boundarySamples:[{x:0,y:0},{x:0,y:2},{x:-0.7654,y:1.8478},{x:-1.4142,y:1.4142},{x:-1.8478,y:0.7654},{x:-2,y:0}],
+        path:'M 0 0 L 0 2 A 2 2 0 0 1 -2 0 Z',
+        keyVertices:[0,1,2],
+        initialState:{gridX:16,gridY:8,rotation:90},
+        targetState:{gridX:8,gridY:4,rotation:0},
+        defaultRotationCenter:{vertexIndex:0},
+        internalElements:[{kind:'path',d:'M -0.875 0.80 C -0.65 1.175 -0.40 1.35 0 1.35',stroke:'#111111',strokeWidth:0.075}],
+        contentAnchors:[{x:-0.875,y:0.80},{x:0,y:1.35}],
+        metadata:{figureNumber:null}
+      },
+      {
+        id:'piece-br-mouth', name:'右下嘴巴碎片', type:'quarter-sector', movable:true, hasInternalPattern:true,
+        vertices:[{x:0,y:0},{x:2,y:0},{x:0,y:2}],
+        boundarySamples:[{x:0,y:0},{x:2,y:0},{x:1.8478,y:0.7654},{x:1.4142,y:1.4142},{x:0.7654,y:1.8478},{x:0,y:2}],
+        path:'M 0 0 L 2 0 A 2 2 0 0 1 0 2 Z',
+        keyVertices:[0,1,2],
+        initialState:{gridX:2,gridY:8,rotation:180},
+        targetState:{gridX:8,gridY:4,rotation:0},
+        defaultRotationCenter:{vertexIndex:0},
+        internalElements:[{kind:'path',d:'M 0 1.35 C 0.40 1.35 0.65 1.175 0.875 0.80',stroke:'#111111',strokeWidth:0.075}],
+        contentAnchors:[{x:0,y:1.35},{x:0.875,y:0.80}],
+        metadata:{figureNumber:null}
+      },
+      {
+        id:'fixed-circle', name:'中间固定圆', type:'fixed-circle', movable:false, hasInternalPattern:false,
+        center:{x:8,y:4}, radius:2,
+        initialState:{gridX:0,gridY:0,rotation:0}, targetState:null,
+        keyVertices:[], contentAnchors:[], internalElements:[], metadata:{fixed:true}
+      }
+    ],
+    movableIds:['piece-ul-eye','piece-ur-eye','piece-bl-mouth','piece-br-mouth'],
+    fixedIds:['fixed-circle'],
+    teacherTools:{numbering:{enabled:true},vertexLabels:{enabled:true}},
+    modules:{processRecord:{enabled:true},timer:{enabled:true}},
+    layout:{panels:['workspace-panel','record-panel']}
+  };
+
+  /* ============================================================
+   * 2. GEOMETRY：统一数学几何计算
+   * ============================================================ */
+  const GEOMETRY = {
+    rad:(deg)=>deg*Math.PI/180,
+    normalizeRotation:(deg)=>((Math.round(deg)%360)+360)%360,
+    rotatePoint(p,deg){
+      const a=this.rad(deg), c=Math.cos(a), s=Math.sin(a);
+      return {x:p.x*c-p.y*s, y:p.x*s+p.y*c};
+    },
+    localToWorld(piece,point,state){
+      const r=this.rotatePoint(point,state.rotation);
+      return {x:r.x+state.gridX,y:r.y+state.gridY};
+    },
+    worldToLocal(piece,point,state){
+      const q={x:point.x-state.gridX,y:point.y-state.gridY};
+      return this.rotatePoint(q,-state.rotation);
+    },
+    transformVertices(piece,state){return (piece.vertices||[]).map(p=>this.localToWorld(piece,p,state));},
+    transformContentAnchors(piece,state){return (piece.contentAnchors||[]).map(p=>this.localToWorld(piece,p,state));},
+    getWorldVertices(piece,state){return this.transformVertices(piece,state);},
+    getWorldBoundary(piece,state){return (piece.boundarySamples||piece.vertices||[]).map(p=>this.localToWorld(piece,p,state));},
+    getBoundingBox(points){
+      if(!points.length) return {minX:0,maxX:0,minY:0,maxY:0,width:0,height:0};
+      const xs=points.map(p=>p.x), ys=points.map(p=>p.y);
+      const minX=Math.min(...xs), maxX=Math.max(...xs), minY=Math.min(...ys), maxY=Math.max(...ys);
+      return {minX,maxX,minY,maxY,width:maxX-minX,height:maxY-minY};
+    },
+    isWithinBounds(piece,state,grid=PUZZLE_CONFIG.grid){
+      if(!piece.movable) return true;
+      const eps=1e-6;
+      return this.getWorldBoundary(piece,state).every(p=>p.x>=-eps&&p.x<=grid.cols+eps&&p.y>=-eps&&p.y<=grid.rows+eps);
+    },
+    stateAfterRotationAroundLocalPivot(piece,state,pivotLocal,newRotation){
+      const pivotWorld=this.localToWorld(piece,pivotLocal,state);
+      const rp=this.rotatePoint(pivotLocal,newRotation);
+      return {gridX:pivotWorld.x-rp.x,gridY:pivotWorld.y-rp.y,rotation:newRotation};
+    },
+    pointNear(a,b,tol=0.035){return Math.abs(a.x-b.x)<=tol&&Math.abs(a.y-b.y)<=tol;},
+    geometryMatchesTarget(piece,state,target){
+      const current=this.getWorldBoundary(piece,state), expected=this.getWorldBoundary(piece,target);
+      if(current.length!==expected.length) return false;
+      const used=new Array(expected.length).fill(false);
+      for(const p of current){
+        let found=-1;
+        for(let i=0;i<expected.length;i++) if(!used[i]&&this.pointNear(p,expected[i])){found=i;break;}
+        if(found<0) return false;
+        used[found]=true;
+      }
+      return true;
+    },
+    strictContentMatchesTarget(piece,state,target){
+      if(!this.geometryMatchesTarget(piece,state,target)) return false;
+      const a=this.transformContentAnchors(piece,state), b=this.transformContentAnchors(piece,target);
+      return a.length===b.length && a.every((p,i)=>this.pointNear(p,b[i]));
+    },
+    pieceMatchesTarget(piece,state,mode){
+      if(!piece.movable||!piece.targetState) return true;
+      const strict=piece.hasInternalPattern || mode==='STRICT_CONTENT';
+      return strict ? this.strictContentMatchesTarget(piece,state,piece.targetState) : this.geometryMatchesTarget(piece,state,piece.targetState);
+    }
+  };
+
+  /* ============================================================
+   * 3. STATE：集中运行状态
+   * ============================================================ */
+  const deepClone=(o)=>JSON.parse(JSON.stringify(o));
+  const STATE = {
+    config:deepClone(PUZZLE_CONFIG),
+    pieceStates:{},
+    history:[],
+    interaction:{kind:null,pieceId:null,pointerId:null,startPointer:null,startState:null,axis:null,lastLegalPreview:null,rotStartAngle:null,rotLastRaw:null,rotAccum:0,pivotIndex:null},
+    studentInteractionState:{rotationPieceId:null,rotationVertexIndex:null},
+    teacherInteractionState:{vertexLabelMode:false},
+    teacherAnnotations:{numbering:{},vertexLabels:{},nextLetterIndex:0,numberingVisible:false},
+    moduleState:{processRecord:{tokens:[]},timer:{startedAt:Date.now(),elapsedAtStop:null,running:true},identity:{studentNo:null},submission:{lastSubmitted:null,inbox:{}}},
+    submitOverlay:{visible:false,success:false},
+    judgementMode:PUZZLE_CONFIG.judgementMode
+  };
+
+  /* ============================================================
+   * 4. DATA / HISTORY
+   * ============================================================ */
+  const HISTORY = {
+    push(entry){STATE.history.push({...entry,seq:STATE.history.length+1,timestamp:Date.now()});},
+    undo(){
+      const last=STATE.history.pop();
+      if(!last) return false;
+      STATE.pieceStates[last.pieceId]=deepClone(last.before);
+      hideSubmitMessage();
+      RENDER.all();
+      return true;
+    }
+  };
+
+  /* ============================================================
+   * 5. RENDER：SVG绘制
+   * ============================================================ */
+  const NS='http://www.w3.org/2000/svg';
+  const svg=document.getElementById('board');
+  const el=(name,attrs={})=>{const n=document.createElementNS(NS,name);for(const [k,v] of Object.entries(attrs)){if(v!==null&&v!==undefined)n.setAttribute(k,String(v));}return n;};
+  const getPiece=(id)=>STATE.config.pieces.find(p=>p.id===id);
+
+  const RENDER = {
+    layers:{},
+    init(){
+      svg.innerHTML='';
+      const gridLayer=el('g',{'data-layer':'grid'}), fixedLayer=el('g',{'data-layer':'fixed'}), pieceLayer=el('g',{'data-layer':'pieces'}), annoLayer=el('g',{'data-layer':'annotations'}), handleLayer=el('g',{'data-layer':'handles'});
+      // 旋转顶点手柄永远位于教师标注层之上，保证标字母后仍可直接点中顶点。
+      svg.append(gridLayer,fixedLayer,pieceLayer,annoLayer,handleLayer);
+      this.layers={grid:gridLayer,fixed:fixedLayer,pieces:pieceLayer,handles:handleLayer,annotations:annoLayer};
+      this.grid();
+    },
+    grid(){
+      const g=this.layers.grid; g.innerHTML='';
+      const {cols,rows}=STATE.config.grid;
+      for(let x=1;x<cols;x++) g.append(el('line',{x1:x,y1:0,x2:x,y2:rows,class:'grid-line'}));
+      for(let y=1;y<rows;y++) g.append(el('line',{x1:0,y1:y,x2:cols,y2:y,class:'grid-line'}));
+      // 参考学生端网格：外边框轻微内缩，配合 non-scaling-stroke，保证四角完整且不被裁切。
+      g.append(el('rect',{x:0.0225,y:0.0225,width:cols-0.045,height:rows-0.045,class:'grid-border'}));
+      svg.setAttribute('viewBox',`0 0 ${cols} ${rows}`);
+      svg.style.aspectRatio=`${cols} / ${rows}`;
+    },
+    all(){
+      this.fixed(); this.pieces(); this.handles(); this.annotations(); updateButtons(); renderRecord();
+    },
+    fixed(){
+      const g=this.layers.fixed;g.innerHTML='';
+      for(const p of STATE.config.pieces.filter(p=>!p.movable)){
+        if(p.type==='fixed-circle'){
+          g.append(el('circle',{cx:p.center.x,cy:p.center.y,r:p.radius,fill:'#ffffff',stroke:'#111111','stroke-width':2.8,'vector-effect':'non-scaling-stroke',class:'fixed-piece'}));
+        }
+      }
+    },
+    pieceGroup(piece,state){
+      const group=el('g',{
+        class:'piece'+(STATE.studentInteractionState.rotationPieceId===piece.id?' rotation-mode':''),
+        'data-piece-id':piece.id,
+        transform:`translate(${state.gridX} ${state.gridY}) rotate(${state.rotation})`
+      });
+      const body=el('path',{d:piece.path,fill:'#FFD54A',stroke:'#111111','stroke-width':2.8,'stroke-linejoin':'round','stroke-linecap':'round','vector-effect':'non-scaling-stroke'});
+      group.append(body);
+      for(const item of piece.internalElements||[]){
+        if(item.kind==='circle') group.append(el('circle',{cx:item.cx,cy:item.cy,r:item.r,fill:item.fill||'#111'}));
+        if(item.kind==='path') group.append(el('path',{d:item.d,fill:'none',stroke:item.stroke||'#111','stroke-width':2.35,'stroke-linecap':'round','stroke-linejoin':'round','vector-effect':'non-scaling-stroke'}));
+      }
+      return group;
+    },
+    pieces(){
+      const g=this.layers.pieces;g.innerHTML='';
+      for(const p of STATE.config.pieces.filter(p=>p.movable)){
+        const s=this.visualState(p.id);
+        const group=this.pieceGroup(p,s);
+        group.addEventListener('pointerdown',INTERACTION.onPiecePointerDown);
+        g.append(group);
+      }
+    },
+    visualState(pieceId){
+      const it=STATE.interaction;
+      if(it.pieceId===pieceId&&it.lastLegalPreview) return it.lastLegalPreview;
+      return STATE.pieceStates[pieceId];
+    },
+    handles(){
+      const g=this.layers.handles;g.innerHTML='';
+      // 教师“标字母”模式下隐藏旋转顶点手柄，避免手柄截获点击，整块拼片都可直接选中。
+      if(STATE.teacherInteractionState.vertexLabelMode) return;
+      for(const p of STATE.config.pieces.filter(p=>p.movable)){
+        const s=this.visualState(p.id);
+        (p.keyVertices||[]).forEach((vertexIndex)=>{
+          const world=GEOMETRY.localToWorld(p,p.vertices[vertexIndex],s);
+          const selected=STATE.studentInteractionState.rotationPieceId===p.id&&STATE.studentInteractionState.rotationVertexIndex===vertexIndex;
+          const c=el('circle',{cx:world.x,cy:world.y,r:0.105,class:'vertex-handle'+(selected?' selected':''),'data-piece-id':p.id,'data-vertex-index':vertexIndex});
+          c.addEventListener('pointerdown',INTERACTION.onVertexPointerDown);
+          g.append(c);
+        });
+      }
+    },
+    annotations(){
+      const g=this.layers.annotations;g.innerHTML='';
+      const bindRecordClick=(group,token)=>{
+        group.classList.add('annotation-input');
+        group.setAttribute('role','button');
+        group.setAttribute('aria-label',`记录 ${token}`);
+        group.addEventListener('pointerdown',(e)=>{
+          e.preventDefault();e.stopPropagation();
+          if(STATE.teacherInteractionState.vertexLabelMode) return;
+          MODULES.processRecord.append(token,'text');
+        });
+      };
+      if(STATE.teacherAnnotations.numberingVisible){
+        for(const p of STATE.config.pieces.filter(p=>p.movable)){
+          const label=STATE.teacherAnnotations.numbering[p.id]; if(!label) continue;
+          const pos=TEACHER_TOOLS.numberLabelPosition(p);
+          const wrap=el('g',{});
+          wrap.append(el('circle',{cx:pos.x,cy:pos.y,r:.30,class:'annotation-hit'}));
+          const text=el('text',{x:pos.x,y:pos.y,'text-anchor':'middle','dominant-baseline':'middle',class:'number-label'});
+          text.textContent=label;wrap.append(text);
+          bindRecordClick(wrap,`图${label}`);
+          g.append(wrap);
+        }
+      }
+      for(const [pieceId,labels] of Object.entries(STATE.teacherAnnotations.vertexLabels)){
+        const p=getPiece(pieceId); if(!p) continue;
+        const s=this.visualState(pieceId);
+        const verts=(p.keyVertices||[]).map(idx=>({idx,world:GEOMETRY.localToWorld(p,p.vertices[idx],s)}));
+        const centroid=verts.reduce((a,v)=>({x:a.x+v.world.x/verts.length,y:a.y+v.world.y/verts.length}),{x:0,y:0});
+        for(const {idx,world} of verts){
+          const letter=labels[`vertex-${idx}`]; if(!letter) continue;
+          // 字母与旋转顶点分离：优先沿“顶点远离图形中心”的方向外移；若会越出方格，则依次尝试反向/侧向。
+          let dx=world.x-centroid.x,dy=world.y-centroid.y;const len=Math.hypot(dx,dy)||1;dx/=len;dy/=len;
+          const offset=.38, margin=.24;
+          const dirs=[[dx,dy],[-dx,-dy],[-dy,dx],[dy,-dx]];
+          let x=world.x+dx*offset,y=world.y+dy*offset;
+          for(const [ux,uy] of dirs){
+            const tx=world.x+ux*offset,ty=world.y+uy*offset;
+            if(tx>=margin&&tx<=STATE.config.grid.cols-margin&&ty>=margin&&ty<=STATE.config.grid.rows-margin){x=tx;y=ty;break;}
+          }
+          const wrap=el('g',{});
+          // 点击区只包住字母本身，不延伸到顶点手柄附近。
+          wrap.append(el('circle',{cx:x,cy:y,r:.18,class:'annotation-hit'}));
+          const text=el('text',{x,y,'text-anchor':'middle','dominant-baseline':'middle',class:'vertex-label'});
+          text.textContent=letter;wrap.append(text);
+          bindRecordClick(wrap,letter);
+          g.append(wrap);
+        }
+      }
+    }
+  };
+
+  /* ============================================================
+   * 6. INTERACTION：学生交互
+   * ============================================================ */
+  const INTERACTION = {
+    pointFromEvent(e){
+      const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;
+      const m=svg.getScreenCTM(); if(!m) return {x:0,y:0};
+      const q=pt.matrixTransform(m.inverse());return {x:q.x,y:q.y};
+    },
+    onVertexPointerDown(e){
+      e.preventDefault();e.stopPropagation();
+      const target=e.currentTarget,pieceId=target.dataset.pieceId,vertexIndex=Number(target.dataset.vertexIndex);
+      if(STATE.teacherInteractionState.vertexLabelMode){
+        TEACHER_TOOLS.labelPiece(pieceId);
+        return;
+      }
+      if(STATE.studentInteractionState.rotationPieceId===pieceId&&STATE.studentInteractionState.rotationVertexIndex===vertexIndex){
+        INTERACTION.cancelRotationMode();
+      }else{
+        STATE.studentInteractionState.rotationPieceId=pieceId;
+        STATE.studentInteractionState.rotationVertexIndex=vertexIndex;
+        hideSubmitMessage();
+        RENDER.all();
+      }
+    },
+    onPiecePointerDown(e){
+      e.preventDefault();e.stopPropagation();
+      const pieceId=e.currentTarget.dataset.pieceId,piece=getPiece(pieceId);
+      if(!piece||!piece.movable) return;
+      if(STATE.teacherInteractionState.vertexLabelMode){
+        TEACHER_TOOLS.labelPiece(pieceId);return;
+      }
+      const pt=INTERACTION.pointFromEvent(e),current=deepClone(STATE.pieceStates[pieceId]);
+      const rotationMode=STATE.studentInteractionState.rotationPieceId===pieceId;
+      STATE.interaction={kind:rotationMode?'rotate':'translate',pieceId,pointerId:e.pointerId,startPointer:pt,startState:current,axis:null,lastLegalPreview:deepClone(current),rotStartAngle:null,rotLastRaw:null,rotAccum:0,pivotIndex:STATE.studentInteractionState.rotationVertexIndex};
+      svg.setPointerCapture?.(e.pointerId);
+      if(rotationMode){
+        const pivotLocal=piece.vertices[STATE.interaction.pivotIndex];
+        const pivotWorld=GEOMETRY.localToWorld(piece,pivotLocal,current);
+        const raw=Math.atan2(pt.y-pivotWorld.y,pt.x-pivotWorld.x)*180/Math.PI;
+        STATE.interaction.rotStartAngle=raw;STATE.interaction.rotLastRaw=raw;STATE.interaction.rotAccum=0;
+      }
+      hideSubmitMessage();
+    },
+    onPointerMove(e){
+      const it=STATE.interaction;if(!it.kind||it.pointerId!==e.pointerId) return;
+      const piece=getPiece(it.pieceId),pt=this.pointFromEvent(e);
+      if(it.kind==='translate'){
+        const dx=pt.x-it.startPointer.x,dy=pt.y-it.startPointer.y;
+        if(!it.axis && Math.hypot(dx,dy)>.08) it.axis=Math.abs(dx)>=Math.abs(dy)?'x':'y';
+        if(!it.axis) return;
+        const delta=Math.round(it.axis==='x'?dx:dy);
+        const candidate=deepClone(it.startState);
+        if(it.axis==='x') candidate.gridX=it.startState.gridX+delta; else candidate.gridY=it.startState.gridY+delta;
+        if(GEOMETRY.isWithinBounds(piece,candidate)) it.lastLegalPreview=candidate;
+      }else if(it.kind==='rotate'){
+        const pivotLocal=piece.vertices[it.pivotIndex];
+        const pivotWorld=GEOMETRY.localToWorld(piece,pivotLocal,it.startState);
+        const raw=Math.atan2(pt.y-pivotWorld.y,pt.x-pivotWorld.x)*180/Math.PI;
+        let d=raw-it.rotLastRaw;if(d>180)d-=360;if(d<-180)d+=360;
+        it.rotAccum+=d;it.rotLastRaw=raw;
+        const candidateRotation=it.startState.rotation+it.rotAccum;
+        const candidate=GEOMETRY.stateAfterRotationAroundLocalPivot(piece,it.startState,pivotLocal,candidateRotation);
+        if(GEOMETRY.isWithinBounds(piece,candidate)) it.lastLegalPreview=candidate;
+      }
+      RENDER.pieces();RENDER.handles();RENDER.annotations();
+    },
+    onPointerUp(e){
+      const it=STATE.interaction;if(!it.kind||it.pointerId!==e.pointerId) return;
+      const piece=getPiece(it.pieceId),before=deepClone(it.startState);let after=deepClone(it.lastLegalPreview||before),entry=null;
+      if(it.kind==='translate'){
+        after.gridX=Math.round(after.gridX);after.gridY=Math.round(after.gridY);after.rotation=GEOMETRY.normalizeRotation(after.rotation);
+        if(!GEOMETRY.isWithinBounds(piece,after)) after=before;
+        const dx=after.gridX-before.gridX,dy=after.gridY-before.gridY;
+        if(dx!==0||dy!==0){
+          const direction=dx>0?'右':dx<0?'左':dy>0?'下':'上',distance=Math.abs(dx||dy);
+          entry={pieceId:piece.id,type:'translate',action:'translate',direction,distance,before,after:deepClone(after),rotationCenter:null};
+        }
+      }else{
+        const pivotLocal=piece.vertices[it.pivotIndex];
+        const visual=it.lastLegalPreview||before;
+        const snapped=Math.round(visual.rotation/90)*90;
+        after=GEOMETRY.stateAfterRotationAroundLocalPivot(piece,before,pivotLocal,snapped);
+        after.rotation=GEOMETRY.normalizeRotation(snapped);
+        after.gridX=Math.round(after.gridX);after.gridY=Math.round(after.gridY);
+        if(!GEOMETRY.isWithinBounds(piece,after)) after=before;
+        const delta=((after.rotation-before.rotation+540)%360)-180;
+        if(delta!==0){
+          entry={pieceId:piece.id,type:'rotate',action:'rotate',pivotVertex:`vertex-${it.pivotIndex}`,direction:delta>0?'顺时针':'逆时针',angle:Math.abs(delta),before,after:deepClone(after),rotationCenter:{vertexIndex:it.pivotIndex}};
+        }
+      }
+      STATE.pieceStates[piece.id]=after;
+      if(entry) HISTORY.push(entry);
+      STATE.interaction={kind:null,pieceId:null,pointerId:null,startPointer:null,startState:null,axis:null,lastLegalPreview:null,rotStartAngle:null,rotLastRaw:null,rotAccum:0,pivotIndex:null};
+      RENDER.all();
+    },
+    cancelRotationMode(){
+      STATE.studentInteractionState.rotationPieceId=null;STATE.studentInteractionState.rotationVertexIndex=null;RENDER.all();
+    },
+    onBoardPointerDown(e){
+      if(e.target===svg||e.target.closest?.('[data-layer="grid"]')){
+        if(STATE.teacherInteractionState.vertexLabelMode) TEACHER_TOOLS.cancelVertexLabelMode();
+        else this.cancelRotationMode();
+      }
+    }
+  };
+  svg.addEventListener('pointermove',(e)=>INTERACTION.onPointerMove(e));
+  svg.addEventListener('pointerup',(e)=>INTERACTION.onPointerUp(e));
+  svg.addEventListener('pointercancel',(e)=>INTERACTION.onPointerUp(e));
+  svg.addEventListener('pointerdown',(e)=>INTERACTION.onBoardPointerDown(e));
+
+  /* ============================================================
+   * 7. JUDGEMENT：完成判定
+   * ============================================================ */
+  const JUDGEMENT = {
+    isComplete(){return STATE.config.pieces.filter(p=>p.movable).every(p=>GEOMETRY.pieceMatchesTarget(p,STATE.pieceStates[p.id],STATE.judgementMode));},
+    submit(){
+      const ok=this.isComplete();
+      if(ok){stopTimer();showSubmitMessage(true,formatTime(getElapsedMs()));}
+      else showSubmitMessage(false,'');
+      return ok;
+    }
+  };
+
+  /* ============================================================
+   * 8. TEACHER_TOOLS：教师编号与标字母
+   * ============================================================ */
+  const CIRCLED=['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩','⑪','⑫','⑬','⑭','⑮','⑯','⑰','⑱','⑲','⑳'];
+  const TEACHER_TOOLS = {
+    initialReadingKey(piece){
+      // 编号与顶点身份都只读取 initialState，绝不受当前移动/旋转影响。
+      const pts=GEOMETRY.getWorldBoundary(piece,piece.initialState);
+      const box=GEOMETRY.getBoundingBox(pts);
+      return {top:box.minY,left:box.minX,centerY:(box.minY+box.maxY)/2,centerX:(box.minX+box.maxX)/2};
+    },
+    getInitialMovableOrder(){
+      const rowTolerance=.35;
+      const items=STATE.config.pieces.filter(p=>p.movable).map(p=>({piece:p,key:this.initialReadingKey(p)}));
+      items.sort((a,b)=>{
+        const dy=a.key.top-b.key.top;
+        if(Math.abs(dy)>rowTolerance) return dy;
+        return a.key.left-b.key.left;
+      });
+      return items.map(x=>x.piece);
+    },
+    assignInitialNumbering(){
+      // 只给可移动碎片编号；编号身份固定由初始页面空间阅读顺序决定。
+      const movable=this.getInitialMovableOrder();
+      const existing=STATE.teacherAnnotations.numbering||{};
+      const next={};
+      movable.forEach((p,i)=>{
+        next[p.id]=existing[p.id]||CIRCLED[i]||String(i+1);
+        p.metadata.figureNumber=i+1;
+      });
+      STATE.teacherAnnotations.numbering=next;
+      return deepClone(next);
+    },
+    toggleNumbering(){
+      // 每次点击只切换“显示/隐藏”，不会依据当前位置重新编号。
+      if(!STATE.teacherAnnotations.numbering || Object.keys(STATE.teacherAnnotations.numbering).length===0) this.assignInitialNumbering();
+      STATE.teacherAnnotations.numberingVisible=!STATE.teacherAnnotations.numberingVisible;
+      STATE.studentInteractionState.rotationPieceId=null;
+      STATE.studentInteractionState.rotationVertexIndex=null;
+      hideSubmitMessage();
+      RENDER.all();
+      return STATE.teacherAnnotations.numberingVisible;
+    },
+    startVertexLabelMode(){
+      STATE.teacherInteractionState.vertexLabelMode=true;
+      STATE.studentInteractionState.rotationPieceId=null;
+      STATE.studentInteractionState.rotationVertexIndex=null;
+      hideSubmitMessage();
+      const prompt=document.getElementById('teacherPrompt');
+      prompt.textContent='请选择需要标注字母的图形';
+      prompt.classList.add('show');
+      // 标字母时隐藏旋转手柄，整块拼片均可直接点击。
+      RENDER.handles();
+      updateButtons();
+    },
+    cancelVertexLabelMode(){
+      STATE.teacherInteractionState.vertexLabelMode=false;
+      document.getElementById('teacherPrompt').classList.remove('show');
+      RENDER.handles();
+      updateButtons();
+    },
+    initialVertexOrder(piece){
+      // 顶点字母身份按“初始页面”中的视觉位置排序：先上后下，同一行从左到右。
+      const rowTolerance=.12;
+      const list=(piece.keyVertices||[]).map(idx=>({idx,pt:GEOMETRY.localToWorld(piece,piece.vertices[idx],piece.initialState)}));
+      list.sort((a,b)=>{
+        const dy=a.pt.y-b.pt.y;
+        if(Math.abs(dy)>rowTolerance) return dy;
+        return a.pt.x-b.pt.x;
+      });
+      return list;
+    },
+    usedLetters(){
+      const used=new Set();
+      for(const labels of Object.values(STATE.teacherAnnotations.vertexLabels||{})){
+        for(const letter of Object.values(labels||{})) if(typeof letter==='string'&&/^[A-Z]$/.test(letter)) used.add(letter);
+      }
+      return used;
+    },
+    nextUnusedLetter(used){
+      for(let i=0;i<26;i++){
+        const letter=String.fromCharCode(65+i);
+        if(!used.has(letter)) return {letter,index:i};
+      }
+      return null;
+    },
+    labelPiece(pieceId){
+      const p=getPiece(pieceId);
+      if(!p||!p.movable) return false;
+      // 已标过的图形再次选择：保留原字母，不重新分配，也不消耗新字母。
+      if(!STATE.teacherAnnotations.vertexLabels[pieceId]){
+        const used=this.usedLetters();
+        const map={};
+        for(const item of this.initialVertexOrder(p)){
+          const next=this.nextUnusedLetter(used);
+          if(!next) break;
+          map[`vertex-${item.idx}`]=next.letter;
+          used.add(next.letter);
+        }
+        if(Object.keys(map).length) STATE.teacherAnnotations.vertexLabels[pieceId]=map;
+        // nextLetterIndex 继续保留在导出结构中，但实际分配以“已使用字母集合”为准，杜绝重复。
+        const highest=[...used].reduce((m,l)=>Math.max(m,l.charCodeAt(0)-64),0);
+        STATE.teacherAnnotations.nextLetterIndex=highest;
+      }
+      this.cancelVertexLabelMode();
+      RENDER.all();
+      return true;
+    },
+    currentObstacleBoxes(excludePieceId){
+      return STATE.config.pieces.filter(p=>p.id!==excludePieceId).map(p=>{
+        if(p.type==='fixed-circle') return {minX:p.center.x-p.radius,maxX:p.center.x+p.radius,minY:p.center.y-p.radius,maxY:p.center.y+p.radius};
+        const s=RENDER.visualState(p.id);
+        return GEOMETRY.getBoundingBox(GEOMETRY.getWorldBoundary(p,s));
+      });
+    },
+    numberLabelPosition(piece){
+      // 编号跟随该碎片当前位置，但永远尝试放在碎片包围盒外的空白区，不压住图案。
+      const state=RENDER.visualState(piece.id);
+      const box=GEOMETRY.getBoundingBox(GEOMETRY.getWorldBoundary(piece,state));
+      const cx=(box.minX+box.maxX)/2, cy=(box.minY+box.maxY)/2;
+      const gap=.42;
+      const candidates=[
+        {x:box.maxX+gap,y:cy,rank:0}, {x:box.minX-gap,y:cy,rank:1},
+        {x:cx,y:box.maxY+gap,rank:2}, {x:cx,y:box.minY-gap,rank:3},
+        {x:box.maxX+gap,y:box.maxY+gap*.55,rank:4}, {x:box.minX-gap,y:box.maxY+gap*.55,rank:5},
+        {x:box.maxX+gap,y:box.minY-gap*.55,rank:6}, {x:box.minX-gap,y:box.minY-gap*.55,rank:7}
+      ];
+      const obstacles=this.currentObstacleBoxes(piece.id);
+      const margin=.24;
+      const inBoard=pt=>pt.x>=margin&&pt.x<=STATE.config.grid.cols-margin&&pt.y>=margin&&pt.y<=STATE.config.grid.rows-margin;
+      const hitsBox=(pt,b,pad=.20)=>pt.x>=b.minX-pad&&pt.x<=b.maxX+pad&&pt.y>=b.minY-pad&&pt.y<=b.maxY+pad;
+      const hitsOther=pt=>obstacles.some(b=>hitsBox(pt,b,.18));
+      const valid=candidates.filter(pt=>inBoard(pt)&&!hitsOther(pt));
+      if(valid.length) return valid[0];
+      // 极端情况下仍保证编号在本碎片外，不落进图案内部；优先选择棋盘内距离最近的位置。
+      const clamped=candidates.map(pt=>({
+        x:Math.max(margin,Math.min(STATE.config.grid.cols-margin,pt.x)),
+        y:Math.max(margin,Math.min(STATE.config.grid.rows-margin,pt.y)),
+        rank:pt.rank
+      })).filter(pt=>!hitsBox(pt,box,.08));
+      return clamped[0]||{x:Math.max(margin,Math.min(STATE.config.grid.cols-margin,box.maxX+gap)),y:Math.max(margin,Math.min(STATE.config.grid.rows-margin,cy))};
+    },
+    getTeacherAnnotations(){return deepClone(STATE.teacherAnnotations);},
+    clearTeacherAnnotations(){
+      STATE.teacherAnnotations.vertexLabels={};
+      STATE.teacherAnnotations.nextLetterIndex=0;
+      STATE.teacherAnnotations.numberingVisible=false;
+      this.assignInitialNumbering();
+      RENDER.all();
+    }
+  };
+
+  /* ============================================================
+   * 9. MODULES：可插拔页面模块（本次新增路径记录）
+   * ============================================================ */
+  const MODULES = {
+    processRecord:{
+      append(token,type='text'){
+        STATE.moduleState.processRecord.tokens.push({token,type});renderRecord();
+      },
+      undo(){STATE.moduleState.processRecord.tokens.pop();renderRecord();},
+      clear(){STATE.moduleState.processRecord.tokens=[];renderRecord();},
+      get(){return deepClone(STATE.moduleState.processRecord.tokens);}
+    }
+  };
+
+  function buildRecordKeys(){
+    const make=(containerId,items,cls)=>{
+      const box=document.getElementById(containerId);box.innerHTML='';
+      items.forEach(item=>{
+        const token=typeof item==='string'?item:item.token;
+        const label=typeof item==='string'?item:item.label;
+        const type=(typeof item==='object'&&item.type)||'text';
+        const b=document.createElement('button');b.type='button';b.className=`key ${cls}`;b.dataset.token=token;b.dataset.type=type;
+        if(type==='rotation') b.innerHTML=`<span class="rot-icon" aria-hidden="true">${label}</span>`; else b.textContent=label;
+        b.setAttribute('aria-label',typeof item==='object'&&item.aria?item.aria:token);
+        b.addEventListener('click',()=>MODULES.processRecord.append(token,(type==='rotation'||cls==='symbol'||cls==='punctuation')?'symbol':'text'));
+        box.appendChild(b);
+      });
+    };
+    // 五年级输入：把同类信息放在同一区域，方向键按真实空间关系排列。
+    make('wordKeys',['向','平移','绕点','旋转'],'word');
+    make('directionKeys',['↑','↓','←','→'],'symbol');
+    make('rotationKeys',[
+      {token:'顺时针',label:'顺时针',aria:'顺时针'},
+      {token:'逆时针',label:'逆时针',aria:'逆时针'},
+      {token:'↻',label:'↻',type:'rotation',aria:'顺时针旋转符号'},
+      {token:'↺',label:'↺',type:'rotation',aria:'逆时针旋转符号'}
+    ],'rotation-choice');
+    make('numberKeys',['1','2','3','4','5','6','7','8','9','0'],'number');
+    make('unitKeys',['格','度'],'unit');
+    make('punctuationKeys',['，','；'],'punctuation');
+  }
+  function renderRecord(){
+    const box=document.getElementById('recordBox'); if(!box)return;box.innerHTML='';
+    for(const item of STATE.moduleState.processRecord.tokens){const s=document.createElement('span');s.className='record-token'+(item.type==='symbol'?' symbol':'');s.textContent=item.token;box.appendChild(s);}
+  }
+
+  /* ============================================================
+   * 10. IDENTITY / SUBMISSION：学生序号与分组提交
+   * ============================================================ */
+  const IDENTITY={
+    storageKey(){return `${STATE.config.id}:student-number`;},
+    normalize(value){const n=Number(value);return Number.isInteger(n)&&n>=1&&n<=48?n:null;},
+    leaderNo(studentNo){return Math.ceil(studentNo/4)*4;},
+    isLeader(studentNo){return studentNo%4===0;},
+    route(studentNo){
+      const n=this.normalize(studentNo); if(!n)return null;
+      if(this.isLeader(n)) return {kind:'teacher',label:'提交给老师',studentNo:n,leaderNo:n,groupNo:n/4};
+      const leaderNo=this.leaderNo(n);
+      return {kind:'leader',label:`提交给组长（${leaderNo}号）`,studentNo:n,leaderNo,groupNo:Math.ceil(n/4)};
+    },
+    get(){return this.normalize(STATE.moduleState.identity?.studentNo);},
+    set(value,{persist=true,close=true}={}){
+      const n=this.normalize(value);if(!n)return false;
+      STATE.moduleState.identity=STATE.moduleState.identity||{};
+      STATE.moduleState.identity.studentNo=n;
+      if(persist){try{localStorage.setItem(this.storageKey(),String(n));}catch(_){}}
+      if(close) document.getElementById('studentModal').classList.remove('show');
+      document.getElementById('studentNoError').textContent='';
+      updateIdentityUI();SUBMISSION.refreshInbox();
+      return true;
+    },
+    restore(){
+      // 每次打开页面都从数字键盘确认本次使用者，避免共用平板沿用上一位学生的序号。
+      STATE.moduleState.identity=STATE.moduleState.identity||{};
+      STATE.moduleState.identity.studentNo=null;
+      try{localStorage.removeItem(this.storageKey());}catch(_){}
+      this.open();
+    },
+    open(){
+      const modal=document.getElementById('studentModal'),input=document.getElementById('studentNoInput');
+      const current=this.get();input.value=current||'';document.getElementById('studentNoError').textContent='';
+      updateStudentNoDisplay();
+      modal.classList.add('show');
+    }
+  };
+
+  function updateStudentNoDisplay(){
+    const input=document.getElementById('studentNoInput'),display=document.getElementById('studentNoDisplay');
+    if(!input||!display)return;
+    const value=String(input.value||'');
+    display.textContent=value||'请输入1—48';
+    display.classList.toggle('empty',!value);
+  }
+  function studentKeypadAppend(digit){
+    const input=document.getElementById('studentNoInput'),error=document.getElementById('studentNoError');
+    if(!input)return;
+    let value=String(input.value||'');
+    if(value.length>=2)return;
+    value=(value+String(digit)).replace(/^0+(?=\d)/,'');
+    if(value==='0'){input.value='';error.textContent='序号从1开始。';}
+    else{input.value=value;error.textContent='';}
+    updateStudentNoDisplay();
+  }
+  function studentKeypadAction(action){
+    const input=document.getElementById('studentNoInput'),error=document.getElementById('studentNoError');
+    if(!input)return;
+    if(action==='clear')input.value='';
+    if(action==='backspace')input.value=String(input.value||'').slice(0,-1);
+    error.textContent='';updateStudentNoDisplay();
+  }
+
+  const SUBMISSION={
+    channel:null,
+    transport:null,
+    memoryInbox:{},
+    storageKey(studentNo){return `${STATE.config.id}:submission:${studentNo}`;},
+    init(){
+      try{if('BroadcastChannel' in window){this.channel=new BroadcastChannel(`${STATE.config.id}:submissions`);this.channel.onmessage=(e)=>this.receive(e.data);}}catch(_){}
+      window.addEventListener('storage',(e)=>{if(e.key?.startsWith(`${STATE.config.id}:submission:`))this.refreshInbox();});
+      setInterval(()=>{if(IDENTITY.get()&&IDENTITY.isLeader(IDENTITY.get()))this.refreshInbox();},1500);
+    },
+    setTransport(transport){
+      this.transport=transport||null;
+      if(transport&&typeof transport.subscribe==='function') transport.subscribe((payload)=>this.receive(payload));
+      return true;
+    },
+    recordText(){return STATE.moduleState.processRecord.tokens.map(x=>x.token).join('');},
+    makePayload(){
+      const studentNo=IDENTITY.get(),route=IDENTITY.route(studentNo);if(!studentNo||!route)return null;
+      return {
+        schemaVersion:'1.0',puzzleId:STATE.config.id,puzzleVersion:STATE.config.version,
+        studentNo,groupNo:route.groupNo,leaderNo:route.leaderNo,destination:route.kind,
+        recordText:this.recordText(),recordTokens:deepClone(STATE.moduleState.processRecord.tokens),
+        puzzleComplete:JUDGEMENT.isComplete(),elapsedMs:getElapsedMs(),history:deepClone(STATE.history),timestamp:Date.now()
+      };
+    },
+    async submitCurrent(){
+      const studentNo=IDENTITY.get();if(!studentNo){IDENTITY.open();return false;}
+      const status=document.getElementById('recordSubmitStatus');status.className='record-submit-status';status.textContent='';
+      const puzzleOk=JUDGEMENT.submit();
+      if(!puzzleOk){status.classList.add('error');status.textContent='还原尚未正确，请继续尝试。';return false;}
+      if(!STATE.moduleState.processRecord.tokens.length){status.classList.add('error');status.textContent='请先完成还原路径记录。';return false;}
+      const payload=this.makePayload();if(!payload)return false;
+      STATE.moduleState.submission=STATE.moduleState.submission||{lastSubmitted:null,inbox:{}};
+      STATE.moduleState.submission.lastSubmitted=deepClone(payload);
+      this.memoryInbox[payload.studentNo]=deepClone(payload);
+      try{localStorage.setItem(this.storageKey(payload.studentNo),JSON.stringify(payload));}catch(_){}
+      try{this.channel?.postMessage(payload);}catch(_){}
+      try{if(this.transport&&typeof this.transport.send==='function') await this.transport.send(deepClone(payload));}catch(err){console.warn('submission transport send failed',err);}
+      window.dispatchEvent(new CustomEvent('puzzle-submission',{detail:deepClone(payload)}));
+      const route=IDENTITY.route(studentNo);
+      status.classList.add('success');status.textContent=route.kind==='teacher'?'已提交给老师':'已提交给组长';
+      this.refreshInbox();
+      return true;
+    },
+    receive(payload){
+      if(!payload||payload.puzzleId!==STATE.config.id||!IDENTITY.normalize(payload.studentNo))return false;
+      this.memoryInbox[payload.studentNo]=deepClone(payload);this.refreshInbox();return true;
+    },
+    readStudent(studentNo){
+      if(this.memoryInbox[studentNo])return deepClone(this.memoryInbox[studentNo]);
+      try{const raw=localStorage.getItem(this.storageKey(studentNo));if(raw){const data=JSON.parse(raw);this.memoryInbox[studentNo]=data;return deepClone(data);}}catch(_){}
+      return null;
+    },
+    groupMembers(leaderNo){return [leaderNo-3,leaderNo-2,leaderNo-1];},
+    getGroupSubmissions(){
+      const n=IDENTITY.get();if(!n||!IDENTITY.isLeader(n))return [];
+      return this.groupMembers(n).map(studentNo=>({studentNo,payload:this.readStudent(studentNo)}));
+    },
+    refreshInbox(){renderGroupInbox();}
+  };
+
+  function updateIdentityUI(){
+    const n=IDENTITY.get(),btn=document.getElementById('studentIdentityBtn'),route=n?IDENTITY.route(n):null;
+    btn.textContent=n?`学号：${n}`:'学号：未设置';btn.classList.toggle('unset',!n);
+    const submit=document.getElementById('recordSubmitBtn'),routeEl=document.getElementById('submitRoute');
+    if(!route){submit.textContent='提交';submit.classList.remove('leader');routeEl.textContent='请先输入学号（1—48）';}
+    else if(route.kind==='teacher'){submit.textContent='提交给老师';submit.classList.add('leader');routeEl.textContent=`${n}号为本组组长，完成后提交给老师。`;}
+    else{submit.textContent=`提交给组长（${route.leaderNo}号）`;submit.classList.remove('leader');routeEl.textContent=`你是${n}号，本组组长是${route.leaderNo}号。`;}
+    renderGroupInbox();
+  }
+
+  function renderGroupInbox(){
+    const wrap=document.getElementById('groupInbox'),box=document.getElementById('groupSubmissions'),n=IDENTITY.get();
+    if(!wrap||!box)return;
+    if(!n||!IDENTITY.isLeader(n)){wrap.classList.remove('show');box.innerHTML='';return;}
+    wrap.classList.add('show');box.innerHTML='';
+    for(const {studentNo,payload} of SUBMISSION.getGroupSubmissions()){
+      const card=document.createElement('div');card.className='member-submission';
+      const head=document.createElement('div');head.className='member-submission-head';
+      const no=document.createElement('span');no.className='member-no';no.textContent=`${studentNo}号`;
+      const time=document.createElement('span');time.textContent=payload?.timestamp?new Date(payload.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'等待提交';
+      head.append(no,time);
+      const body=document.createElement('div');body.className='member-record'+(payload?'':' waiting');body.textContent=payload?.recordText||'尚未收到该组员的记录';
+      card.append(head,body);box.append(card);
+    }
+  }
+
+  /* ============================================================
+   * 10. TIMER / UI
+   * ============================================================ */
+  const timerEl=document.getElementById('timer');
+  function getElapsedMs(){const t=STATE.moduleState.timer;return t.running?Date.now()-t.startedAt:t.elapsedAtStop||0;}
+  function formatTime(ms){const sec=Math.max(0,Math.floor(ms/1000)),m=Math.floor(sec/60),s=sec%60;return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;}
+  function resetTimer(){STATE.moduleState.timer={startedAt:Date.now(),elapsedAtStop:null,running:true};timerEl.textContent='用时 00:00';}
+  function stopTimer(){const t=STATE.moduleState.timer;if(t.running){t.elapsedAtStop=Date.now()-t.startedAt;t.running=false;}}
+  setInterval(()=>{timerEl.textContent='用时 '+formatTime(getElapsedMs());},250);
+
+  function showSubmitMessage(success,time){
+    const wrap=document.getElementById('submitMessage'),card=document.getElementById('submitCard'),title=document.getElementById('submitTitle'),timeEl=document.getElementById('submitTime');
+    STATE.submitOverlay={visible:true,success};
+    wrap.classList.add('show');card.className='submit-card '+(success?'success':'fail');title.textContent=success?'还原成功':'还原失败';timeEl.textContent=success?`总用时 ${time}`:'继续尝试';
+  }
+  function hideSubmitMessage(){STATE.submitOverlay.visible=false;document.getElementById('submitMessage').classList.remove('show');}
+  function updateButtons(){
+    document.getElementById('numberingBtn').classList.toggle('active',STATE.teacherAnnotations.numberingVisible);
+    document.getElementById('labelBtn').classList.toggle('active',STATE.teacherInteractionState.vertexLabelMode);
+    document.getElementById('undoBtn').disabled=STATE.history.length===0;
+    updateIdentityUI();
+  }
+
+  /* ============================================================
+   * 11. RESET / LOAD / API
+   * ============================================================ */
+  function initStatesFromConfig(){
+    STATE.pieceStates={};for(const p of STATE.config.pieces)if(p.movable)STATE.pieceStates[p.id]=deepClone(p.initialState);
+    STATE.history=[];STATE.interaction={kind:null,pieceId:null,pointerId:null,startPointer:null,startState:null,axis:null,lastLegalPreview:null,rotStartAngle:null,rotLastRaw:null,rotAccum:0,pivotIndex:null};
+    STATE.studentInteractionState={rotationPieceId:null,rotationVertexIndex:null};STATE.teacherInteractionState={vertexLabelMode:false};
+    STATE.teacherAnnotations={numbering:{},vertexLabels:{},nextLetterIndex:0,numberingVisible:false};
+    STATE.moduleState.processRecord={tokens:[]};STATE.moduleState.identity=STATE.moduleState.identity||{studentNo:null};STATE.moduleState.submission=STATE.moduleState.submission||{lastSubmitted:null,inbox:{}};TEACHER_TOOLS.assignInitialNumbering();resetTimer();hideSubmitMessage();document.getElementById('teacherPrompt').classList.remove('show');document.getElementById('recordSubmitStatus').textContent='';
+  }
+  function reset(){initStatesFromConfig();RENDER.all();}
+  function exportState(){
+    const pieces=STATE.config.pieces.map(p=>({id:p.id,type:p.type,current:p.movable?deepClone(STATE.pieceStates[p.id]):deepClone(p.initialState),initial:deepClone(p.initialState),target:deepClone(p.targetState),movable:p.movable,rotationCenter:p.movable&&STATE.studentInteractionState.rotationPieceId===p.id?{vertexIndex:STATE.studentInteractionState.rotationVertexIndex}:deepClone(p.defaultRotationCenter||null),defaultRotationCenter:deepClone(p.defaultRotationCenter||null),keyVertices:deepClone(p.keyVertices||[]),hasInternalPattern:!!p.hasInternalPattern,contentAnchors:deepClone(p.contentAnchors||[]),solved:p.movable?GEOMETRY.pieceMatchesTarget(p,STATE.pieceStates[p.id],STATE.judgementMode):true}));
+    return {version:STATE.config.version,puzzleId:STATE.config.id,grid:deepClone(STATE.config.grid),judgementMode:STATE.judgementMode,complete:JUDGEMENT.isComplete(),pieces,history:deepClone(STATE.history),teacherAnnotations:deepClone(STATE.teacherAnnotations),moduleState:deepClone(STATE.moduleState)};
+  }
+  function importState(data){
+    if(!data||data.puzzleId!==STATE.config.id) throw new Error('状态文件与当前题目不匹配');
+    for(const p of data.pieces||[]) if(STATE.pieceStates[p.id]&&p.current) STATE.pieceStates[p.id]=deepClone(p.current);
+    STATE.history=deepClone(data.history||[]);STATE.teacherAnnotations=deepClone(data.teacherAnnotations||STATE.teacherAnnotations);STATE.moduleState=deepClone(data.moduleState||STATE.moduleState);STATE.judgementMode=data.judgementMode||STATE.judgementMode;RENDER.all();
+  }
+
+  window.PuzzleGame={
+    newPuzzle(config){STATE.config=deepClone(config);STATE.judgementMode=config.judgementMode||'GEOMETRY_ONLY';initStatesFromConfig();RENDER.init();RENDER.all();},
+    loadPuzzle(config){return this.newPuzzle(config);},
+    reset,
+    submit:()=>JUDGEMENT.submit(),
+    undo:()=>HISTORY.undo(),
+    exportState,
+    importState,
+    getPiece:(id)=>deepClone(getPiece(id)),
+    getPieces:()=>deepClone(STATE.config.pieces),
+    setMovable(id,value){const p=getPiece(id);if(p)p.movable=!!value;RENDER.all();},
+    setPieceState(id,state){if(STATE.pieceStates[id])STATE.pieceStates[id]=deepClone(state);RENDER.all();},
+    movePieceBy(id,dx,dy){const p=getPiece(id),s=STATE.pieceStates[id];if(!p||!s)return false;const n={...s,gridX:s.gridX+Math.round(dx),gridY:s.gridY+Math.round(dy)};if(!GEOMETRY.isWithinBounds(p,n))return false;STATE.pieceStates[id]=n;RENDER.all();return true;},
+    rotatePiece(id,angle,vertexIndex=0){const p=getPiece(id),s=STATE.pieceStates[id];if(!p||!s)return false;const pivot=p.vertices[vertexIndex],n=GEOMETRY.stateAfterRotationAroundLocalPivot(p,s,pivot,s.rotation+Math.round(angle/90)*90);n.rotation=GEOMETRY.normalizeRotation(n.rotation);n.gridX=Math.round(n.gridX);n.gridY=Math.round(n.gridY);if(!GEOMETRY.isWithinBounds(p,n))return false;STATE.pieceStates[id]=n;RENDER.all();return true;},
+    selectVertex(id,index){STATE.studentInteractionState.rotationPieceId=id;STATE.studentInteractionState.rotationVertexIndex=index;RENDER.all();},
+    cancelRotationMode:()=>INTERACTION.cancelRotationMode(),
+    setJudgementMode:(mode)=>{STATE.judgementMode=mode;},
+    isComplete:()=>JUDGEMENT.isComplete(),
+    showNumbering(){if(!Object.keys(STATE.teacherAnnotations.numbering||{}).length)TEACHER_TOOLS.assignInitialNumbering();STATE.teacherAnnotations.numberingVisible=true;RENDER.all();},
+    hideNumbering(){STATE.teacherAnnotations.numberingVisible=false;RENDER.all();},
+    startVertexLabelMode:()=>TEACHER_TOOLS.startVertexLabelMode(),
+    cancelVertexLabelMode:()=>TEACHER_TOOLS.cancelVertexLabelMode(),
+    getTeacherAnnotations:()=>TEACHER_TOOLS.getTeacherAnnotations(),
+    clearTeacherAnnotations:()=>TEACHER_TOOLS.clearTeacherAnnotations(),
+    getHistory:()=>deepClone(STATE.history),
+    getRecord:()=>MODULES.processRecord.get(),
+    appendRecordToken:(token,type='text')=>MODULES.processRecord.append(token,type),
+    clearRecord:()=>MODULES.processRecord.clear(),
+    setStudentNumber:(n)=>IDENTITY.set(n),
+    getStudentNumber:()=>IDENTITY.get(),
+    getSubmissionRoute:()=>deepClone(IDENTITY.route(IDENTITY.get())),
+    submitRecord:()=>SUBMISSION.submitCurrent(),
+    getGroupSubmissions:()=>deepClone(SUBMISSION.getGroupSubmissions()),
+    receiveSubmission:(payload)=>SUBMISSION.receive(payload),
+    setSubmissionTransport:(transport)=>SUBMISSION.setTransport(transport),
+    runSelfTests:()=>SELF_TEST.run()
+  };
+
+  /* ============================================================
+   * 12. 自检
+   * ============================================================ */
+  const SELF_TEST={
+    run(){
+      const results=[];const check=(name,fn)=>{try{results.push({name,ok:!!fn()});}catch(err){results.push({name,ok:false,error:String(err)});}};
+      check('4个可移动拼片 + 1个固定圆',()=>STATE.config.pieces.filter(p=>p.movable).length===4&&STATE.config.fixedIds.length===1);
+      check('初始状态均为整数格',()=>STATE.config.pieces.filter(p=>p.movable).every(p=>Number.isInteger(p.initialState.gridX)&&Number.isInteger(p.initialState.gridY)));
+      check('目标状态严格内容判定',()=>STATE.config.pieces.filter(p=>p.movable).every(p=>p.hasInternalPattern)&&STATE.judgementMode==='STRICT_CONTENT');
+      check('固定圆不可移动',()=>getPiece('fixed-circle').movable===false);
+      check('编号只含可移动拼片',()=>Object.keys(STATE.teacherAnnotations.numbering).length===4&&!STATE.teacherAnnotations.numbering['fixed-circle']);
+      check('编号身份按初始页面阅读顺序稳定分配',()=>STATE.teacherAnnotations.numbering['piece-ul-eye']==='①'&&STATE.teacherAnnotations.numbering['piece-ur-eye']==='②'&&STATE.teacherAnnotations.numbering['piece-bl-mouth']==='③'&&STATE.teacherAnnotations.numbering['piece-br-mouth']==='④');
+      check('教师编号按钮存在且可切换',()=>!!document.getElementById('numberingBtn')&&typeof TEACHER_TOOLS.toggleNumbering==='function');
+      check('教师标字母入口存在',()=>!!document.getElementById('labelBtn')&&typeof TEACHER_TOOLS.labelPiece==='function');
+      check('右上碎片初始直角边贴合方格',()=>{const p=getPiece('piece-ur-eye'),s=p.initialState,pts=p.vertices.map(v=>GEOMETRY.localToWorld(p,v,s));return s.rotation===270&&Math.abs(s.gridX-16)<1e-9&&Math.abs(s.gridY-2)<1e-9&&pts.some(q=>Math.abs(q.x-16)<1e-9&&Math.abs(q.y)<1e-9)&&pts.some(q=>Math.abs(q.x-14)<1e-9&&Math.abs(q.y-2)<1e-9);});
+      check('编号位置不落在对应碎片内部包围盒',()=>STATE.config.pieces.filter(p=>p.movable).every(p=>{const pos=TEACHER_TOOLS.numberLabelPosition(p),box=GEOMETRY.getBoundingBox(GEOMETRY.getWorldBoundary(p,STATE.pieceStates[p.id]));return !(pos.x>box.minX+.03&&pos.x<box.maxX-.03&&pos.y>box.minY+.03&&pos.y<box.maxY-.03);}));
+      check('顶点字母排序读取initialState',()=>TEACHER_TOOLS.initialVertexOrder(getPiece('piece-ur-eye')).map(x=>x.idx).join(',')==='2,1,0');
+      check('目标拼片状态本身可通过',()=>STATE.config.pieces.filter(p=>p.movable).every(p=>GEOMETRY.pieceMatchesTarget(p,p.targetState,STATE.judgementMode)));
+      check('初始状态未提前完成',()=>!STATE.config.pieces.filter(p=>p.movable).every(p=>GEOMETRY.pieceMatchesTarget(p,p.initialState,STATE.judgementMode)));
+      check('记录区不再单独提供字母键盘',()=>!document.getElementById('letterKeys'));
+      check('记录词语完整',()=>['顺时针','逆时针','向','平移','绕点','旋转'].every(t=>[...document.querySelectorAll('.record-panel .key')].some(b=>b.dataset.token===t)));
+      check('记录符号完整',()=>['↑','↓','←','→','↻','↺','，','；'].every(t=>[...document.querySelectorAll('.record-panel .key')].some(b=>b.dataset.token===t)));
+      check('方向键采用空间十字布局',()=>!!document.querySelector('#directionKeys.dpad')&&document.querySelectorAll('#directionKeys .key').length===4);
+      check('记录单位只保留格与度',()=>['格','度'].every(t=>[...document.querySelectorAll('#unitKeys .key')].some(b=>b.dataset.token===t))&&![...document.querySelectorAll('#unitKeys .key')].some(b=>String(b.dataset.token||'').startsWith('图')));
+      check('分组路由：1号提交给4号组长',()=>IDENTITY.route(1)?.leaderNo===4&&IDENTITY.route(1)?.kind==='leader');
+      check('分组路由：4号提交给老师',()=>IDENTITY.route(4)?.kind==='teacher');
+      check('分组路由：45号提交给48号组长',()=>IDENTITY.route(45)?.leaderNo===48);
+      check('记录区提交按钮存在',()=>!!document.getElementById('recordSubmitBtn'));
+      check('图号与字母由图中标注点击输入',()=>typeof MODULES.processRecord.append==='function'&&!!RENDER.annotations);
+      check('组员提交板块位于方格操作区下方',()=>document.getElementById('groupInbox')?.parentElement?.classList.contains('workspace-panel'));
+      check('序号数字键盘存在',()=>document.querySelectorAll('#studentKeypad [data-student-key]').length===10&&!!document.getElementById('studentConfirmBtn'));
+      const failed=results.filter(r=>!r.ok);console.groupCollapsed(`PuzzleGame 自检：${failed.length?'存在 '+failed.length+' 项失败':'全部通过'}（${results.length}项）`);console.table(results);console.groupEnd();return results;
+    }
+  };
+
+  /* ============================================================
+   * 13. 事件绑定与启动
+   * ============================================================ */
+  document.getElementById('undoBtn').addEventListener('click',()=>HISTORY.undo());
+  document.getElementById('resetBtn').addEventListener('click',()=>reset());
+  document.getElementById('recordSubmitBtn').addEventListener('click',()=>SUBMISSION.submitCurrent());
+  document.getElementById('numberingBtn').addEventListener('click',()=>TEACHER_TOOLS.toggleNumbering());
+  document.getElementById('labelBtn').addEventListener('click',()=>STATE.teacherInteractionState.vertexLabelMode?TEACHER_TOOLS.cancelVertexLabelMode():TEACHER_TOOLS.startVertexLabelMode());
+  document.getElementById('recordUndo').addEventListener('click',()=>MODULES.processRecord.undo());
+  document.getElementById('recordClear').addEventListener('click',()=>MODULES.processRecord.clear());
+  document.getElementById('studentIdentityBtn').addEventListener('click',()=>IDENTITY.open());
+  document.getElementById('studentConfirmBtn').addEventListener('click',()=>{const input=document.getElementById('studentNoInput'),n=IDENTITY.normalize(input.value);if(!n){document.getElementById('studentNoError').textContent='请输入1—48之间的整数。';return;}IDENTITY.set(n);});
+  document.getElementById('studentKeypad').addEventListener('click',(e)=>{
+    const key=e.target.closest('[data-student-key]');if(key){studentKeypadAppend(key.dataset.studentKey);return;}
+    const action=e.target.closest('[data-student-action]');if(action)studentKeypadAction(action.dataset.studentAction);
+  });
+  document.addEventListener('keydown',(e)=>{
+    if(!document.getElementById('studentModal').classList.contains('show'))return;
+    if(/^\d$/.test(e.key)){e.preventDefault();studentKeypadAppend(e.key);}
+    else if(e.key==='Backspace'){e.preventDefault();studentKeypadAction('backspace');}
+    else if(e.key==='Escape'){e.preventDefault();studentKeypadAction('clear');}
+    else if(e.key==='Enter'){e.preventDefault();document.getElementById('studentConfirmBtn').click();}
+  });
+
+  buildRecordKeys();initStatesFromConfig();RENDER.init();SUBMISSION.init();RENDER.all();IDENTITY.restore();
+  requestAnimationFrame(()=>SELF_TEST.run());
+})();
+</script>
+</body>
+</html>

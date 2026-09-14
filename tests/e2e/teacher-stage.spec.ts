@@ -39,11 +39,10 @@ test('Teacher controls authoritative Stage and Display receives public projectio
 
     const studentContext = await browser.newContext();
     const student = await studentContext.newPage();
-    await student.goto(`${baseUrl}/student/index.html?mode=classroom&session=class:authenticated-demo`);
-    await student.getByRole('textbox', { name: '课堂地址' }).fill('class:authenticated-demo');
-    await student.getByRole('textbox', { name: '课堂码' }).fill('A17');
+    await student.goto(`${baseUrl}/student/index.html?mode=classroom&session=class:authenticated-demo&code=A17`);
+    await student.getByRole('textbox', { name: '学号' }).fill('17');
     await student.getByRole('button', { name: '加入课堂' }).click();
-    await expect(student.getByRole('heading', { name: '图案的还原' })).toBeVisible();
+    await expect(student.getByRole('heading', { name: '方格图案还原' })).toBeVisible();
 
     await expect(teacher.getByText('学生 S17')).toBeVisible();
     await teacher.getByRole('button', { name: /学生 S17/ }).click();
@@ -54,11 +53,22 @@ test('Teacher controls authoritative Stage and Display receives public projectio
     await display.goto(`${baseUrl}/display/index.html?mode=classroom&sessionId=session:authenticated-demo&locator=class:authenticated-demo&code=D17`);
     await expect(display.getByText('已连接 · 只读投影')).toBeVisible();
     await expect(display.getByTestId('display-stage')).toContainText('学生实时视图');
+    await expect(display.locator('[data-field="join-panel"]')).toBeHidden();
+    await teacher.getByRole('button', { name: /入口/ }).click();
+    await expect(display.getByText('扫码加入课堂')).toBeVisible();
+    await expect(display.locator('canvas[data-qr="student"]')).toBeVisible();
+    await expect(display.locator('canvas[data-qr="observer"]')).toBeVisible();
+    await expect(display.locator('[data-field="student-url"]')).toContainText(`${baseUrl}/student/index.html`);
+    await expect(display.locator('[data-field="observer-url"]')).toContainText(`${baseUrl}/observer/index.html`);
+    await teacher.getByRole('button', { name: /学生操作/ }).click();
+    await expect(display.locator('[data-field="join-panel"]')).toBeHidden();
+    await expect(display.getByTestId('display-stage')).toContainText('学生实时视图');
     await teacher.getByRole('button', { name: '当前活动' }).click();
     await expect(teacher.getByTestId('teacher-stage')).toContainText('当前活动摘要');
     await expect(teacher.getByTestId('teacher-stage')).toContainText('individual-work');
     await expect(display.getByTestId('display-stage')).toContainText('当前活动摘要');
     await teacher.getByRole('button', { name: 'Presentation' }).click();
+    await expect(display.locator('[data-field="join-panel"]')).toBeHidden();
     await expect(display.getByTestId('display-stage')).toContainText('Presentation 权威源');
 
     await studentContext.close();

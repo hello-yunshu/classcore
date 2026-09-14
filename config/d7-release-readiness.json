@@ -10,13 +10,13 @@
     },
     {
       "id": "student-transformboard",
-      "ready": true,
-      "note": "TransformBoard Student Practice Alpha is usable on the target browser"
+      "ready": false,
+      "note": "Reference-first classroom Student fidelity and XP21A evidence are not yet verified"
     },
     {
       "id": "presentation-runtime",
-      "ready": true,
-      "note": "Presentation Engine/Studio Alpha can author and run the lesson deck"
+      "ready": false,
+      "note": "Reference-first classroom Presentation fidelity and Display evidence are not yet verified"
     },
     {
       "id": "classroom-join-presence-submission",
@@ -25,8 +25,8 @@
     },
     {
       "id": "teacher-display-observer-flow",
-      "ready": true,
-      "note": "Teacher Runtime, Display and Observer complete the required D7 classroom flow"
+      "ready": false,
+      "note": "Reference-first Teacher three-column flow and real board/presentation visual evidence are not yet verified"
     },
     {
       "id": "xp21a-lan-rehearsal",

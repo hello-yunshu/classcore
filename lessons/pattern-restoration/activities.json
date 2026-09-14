@@ -22,7 +22,7 @@
       {
         "appletInstanceId": "applet-instance:restore-independent-board",
         "appletTypeId": "applet:transform-board",
-        "configRef": "config:restore-board",
+        "configRef": "config:restore-stage-one-board",
         "requiredCapabilities": ["transform.drag", "transform.rotate", "state.snapshot", "live.mirroring"]
       }
     ],

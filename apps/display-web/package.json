@@ -1,7 +1,13 @@
 {
-  "name":"@classroom/display-web",
-  "version":"0.0.1",
-  "private":true,
-  "type":"module",
-  "dependencies":{"@classroom/classroom-client":"0.1.0","@classroom/contracts":"0.1.2","@classroom/surfaces":"0.1.0","@classroom/presentation-webppt-adapter":"0.1.0"}
+  "name": "@classroom/display-web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@classroom/classroom-client": "0.1.0",
+    "@classroom/contracts": "0.1.2",
+    "@classroom/presentation-webppt-adapter": "0.1.0",
+    "@classroom/surfaces": "0.1.0",
+    "qrcode": "^1.5.4"
+  }
 }

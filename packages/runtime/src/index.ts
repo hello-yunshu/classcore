@@ -348,6 +348,15 @@ export class InMemoryClassroomAuthority {
         return session ? structuredClone(session) : null;
     }
 
+    setCurrentActivity(sessionId: string, activityId: string, expectedRevision?: number): ClassroomSession {
+        const current = this.#sessions.get(sessionId);
+        if (!current) throw new Error('session-not-found');
+        if (expectedRevision !== undefined && expectedRevision !== current.revision) throw new Error('stale-revision');
+        const updated = { ...current, currentActivityId: activityId, revision: current.revision + 1 };
+        this.#sessions.set(sessionId, updated);
+        return structuredClone(updated);
+    }
+
     getMembership(membershipId: string): SessionMembership | null {
         const membership = this.#memberships.get(membershipId);
         return membership ? structuredClone(membership) : null;
