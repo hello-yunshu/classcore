@@ -34,18 +34,18 @@ if (!/server\.mjs/.test(dockerfile))
 const compose = fs.readFileSync(new URL('../deploy/docker/docker-compose.example.yml', import.meta.url), 'utf8');
 if (/^\s*platform:\s*linux\/amd64\s*$/im.test(compose))
     fail('Compose must not force amd64');
-if (!/127\.0\.0\.1:8788:8788/.test(compose))
-    fail('Reference local tools must be loopback-only on 127.0.0.1:8788');
-if (!/127\.0\.0\.1:8787:8787/.test(compose))
-    fail('Reference classroom endpoint must be loopback-only before authenticated D7 runtime exists');
+if (!/127\.0\.0\.1:9688:9688/.test(compose))
+    fail('Reference local tools must be loopback-only on 127.0.0.1:9688');
+if (!/127\.0\.0\.1:9602:9602/.test(compose))
+    fail('Reference classroom endpoint must be loopback-only on port 9602 before authenticated D7 runtime exists');
 const d7ComposeUrl = new URL('../deploy/docker/docker-compose.d7.yml', import.meta.url);
 if (!fs.existsSync(d7ComposeUrl)) fail('missing dedicated authenticated D7 Compose file');
 const d7Compose = fs.readFileSync(d7ComposeUrl, 'utf8');
 if (!/CLASSROOM_RUNTIME_MODE:.*authenticated-classroom-server/.test(d7Compose)) fail('D7 Compose must explicitly request authenticated classroom runtime');
 if (!/CLASSROOM_AUTHENTICATION:.*true/.test(d7Compose)) fail('D7 Compose must explicitly require authentication');
 if (!/CLASSROOM_PRODUCT_READY:.*true/.test(d7Compose)) fail('D7 Compose must explicitly require product readiness');
-if (!/\"8787:8787\"/.test(d7Compose)) fail('D7 classroom Compose must publish LAN port 8787');
-if (!/127\.0\.0\.1:8788:8788/.test(d7Compose)) fail('D7 local-tools port must remain loopback-only');
+if (!/\"9602:9602\"/.test(d7Compose)) fail('D7 classroom Compose must publish LAN port 9602');
+if (!/127\.0\.0\.1:9688:9688/.test(d7Compose)) fail('D7 local-tools port must remain loopback-only on 9688');
 if (!/npm ci/.test(dockerfile) || /npm install/.test(dockerfile))
     fail('Dockerfile must use reproducible npm ci, not npm install');
 const buildCurrentUrl = new URL('../deploy/docker/build-current.sh', import.meta.url);

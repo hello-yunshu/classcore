@@ -40,7 +40,7 @@
 - 正式工具链为 Node 26.8.2 Current / npm 11.19.1 / TypeScript 7.0.2 / Python 3.14.7，旧 Node/Python 线不会静默继续构建；
 - clean checkout 的 `npm test` 自行 build，不依赖随 ZIP 携带的 `dist`；
 - `lesson:validate` 使用正式 Draft 2020-12 Schema + 通用 semantic gate，并有 lazy asset、capability、server-owned event、Presentation cross-ref、path traversal 与非法枚举反例；
-- Docker/CI 使用 `npm ci`，教师本机工具端口（Backstage + Authoring）在 Compose 中只发布到宿主 `127.0.0.1:8788`；
+- Docker/CI 使用 `npm ci`，教师本机工具端口（Backstage + Authoring）在 Compose 中只发布到宿主 `127.0.0.1:9688`；
 - `foundation:check` 为 exact-set freeze；修改、删除、新增未登记 Foundation 文件都会失败；
 - CI 同时运行原生 Linux x64/arm64 full-check，并在 arm64 runner 上构建 `linux/arm64` Docker image；
 - `check:dist` 编译后入口真实可解析；

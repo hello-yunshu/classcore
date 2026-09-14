@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "requirementId": "authenticated-classroom-server",
+  "status": "verified",
+  "checks": [
+    { "id": "server-startup-no-implicit-demo", "passed": true, "evidence": "Authenticated server exits fail-closed without CLASSROOM_LESSON and explicit credentials; demo credentials require CLASSROOM_DEMO_MODE=true." },
+    { "id": "authenticated-join-and-membership", "passed": true, "evidence": "Authenticated protocol regression resolves credential to membership, JoinGrant and current Activity." },
+    { "id": "authenticated-websocket-protocol", "passed": true, "evidence": "Authenticated WebSocket hello, Event, Snapshot and Submission ACK path passed." }
+  ],
+  "testCommand": "node --test tests/authenticated-server-protocol.test.mjs"
+}

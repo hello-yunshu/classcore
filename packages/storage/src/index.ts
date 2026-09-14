@@ -95,6 +95,7 @@ export interface ClassroomStorage extends RuntimeRecoveryStorage, StudentClaimPe
     getArtifact(artifactId: string, revision?: number): Promise<LearningArtifact | null>;
     saveSubmission(submission: Submission): Promise<void>;
     getSubmission(submissionId: string): Promise<Submission | null>;
+    listSubmissions(sessionId: string, activityId?: string): Promise<Submission[]>;
     saveTransfer(transfer: ArtifactTransfer): Promise<void>;
     getTransfer(transferId: string): Promise<ArtifactTransfer | null>;
     listEvents(sessionId: string): Promise<AcceptedDomainEvent[]>;
@@ -213,6 +214,11 @@ export class InMemoryClassroomStorage extends InMemoryRuntimeRecoveryStorage imp
         this.#submissions.set(submission.submissionId, structuredClone(submission));
     }
     async getSubmission(submissionId: string): Promise<Submission | null> { const value = this.#submissions.get(submissionId); return value ? structuredClone(value) : null; }
+    async listSubmissions(sessionId: string, activityId?: string): Promise<Submission[]> {
+        return [...this.#submissions.values()]
+            .filter(value => value.sessionId === sessionId && (!activityId || value.activityId === activityId))
+            .map(value => structuredClone(value));
+    }
     async saveTransfer(transfer: ArtifactTransfer): Promise<void> {
         const existing = this.#transfers.get(transfer.transferId);
         if (existing) {

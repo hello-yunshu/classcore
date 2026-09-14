@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "requirementId": "classroom-join-presence-submission",
+  "status": "verified",
+  "checks": [
+    { "id": "server-authoritative-join", "passed": true, "evidence": "Join endpoint and authenticated WebSocket use server-issued membership and access token." },
+    { "id": "presence-projection", "passed": true, "evidence": "Teacher receives authoritative presence; Display/Observer receive public pseudonymous projection only." },
+    { "id": "durable-event-snapshot-submission-acks", "passed": true, "evidence": "Protocol regression and Student browser flow verify durable Event, Snapshot and Submission acknowledgement/retry behavior." }
+  ],
+  "testCommand": "node --test tests/authenticated-server-protocol.test.mjs"
+}

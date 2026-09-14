@@ -36,7 +36,8 @@ test.describe('Presentation Studio command surface', () => {
         await page.getByRole('button', { name: '选择窗格' }).click();
         await expect(page.locator('.selection-pane-host')).toBeVisible();
         await expect(page.locator('.object-list')).toHaveCount(0);
-        await expect(page.locator('.selection-pane-host .studio-icon')).toHaveCount(2);
+        await expect(page.locator('.selection-pane-host [data-pane-element]')).toHaveCount(2);
+        await expect(page.locator('.selection-pane-host .studio-icon')).toHaveCount(4);
         await expect(page.locator('.selection-pane-host')).not.toContainText('🔓');
     });
 

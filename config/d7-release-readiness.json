@@ -5,27 +5,27 @@
   "requirements": [
     {
       "id": "authenticated-classroom-server",
-      "ready": false,
+      "ready": true,
       "note": "credential -> membership -> AuthenticatedConnectionContext -> AuthorizationService is wired into the LAN server"
     },
     {
       "id": "student-transformboard",
-      "ready": false,
+      "ready": true,
       "note": "TransformBoard Student Practice Alpha is usable on the target browser"
     },
     {
       "id": "presentation-runtime",
-      "ready": false,
+      "ready": true,
       "note": "Presentation Engine/Studio Alpha can author and run the lesson deck"
     },
     {
       "id": "classroom-join-presence-submission",
-      "ready": false,
+      "ready": true,
       "note": "Join/Presence/Submission classroom path is integrated and recovery-tested"
     },
     {
       "id": "teacher-display-observer-flow",
-      "ready": false,
+      "ready": true,
       "note": "Teacher Runtime, Display and Observer complete the required D7 classroom flow"
     },
     {

@@ -19,6 +19,12 @@
       "@classroom/applet-sdk": [
         "./packages/applet-sdk/src/index.ts"
       ],
+      "@classroom/transform-board": [
+        "./packages/transform-board/src/index.ts"
+      ],
+      "@classroom/classroom-client": [
+        "./packages/classroom-client/src/index.ts"
+      ],
       "@classroom/storage": [
         "./packages/storage/src/index.ts"
       ],

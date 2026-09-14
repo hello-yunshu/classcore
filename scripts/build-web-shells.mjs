@@ -8,6 +8,8 @@ import pptxgen from 'pptxgenjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outputDir = path.join(root, 'dist', 'public');
 const assetsDir = path.join(outputDir, 'assets');
+const bundledPresentationFontSource = path.join(root, 'packages', 'presentation-webppt-adapter', 'assets', 'fonts');
+const bundledPresentationFontTarget = path.join(assetsDir, 'fonts');
 fs.rmSync(outputDir, { recursive: true, force: true });
 fs.mkdirSync(assetsDir, { recursive: true });
 
@@ -36,10 +38,22 @@ function baseDocument(title, style, markup, script) {
 </head>
 <body>
   ${markup}
-  <script type="importmap">{"imports":{"@classroom/surfaces":"/assets/packages/surfaces/src/index.js"}}</script>
+  <script type="importmap">{"imports":{"@classroom/applet-sdk":"/assets/packages/applet-sdk/src/index.js","@classroom/surfaces":"/assets/packages/surfaces/src/index.js","@classroom/transform-board":"/assets/packages/transform-board/src/index.js","@classroom/classroom-client":"/assets/packages/classroom-client/src/index.js"}}</script>
   <script type="module">${script}</script>
 </body>
 </html>`;
+}
+
+function presentationFontStyle() {
+    return `<style>
+      @font-face{font-family:"LXGW WenKai GB Lite";src:url("/assets/fonts/LXGWWenKaiGBLite-Regular.ttf") format("truetype");font-style:normal;font-weight:100 900;font-display:swap}
+      @font-face{font-family:"霞鹜文楷 GB 轻便版";src:url("/assets/fonts/LXGWWenKaiGBLite-Regular.ttf") format("truetype");font-style:normal;font-weight:100 900;font-display:swap}
+      @font-face{font-family:"楷体";src:url("/assets/fonts/LXGWWenKaiGBLite-Regular.ttf") format("truetype");font-style:normal;font-weight:100 900;font-display:swap}
+      @font-face{font-family:"KaiTi";src:url("/assets/fonts/LXGWWenKaiGBLite-Regular.ttf") format("truetype");font-style:normal;font-weight:100 900;font-display:swap}
+      @font-face{font-family:"楷体_GB2312";src:url("/assets/fonts/LXGWWenKaiGBLite-Regular.ttf") format("truetype");font-style:normal;font-weight:100 900;font-display:swap}
+      @font-face{font-family:"Noto Serif";src:url("/assets/fonts/NotoSerif-Variable.ttf") format("truetype");font-style:normal;font-weight:100 900;font-display:swap}
+      @font-face{font-family:"Times New Roman";src:url("/assets/fonts/NotoSerif-Variable.ttf") format("truetype");font-style:normal;font-weight:100 900;font-display:swap}
+    </style>`;
 }
 
 function studentShell() {
@@ -47,14 +61,14 @@ function studentShell() {
         '学生练习',
         readStyle('apps/student-web/src/student.css'),
         '<div id="student-root"></div><!-- R3.10 · 视觉与交互设计尚未冻结 -->',
-        "import { mountStudentPractice } from '/assets/apps/student-web/src/entry.js'; mountStudentPractice(document.querySelector('#student-root'));"
+        "import { mountStudent } from '/assets/apps/student-web/src/entry.js'; mountStudent(document.querySelector('#student-root'));"
     );
 }
 
 function studioShell() {
     return baseDocument(
         '备课创作',
-        readStyle('apps/presentation-studio/src/studio.css'),
+        readStyle('apps/presentation-studio/src/studio.css') + presentationFontStyle(),
         '<div id="studio-root"></div><!-- 备课创作端 · D2 Alpha -->',
         "import { mountPresentationStudio } from '/assets/apps/presentation-studio/bundle.js'; mountPresentationStudio(document.querySelector('#studio-root'));"
     );
@@ -62,21 +76,45 @@ function studioShell() {
 
 function teacherShell() {
     return baseDocument(
-        '我的课件',
+        '课堂控制台',
         readStyle('apps/teacher-web/src/teacher.css'),
         '<div id="teacher-root"></div>',
         "import { mountTeacherLibrary } from '/assets/apps/teacher-web/src/entry.js'; mountTeacherLibrary(document.querySelector('#teacher-root'));"
     );
 }
 
+function backstageShell() {
+    return baseDocument(
+        '课程准备台',
+        readStyle('apps/backstage/src/backstage.css'),
+        '<div id="backstage-root"></div>',
+        "import { mountBackstage } from '/assets/apps/backstage/src/entry.js'; mountBackstage(document.querySelector('#backstage-root'));"
+    );
+}
+
+function observerShell() {
+    return baseDocument(
+        '课堂观察',
+        readStyle('apps/observer-web/src/observer.css'),
+        '<div id="observer-root"></div>',
+        "import { mountObserver } from '/assets/apps/observer-web/src/entry.js'; mountObserver(document.querySelector('#observer-root'));"
+    );
+}
+
 function displayShell() {
-    const style = `<style>
-      html,body{margin:0;min-width:320px;background:#101827;color:#f7f4ee;font-family:Inter,ui-sans-serif,system-ui,sans-serif}
+    const style = presentationFontStyle() + `<style>
+      :root { color-scheme: light; --ink: #24324b; --ink-soft: #697386; --muted: #7d8490; --line: #d9d6cc; --line-strong: #d2d0ca; --paper: #f6f3ec; --panel: #fbfaf7; --canvas: #e7e3d9; --focus: #5575b8; --focus-wash: #e3eaf7; --signal: #c96b55; --gold: #897e70; }
+      html,body{margin:0;min-width:320px;background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,sans-serif}
       .display-runtime{min-height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:24px 32px;gap:18px}
-      .display-header{display:flex;align-items:center;gap:14px}.display-mark{display:grid;place-items:center;width:42px;height:42px;border:1px solid #efb37e;color:#efb37e;font:700 24px Georgia,serif}
-      .display-kicker{color:#efb37e;font-size:11px;letter-spacing:.18em}.display-header h1{margin:4px 0 0;font:500 30px Georgia,serif}.display-state{margin-left:auto;color:#b8c1d1;font-size:13px}
-      .display-stage{display:grid;place-items:center;min-height:0;background:#182338;border:1px solid #34435c;box-shadow:0 24px 60px #090e18;border-radius:14px;overflow:hidden}.display-stage>*{width:min(100%,1200px);height:auto;max-height:100%;aspect-ratio:var(--display-aspect-ratio,auto);object-fit:contain}
-      .display-empty{display:grid;place-items:center;align-content:center;gap:12px;color:#b8c1d1}.display-empty strong{font:500 40px Georgia,serif;color:#f7f4ee}.display-footer{color:#7e8ba1;font-size:12px;text-align:center}
+      .display-header{display:flex;align-items:center;gap:14px}.display-mark{display:grid;place-items:center;width:42px;height:42px;border:1px solid var(--signal);color:var(--signal);font:700 24px Georgia,serif}
+      .display-kicker{color:var(--signal);font-size:11px;letter-spacing:.18em}.display-header h1{margin:4px 0 0;font:500 30px Georgia,serif}.display-state{margin-left:auto;color:var(--muted);font-size:13px}
+      .display-stage{display:grid;place-items:center;min-height:0;background:var(--canvas);border:1px solid var(--line-strong);box-shadow:0 24px 60px rgba(110,102,86,.18);border-radius:14px;overflow:hidden}.display-stage>*{width:min(100%,1200px);height:auto;max-height:100%;aspect-ratio:var(--display-aspect-ratio,auto);object-fit:contain}
+      .display-empty{display:grid;place-items:center;align-content:center;gap:12px;color:var(--muted)}.display-empty strong{font:500 40px Georgia,serif;color:var(--ink)}.display-footer{color:var(--muted);font-size:12px;text-align:center}
+      .display-classroom{min-height:100vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:24px 32px;gap:18px}
+      .display-classroom-stage{display:grid;place-items:center;align-content:center;gap:18px;min-height:0;background:linear-gradient(145deg,var(--ink),#3d5678);border:1px solid var(--ink);border-radius:14px;box-shadow:0 24px 60px rgba(36,50,75,.24);text-align:center}
+      .display-classroom-stage strong{font:500 clamp(42px,8vw,104px) Georgia,serif;color:var(--paper)}.display-classroom-stage span{font-size:clamp(18px,3vw,32px);color:var(--focus-wash)}
+      .display-classroom-stage .artifact-content{display:grid;gap:4px;width:min(90%,720px);padding:10px 14px;border:1px solid rgba(227,234,247,.42);border-radius:9px;font-size:13px;line-height:1.45;text-align:left}
+      .display-classroom-stage .artifact-content strong{font:700 13px Inter, sans-serif}.display-classroom-stage .artifact-content span{font-size:13px}.display-classroom-stage em{min-height:24px;color:#f0d6cc;font-style:normal}
       @media(max-width:680px){.display-runtime{padding:18px 14px}.display-header h1{font-size:24px}}
     </style>`;
     return baseDocument(
@@ -119,10 +157,12 @@ async function buildBlankPresentationTemplate() {
     pptx.author = 'ClassCore';
     pptx.subject = 'ClassCore web-ppt blank template';
     const slide = pptx.addSlide();
-    slide.background = { color: 'F7F4EE' };
+    slide.background = { color: 'F6F3EC' };
     slide.addText('ClassCore 网页 Presentation', {
         x: 1, y: 1, w: 8, h: 0.6, fontFace: 'Arial', fontSize: 24, color: '24324B',
     });
+    const visualMarker = '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120" viewBox="0 0 240 120"><rect width="240" height="120" rx="18" fill="#E3EAF7"/><circle cx="60" cy="60" r="28" fill="#5575B8"/><path d="M120 82 164 28 208 82Z" fill="#C96B55"/></svg>';
+    slide.addImage({ data: `data:image/svg+xml;base64,${Buffer.from(visualMarker).toString('base64')}`, x: 1, y: 2, w: 3, h: 1.5 });
     await pptx.writeFile({ fileName: path.join(assetsDir, 'presentation-webppt-blank.pptx') });
     // PptxGenJS emits PowerPoint's blue default table style even for a blank
     // deck. Remove only that default declaration so AddTable + SetTableStyle
@@ -139,9 +179,10 @@ async function buildBlankPresentationTemplate() {
 
 function neutralShell({ app, label }) {
     const style = `<style>
-      html, body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #f5f6f8; color: #1f2328; }
-      main { max-width: 760px; margin: 8vh auto; padding: 28px; background: white; border: 1px solid #ddd; border-radius: 12px; }
-      code { background: #f1f3f5; padding: 2px 6px; border-radius: 4px; }
+      :root { color-scheme: light; --ink: #24324b; --muted: #7d8490; --line: #d9d6cc; --paper: #f6f3ec; --panel: #fbfaf7; --focus-wash: #e3eaf7; }
+      html, body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: var(--paper); color: var(--ink); }
+      main { max-width: 760px; margin: 8vh auto; padding: 28px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 19px 42px rgba(110,102,86,.11); }
+      code { background: var(--focus-wash); padding: 2px 6px; border-radius: 4px; }
       .ok { font-weight: 600; }
     </style>`;
     const markup = `<main><h1>${label}</h1>
@@ -161,6 +202,10 @@ function buildShell({ route, app, label }) {
         return studioShell();
     if (route === 'teacher')
         return teacherShell();
+    if (route === 'backstage')
+        return backstageShell();
+    if (route === 'observer')
+        return observerShell();
     if (route === 'display')
         return displayShell();
     return neutralShell({ app, label });
@@ -176,6 +221,15 @@ function copyCompiledAsset(relativePath) {
 }
 
 copyCompiledAsset('packages/surfaces/src/index.js');
+copyCompiledAsset('packages/applet-sdk/src/index.js');
+copyCompiledAsset('packages/transform-board/src/index.js');
+copyCompiledAsset('packages/classroom-client/src/index.js');
+fs.mkdirSync(bundledPresentationFontTarget, { recursive: true });
+for (const filename of ['LXGWWenKaiGBLite-Regular.ttf', 'LXGWWenKaiGBLite-OFL.txt', 'NotoSerif-Variable.ttf', 'NotoSerif-OFL.txt']) {
+    const source = path.join(bundledPresentationFontSource, filename);
+    if (!fs.existsSync(source)) throw new Error(`Missing bundled presentation font asset: ${filename}`);
+    fs.copyFileSync(source, path.join(bundledPresentationFontTarget, filename));
+}
 for (const [, app] of surfaces) {
     if (app !== 'presentation-studio')
         copyCompiledAsset(`apps/${app}/src/entry.js`);

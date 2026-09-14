@@ -1,8 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {
   createInitialTransformBoardState,
+  commitPreview,
+  isValidPivot,
+  previewRotation,
+  previewTranslate,
   reduceTransformBoard,
+  selectPivot,
+  serializeBoardState,
+  translateGrid,
+  restoreBoardState,
 } from '../apps/student-web/src/entry.ts';
 import {
   addElement,
@@ -18,21 +27,67 @@ import {
   updateElement,
 } from '../apps/presentation-studio/src/entry.ts';
 
-test('Student TransformBoard Alpha keeps selection, movement, rotation and reset pure', () => {
+test('TransformBoard keeps selection, movement, rotation and reset pure', () => {
   const initial = createInitialTransformBoardState();
-  const moved = reduceTransformBoard(initial, { type: 'move', objectId: 'fragmentA', dx: 20, dy: -5 });
-  assert.equal(initial.objects.fragmentA.x, 112);
-  assert.equal(moved.objects.fragmentA.x, 132);
-  const centered = reduceTransformBoard(moved, { type: 'set-rotation-center', objectId: 'fragmentB', x: 1.4, y: -0.2 });
-  assert.equal(centered.selectedObjectId, 'fragmentB');
-  assert.deepEqual(centered.objects.fragmentB.rotationCenter, { x: 1, y: 0 });
-  const rotated = reduceTransformBoard(centered, { type: 'rotate', objectId: 'fragmentB', delta: 350 });
-  assert.equal(rotated.objects.fragmentB.rotation, 2);
+  const moved = reduceTransformBoard(initial, { type: 'move', objectId: 'object:a', dx: 1, dy: 0 });
+  assert.equal(initial.objects['object:a'].x, 2);
+  assert.equal(moved.objects['object:a'].x, 3);
+  const centered = reduceTransformBoard(moved, { type: 'set-rotation-center', objectId: 'object:b', x: 1.4, y: -0.2 });
+  assert.equal(centered.selectedObjectId, 'object:a');
+  assert.deepEqual(centered.objects['object:b'].rotationCenter, { x: 1, y: 0 });
+  const rotated = reduceTransformBoard(centered, { type: 'rotate', objectId: 'object:b', delta: 350 });
+  assert.equal(rotated.objects['object:b'].rotation, -10);
   const panned = reduceTransformBoard(rotated, { type: 'pan', dx: 12, dy: 8 });
   assert.deepEqual(panned.pan, { x: 12, y: 8 });
   const reset = reduceTransformBoard(panned, { type: 'reset' });
-  assert.equal(reset.objects.fragmentA.x, 112);
+  assert.equal(reset.objects['object:a'].x, 2);
   assert.equal(reset.pan.x, 0);
+});
+
+test('TransformBoard enforces integer single-axis movement, bounds, fixed objects and valid pivots', () => {
+  const initial = createInitialTransformBoardState({
+    board: { columns: 6, rows: 4 },
+    objects: [
+      { objectId: 'movable', label: 'M', x: 1, y: 1, width: 2, height: 2, pivots: { corner: { x: 0, y: 0 } } },
+      { objectId: 'fixed', label: 'F', x: 4, y: 0, width: 2, height: 2, fixed: true },
+    ],
+    initialSelection: 'movable',
+  });
+  assert.equal(translateGrid(initial, 'movable', 'x', 1).objects.movable.x, 2);
+  assert.equal(translateGrid(initial, 'movable', 'x', 0.5).objects.movable.x, 1);
+  assert.equal(translateGrid(initial, 'movable', 'y', 3).objects.movable.y, 1);
+  assert.equal(translateGrid(initial, 'fixed', 'x', -1).objects.fixed.x, 4);
+  assert.equal(isValidPivot(initial, 'movable', 'corner'), true);
+  assert.equal(isValidPivot(initial, 'movable', 'missing'), false);
+  assert.equal(selectPivot(initial, 'movable', 'missing').objects.movable.selectedPivotId, 'corner');
+});
+
+test('pattern-restoration config loads directly into the shared TransformBoard grid', () => {
+  const configs = JSON.parse(fs.readFileSync(new URL('../lessons/pattern-restoration/configs.json', import.meta.url), 'utf8'));
+  const config = configs['config:restore-board'].payload;
+  const initial = createInitialTransformBoardState(config);
+  assert.deepEqual(initial.board, { columns: 16, rows: 8, coordinateUnit: 'grid-cell' });
+  assert.equal(Object.keys(initial.objects).length, 4);
+  assert.equal(translateGrid(initial, 'piece:a', 'x', 1).objects['piece:a'].x, 3);
+  assert.equal(translateGrid(initial, 'piece:a', 'x', 20).objects['piece:a'].x, 2);
+  const preview = previewTranslate(initial, 'piece:a', 0.4, 1.6);
+  assert.deepEqual(preview.preview, { kind: 'translate', objectId: 'piece:a', dx: 0.4, dy: 1.6 });
+  assert.equal(commitPreview(preview).objects['piece:a'].y, 3);
+});
+
+test('TransformBoard supports continuous preview, 90-degree commit, undo and snapshots', () => {
+  const initial = createInitialTransformBoardState();
+  const preview = previewRotation(initial, 'object:a', 44);
+  assert.equal(preview.preview?.kind, 'rotate');
+  const committed = commitPreview(preview);
+  assert.equal(committed.objects['object:a'].rotation, 90);
+  const undone = reduceTransformBoard(committed, { type: 'undo' });
+  assert.equal(undone.objects['object:a'].rotation, 0);
+  const restored = restoreBoardState({
+    board: { columns: 12, rows: 8 },
+    objects: Object.values(initial.objects).map((object) => ({ objectId: object.id, label: object.label, shape: object.shape, x: object.x, y: object.y, width: object.width, height: object.height })),
+  }, serializeBoardState(committed));
+  assert.equal(restored.objects['object:a'].rotation, 90);
 });
 
 test('Authoring Studio Alpha supports scene CRUD, element editing and layer ordering', () => {

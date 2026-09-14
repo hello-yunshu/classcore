@@ -39,8 +39,8 @@ try {
     }
     const teacherResponse = await fetch(`${baseUrl}/teacher`);
     const teacherHtml = await teacherResponse.text();
-    if (!teacherResponse.ok || !teacherHtml.includes('我的课件')) {
-        throw new Error('teacher-library-shell-failed');
+    if (!teacherResponse.ok || !teacherHtml.includes('<title>课堂控制台 · Classroom Runtime</title>')) {
+        throw new Error('teacher-runtime-shell-failed');
     }
     const backstageOnClassroom = await fetch(`${baseUrl}/backstage`);
     if (backstageOnClassroom.status !== 404)
@@ -53,7 +53,7 @@ try {
         throw new Error('simulation-must-not-be-served-in-production');
     const backstageResponse = await fetch(`${backstageUrl}/backstage`);
     const backstageHtml = await backstageResponse.text();
-    if (!backstageResponse.ok || !backstageHtml.includes('后台运维端')) {
+    if (!backstageResponse.ok || !backstageHtml.includes('<title>课程准备台 · Classroom Runtime</title>')) {
         throw new Error('backstage-separate-port-failed');
     }
     const publicAsset = await fetch(`${baseUrl}/assets/apps/student-web/src/entry.js`);

@@ -33,8 +33,8 @@ R3.10 未修改 `docs/contracts/v0.1.2`。工具链、Docker、Codex Handoff 与
 - [x] Canonical Stage 与 Projected Stage 分离；
 - [x] Observer/Display 不能提交 Applet 学习 Event；
 - [x] Presentation动态学生内容使用角色投影与语义 binding；
-- [x] 8787 只提供 Student/Teacher/Display/Observer；
-- [x] 8788 host-only 提供 Backstage/Authoring；
+- [x] 9602 只提供 Student/Teacher/Display/Observer；
+- [x] 9688 host-only 提供 Backstage/Authoring；
 - [x] Simulation 不由生产HTTP Server暴露。
 
 ## 稳定 / 流畅 / 恢复 / 维护

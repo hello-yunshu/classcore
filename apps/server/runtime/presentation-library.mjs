@@ -579,6 +579,8 @@ export class PresentationLibraryStore {
             assetId: project.currentDraftAssetId,
             fingerprint: draft.asset.sha256,
             engineVersion: (options.engine ?? WEB_PPT_ENGINE).engineVersion,
+            availableFonts: options.availableFonts,
+            fontSubstitutions: options.fontSubstitutions,
         });
         if (compatibilityReport.status === 'blocked') throw new PresentationLibraryError('compatibility-blocked', 'compatibility-blocked', { compatibilityReport });
         if (options.kind === 'published' && compatibilityReport.status === 'warnings' && options.acknowledgeWarnings !== true)

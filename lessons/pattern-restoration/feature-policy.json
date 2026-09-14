@@ -1,0 +1,11 @@
+{
+  "revision": 1,
+  "features": {
+    "liveMirroring": true,
+    "intelligence": true,
+    "observer": true,
+    "artifactExchange": true,
+    "sceneRuntime": true,
+    "presentationRuntime": true
+  }
+}

@@ -45,6 +45,35 @@
 
 `Backstage -> Session -> Teacher -> Student Join -> Activity -> TransformBoard -> Event/Snapshot/Submission -> Live -> Teacher/Observer -> Stage -> Web Presentation -> Display -> Reconnect/Degradation`
 
+### 3.1 课程准备台 / 课堂控制台分层 — 2026-09-14
+
+教师工作流固定为两个入口：
+
+```text
+课程准备台（Backstage，9688）
+  创建课程工作区 → 导入 PPT/资源 → 配置 Lesson Package 基座 → 发布版本
+                                      ↓
+课堂控制台（Teacher Runtime，9602）
+  选择已发布课程 → 创建 Session → 签发四端入口 → 控制现场
+```
+
+- Backstage 是课程资产、活动来源、资源文件、版本和运行资格的管理入口；不承担课堂 Participant Role。
+- Teacher Runtime 是课堂现场唯一主控；不再承担课程文件管理和版本编辑。
+- Student / Display / Observer 不选择课程，只通过服务端签发的 Session locator/credential 加入。
+- Session 启动后固定 `courseId`、Lesson Package 基座、Presentation pin 和课程版本；后台后续编辑只影响下一次课堂。
+- 当前已完成课程工作区的创建、草稿/发布、资源导入、PPTX→Published Presentation 绑定和独立 Session 启动垂直切片；任意新 Applet 图形化编排、跨 Lesson Package 热加载和 XP21A/LAN 仍是独立后续工作。
+
+### 3.2 最新复验结果 — 2026-09-14
+
+- 课程准备台工作区已能显示基座 Lesson Package 的 5 个课堂活动和基座资源；草稿课程不能启动，发布后才允许创建课堂 Session。
+- 创建课程已改为页面内表单；导入 PPTX 会保存到工作区并自动生成 Published Presentation；启动结果固定课程版本并签发 Teacher / Student / Display / Observer 四端入口。
+- 浏览器闭环已复验：Backstage 发布 → Teacher Runtime 自动加入 → Student 使用 A17 加入 → Teacher 发布当前活动 → Display 与 Observer 收到相同公共 Stage；Observer 只显示匿名伪名。
+- 本轮流程修复已复验：创建课程表单取消后真实隐藏；Backstage 打开 Studio 会携带当前课程与已绑定 Presentation 上下文；Teacher 显示课程信息、服务端下发的学生/观察端凭证、可复制的大屏地址和返回准备台入口；Controller Lease 使用 45 秒 TTL、教师端每 10 秒自动续租，刷新后按最新 revision 自动恢复控制权，错误会明确提示“重新取得控制权”等恢复动作。
+- 浏览器端到端复验：教师控制权持续超过原 20 秒窗口仍有效；教师发布当前活动、切换 Presentation 并播放后，Display/Observer 同步；Student 使用 A17 加入并提交后，Teacher 收到已确认资源；Backstage、Authoring、Teacher、Display、Observer、Student 六端 console warn/error 均为空。
+- `npm run check`：PASS，186/186 tests，Formal/Lesson/Dist/HTTP/WS/Load/Smoke 全部通过。
+- `npm run docker:gate`：PASS，当前宿主 Apple Silicon `linux/arm64`，容器用户 `node`，课堂端 9602 与本机工具端 9688 的隔离及 SQLite 重启序号恢复通过。
+- 仍未宣称：XP21A 真机、真实课堂 LAN、authenticated D7 发布门禁、任意新 Applet 图形化编排和跨 Lesson Package 热加载。
+
 六个 Product Surface 都有最小可用入口：
 - Student：课堂加入、当前 Activity、TransformBoard、提交、自己的建议；
 - Teacher：Activity/Stage/Presentation 控制、Lease、真实学生投影、关键学生资源；

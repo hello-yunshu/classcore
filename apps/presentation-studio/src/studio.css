@@ -56,6 +56,8 @@ h1 { margin: 0; color: var(--ink); font: 700 21px ui-sans-serif, -apple-system, 
 .deck-title:hover { border-color: var(--line-strong); background: var(--panel-wash); }
 .deck-title:focus { border-color: #a9badc; outline: none; background: var(--panel); box-shadow: 0 0 0 3px rgba(85, 117, 184, .12); }
 .save-state { max-width: 190px; overflow: hidden; color: var(--success); font-size: 11px; text-overflow: clip; white-space: nowrap; }
+.studio-course-context { max-width: 230px; overflow: hidden; color: var(--focus); font-size: 11px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; text-decoration: none; }
+.studio-course-context:hover { text-decoration: underline; text-underline-offset: 3px; }
 .header-actions, .toolbar-group, .scene-actions, .layer-actions, .swatch-row, .preview-controls { display: flex; align-items: center; gap: 6px; }
 .header-actions { justify-content: flex-end; gap: 8px; }
 

@@ -19,7 +19,16 @@ export interface AppletHost {
 /** Host-side helper: applets never see or manage these sequencing fields. */
 export class AppletEventSequencer {
     #seq = 0;
-    constructor(private readonly appletInstanceId: string, private readonly eventSchemaVersion: number, private readonly streamId: string, private readonly idFactory: () => string) { }
+    private readonly appletInstanceId: string;
+    private readonly eventSchemaVersion: number;
+    private readonly streamId: string;
+    private readonly idFactory: () => string;
+    constructor(appletInstanceId: string, eventSchemaVersion: number, streamId: string, idFactory: () => string) {
+        this.appletInstanceId = appletInstanceId;
+        this.eventSchemaVersion = eventSchemaVersion;
+        this.streamId = streamId;
+        this.idFactory = idFactory;
+    }
     next<T extends Record<string, unknown> = Record<string, unknown>>(intent: AppletEventIntent<T>): ClientAppletEvent<T> {
         this.#seq += 1;
         return {
@@ -119,8 +128,10 @@ export class AppletHostRuntime<TConfig extends Record<string, unknown> = Record<
     #status: AppletHostRuntimeStatus = 'created';
     #applet: ClassroomApplet<TConfig, TState> | null = null;
     readonly manifest: AppletManifest;
+    private readonly options: AppletHostRuntimeOptions<TConfig, TState>;
 
-    constructor(private readonly options: AppletHostRuntimeOptions<TConfig, TState>) {
+    constructor(options: AppletHostRuntimeOptions<TConfig, TState>) {
+        this.options = options;
         const entry = options.registry.resolve(options.instance.appletTypeId);
         const requiredCapabilities = new Set([
             ...(entry.manifest.requiredPlatformCapabilities ?? []),

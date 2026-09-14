@@ -1,0 +1,16 @@
+{
+  "pack": "ClassCore Lesson Boundary + Codex Development Pack",
+  "baseline_repository": "hello-yunshu/classcore",
+  "baseline_head": "956d7930c115357c79371336204fdcfb0491f069",
+  "purpose": "Protect Core while integrating pattern-restoration as the first real Lesson",
+  "task_order": [
+    "00 Ask/Audit",
+    "01 Boundary Gates",
+    "02 Real Lesson Package",
+    "03 TransformBoard Applet",
+    "04 Student Classroom",
+    "05 Teacher + Stage",
+    "06 Lesson Analytics/AI",
+    "07 Vertical E2E/Freeze"
+  ]
+}

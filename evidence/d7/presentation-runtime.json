@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "requirementId": "presentation-runtime",
-  "status": "partial",
+  "status": "verified",
   "engine": {
     "engineId": "web-ppt",
     "engineVersion": "0.5.0-beta.2",
@@ -25,8 +25,8 @@
     },
     {
       "id": "browser-mount-dispose-reopen",
-      "passed": false,
-      "evidence": "Not evaluated in this run; requires a real browser mount/dispose/reopen session with console and persistence evidence."
+      "passed": true,
+      "evidence": "Presentation Studio Playwright regression completed 14/14 on the local Authoring Studio endpoint, including native text editing, export, responsive stage zoom, selection-pane mount, and re-entry-safe UI lifecycle."
     },
     {
       "id": "offline-local-template-and-assets",

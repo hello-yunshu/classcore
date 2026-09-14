@@ -20,8 +20,8 @@ function readPositiveInt(name, fallback, { min = 1, max = Number.MAX_SAFE_INTEGE
     return value;
 }
 const host = process.env.HOST ?? '127.0.0.1';
-const port = readPositiveInt('PORT', 8787, { max: 65535 });
-const defaultLocalToolsPort = port < 65535 ? port + 1 : 8788;
+const port = readPositiveInt('PORT', 9602, { max: 65535 });
+const defaultLocalToolsPort = port === 9602 ? 9688 : port < 65535 ? port + 1 : 9688;
 const localToolsHost = process.env.LOCAL_TOOLS_HOST ?? '127.0.0.1';
 const localToolsPort = readPositiveInt('LOCAL_TOOLS_PORT', defaultLocalToolsPort, { max: 65535 });
 function hostsOverlap(left, right) {
@@ -355,7 +355,7 @@ function serveAsset(reqUrl, res, allowedPrefixes) {
     sendJson(res, 404, { error: 'asset-not-found' });
     return true;
 }
-const sharedBrowserAssetPrefixes = ['packages/surfaces/'];
+const sharedBrowserAssetPrefixes = ['packages/applet-sdk/', 'packages/surfaces/', 'packages/transform-board/', 'packages/classroom-client/'];
 const classroomAssetPrefixes = [
     ...sharedBrowserAssetPrefixes,
     'apps/student-web/',

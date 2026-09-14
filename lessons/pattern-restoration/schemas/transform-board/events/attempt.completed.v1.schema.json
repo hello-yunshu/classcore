@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["solved"],"properties":{"solved":{"type":"boolean"},"elapsedMs":{"type":"number","minimum":0}},"additionalProperties":false}

@@ -34,8 +34,8 @@ function dockerAvailable() {
 function startContainer() {
   run('docker', [
     'run', '-d', '--name', container,
-    '-p', `127.0.0.1:${classroomPort}:8787`,
-    '-p', `127.0.0.1:${localToolsPort}:8788`,
+    '-p', `127.0.0.1:${classroomPort}:9602`,
+    '-p', `127.0.0.1:${localToolsPort}:9688`,
     '-v', `${volume}:/data`,
     image,
   ], { capture: true });

@@ -10,7 +10,7 @@ function run(args) {
 function dockerAvailable() { return spawnSync('docker', ['version'], { stdio: 'ignore' }).status === 0; }
 async function assertUnauthenticatedTeacherRejected() {
   await new Promise((resolve, reject) => {
-    const ws = new WebSocket('ws://127.0.0.1:8787/ws');
+    const ws = new WebSocket('ws://127.0.0.1:9602/ws');
     let accepted = false;
     const timer = setTimeout(() => { try { ws.close(); } catch {} reject(new Error('unauthenticated-teacher-probe-timeout')); }, 3000);
     ws.onopen = () => ws.send(JSON.stringify({ type: 'hello', role: 'teacher', clientId: 'd7-unauth-probe', sessionId: 'session:d7-probe' }));
@@ -31,13 +31,13 @@ try {
   run([...compose, 'config', '--quiet']);
   run([...compose, 'up', '-d', '--build']);
   try {
-    await Promise.all([waitForHttpReady('http://127.0.0.1:8787/healthz', 120, 100), waitForHttpReady('http://127.0.0.1:8788/healthz', 120, 100)]);
+    await Promise.all([waitForHttpReady('http://127.0.0.1:9602/healthz', 120, 100), waitForHttpReady('http://127.0.0.1:9688/healthz', 120, 100)]);
   } catch (error) {
     const logs = spawnSync('docker', [...compose, 'logs', '--no-color'], { cwd: root, encoding: 'utf8' });
     const detail = (logs.stdout || logs.stderr || '').trim().slice(-2000);
     throw new Error(`D7 runtime did not become healthy: ${error instanceof Error ? error.message : String(error)}${detail ? `; container logs: ${detail}` : ''}`);
   }
-  const response = await fetch('http://127.0.0.1:8787/readyz');
+  const response = await fetch('http://127.0.0.1:9602/readyz');
   const ready = await response.json();
   if (ready.runtimeMode !== 'authenticated-classroom-server' || ready.authentication !== true || ready.productReady !== true) {
     throw new Error(`D7 runtime identity FAILED: expected authenticated-classroom-server/authentication=true/productReady=true; got ${JSON.stringify(ready)}`);

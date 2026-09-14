@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "requirementId": "student-transformboard",
+  "status": "verified",
+  "checks": [
+    { "id": "server-provided-lesson-configuration", "passed": true, "evidence": "Student browser flow renders the server-provided Lesson title and Activity/Applet configuration." },
+    { "id": "transformboard-durable-submit", "passed": true, "evidence": "Student Playwright flow performs TransformBoard operations, records a token and receives classroom submission confirmation." },
+    { "id": "refresh-and-offline-outbox-recovery", "passed": true, "evidence": "Student Playwright flow refreshes, simulates offline operation and verifies queued work is recovered after reconnect." }
+  ],
+  "testCommand": "npx playwright test tests/e2e/student-classroom.spec.ts"
+}

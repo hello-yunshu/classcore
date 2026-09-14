@@ -1,14 +1,16 @@
 import { getSurfaceDescriptor, CLIENT_RUNTIME_BUDGETS } from '@classroom/surfaces';
+import { ClassroomClient } from '@classroom/classroom-client';
 
 export const surface = getSurfaceDescriptor('teacher-runtime');
 export const runtimeBudget = CLIENT_RUNTIME_BUDGETS['teacher-runtime'];
 
 type PresentationProject = { presentationId: string; title: string; currentDraftRevision: number; currentDraftDocument?: { pageCount?: number }; updatedAt: string };
-const ownerHeaders = { 'x-classcore-user-id': 'demo-teacher' };
+const ownerId = sessionStorage.getItem('classcore.teacher.owner-id');
+const ownerHeaders: Record<string, string> = ownerId ? { 'x-classcore-user-id': ownerId } : {};
 
 function toolsOrigin(): string {
     const port = Number(window.location.port || (window.location.protocol === 'https:' ? 443 : 80));
-    const toolsPort = port === 80 || port === 443 ? 8788 : port + 1;
+    const toolsPort = port === 80 || port === 443 || port === 9602 ? 9688 : port + 1;
     return `${window.location.protocol}//${window.location.hostname}:${toolsPort}`;
 }
 function authoringUrl(presentationId?: string): string {
@@ -28,11 +30,39 @@ function formatUpdatedAt(value: string): string {
 }
 
 export function mountTeacherLibrary(root: HTMLElement): void {
-    const requestedSession = new URLSearchParams(window.location.search).get('sessionId')?.trim();
-    if (requestedSession) {
-        mountTeacherControl(root, requestedSession);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') === 'classroom') {
+        mountTeacherClassroom(root);
         return;
     }
+    const requestedSession = new URLSearchParams(window.location.search).get('sessionId')?.trim();
+    if (requestedSession) {
+        mountTeacherClassroom(root, { defaultSessionLocator: requestedSession });
+        return;
+    }
+    mountTeacherLanding(root);
+}
+
+function mountTeacherLanding(root: HTMLElement): void {
+    root.replaceChildren();
+    const app = document.createElement('main'); app.className = 'teacher-landing'; root.append(app);
+    const header = document.createElement('header'); header.className = 'library-header';
+    header.innerHTML = '<div><p class="library-kicker">CLASSCORE · TEACHER RUNTIME</p><h1>课堂控制台</h1><p class="library-subtitle">课堂现场只保留控制、观察和同步。课程准备与文件管理请在课程准备台完成。</p></div>';
+    const headerActions = document.createElement('div'); headerActions.className = 'library-actions';
+    headerActions.append(button('打开课程准备台', () => { window.location.href = toolsOrigin() + '/backstage'; }, 'primary-action'));
+    header.append(headerActions); app.append(header);
+    const status = document.createElement('p'); status.className = 'library-status'; app.append(status);
+    const guide = document.createElement('section');
+    guide.className = 'teacher-landing-guide';
+    guide.innerHTML = [
+        '<div><span class="landing-step">准备</span><strong>在课程准备台选择并发布课程</strong><p>导入 PPT、配置活动和 Applet，完成运行检查后点击“开始课堂”。</p></div>',
+        '<div><span class="landing-step">上课</span><strong>在这里控制课堂现场</strong><p>开始课堂后，服务端会把教师带入同一 Session，学生、大屏和观察端随之同步。</p></div>',
+    ].join('');
+    app.append(guide);
+    status.textContent = '课堂尚未启动 · 请先从课程准备台开始';
+}
+
+function mountTeacherPresentationLibrary(root: HTMLElement): void {
     root.replaceChildren();
     const app = document.createElement('main'); app.className = 'teacher-library'; root.append(app);
     const header = document.createElement('header'); header.className = 'library-header';
@@ -178,7 +208,253 @@ export function mountTeacherLibrary(root: HTMLElement): void {
     search.addEventListener('input', render); void refresh();
 }
 
+type TeacherStudent = { participantId: string; displayName: string; seatNo?: string | null };
+type TeacherStageWidget = {
+    selector?: string;
+    activityType?: string;
+    participantMode?: string;
+    appletCount?: number;
+    adviceMode?: string;
+    submissionPolicy?: string;
+    evidenceCount?: number;
+    artifactCount?: number;
+    selectedCount?: number;
+    activeCount?: number;
+    objectCount?: number;
+    latestSeq?: number;
+};
+type ArtifactObject = { shape?: string; x?: number; y?: number; width?: number; height?: number; rotation?: number };
+type ArtifactContent = { artifactType?: string; revision?: number; recordText?: string; tokens?: Array<{ kind?: string; display?: string }>; objectCount?: number; solved?: boolean | null; objects?: ArtifactObject[] };
+type TeacherStage = { revision: number; contentType: string; payload: { source?: string; selectedParticipantIds?: string[]; annotation?: string | null; artifactContents?: ArtifactContent[]; widget?: TeacherStageWidget } };
+
+function renderArtifactContent(container: HTMLElement, artifact?: ArtifactContent): void {
+    container.replaceChildren();
+    if (!artifact) return;
+    const heading = document.createElement('strong');
+    heading.textContent = `作品内容 · ${artifact.solved === true ? '已完成' : '未完成'}`;
+    const record = document.createElement('span');
+    record.textContent = artifact.recordText ? `记录：${artifact.recordText}` : '未记录文字';
+    const tokens = document.createElement('span');
+    const tokenText = (artifact.tokens ?? []).map(token => token.display || token.kind || '词元').join('');
+    tokens.textContent = tokenText ? `表达：${tokenText}` : '无表达词元';
+    const objects = document.createElement('span');
+    const objectText = (artifact.objects ?? []).slice(0, 6).map((object, index) => {
+        const position = `${object.x ?? 0},${object.y ?? 0}`;
+        return `图形${index + 1} ${object.shape ?? 'unknown'} · ${position} · ${object.rotation ?? 0}°`;
+    }).join(' ｜ ');
+    objects.textContent = `对象：${artifact.objectCount ?? 0}${objectText ? ` · ${objectText}` : ''}`;
+    container.append(heading, record, tokens, objects);
+}
+
+function mountTeacherClassroom(root: HTMLElement, options: { defaultSessionLocator?: string; defaultCredential?: string } = {}): void {
+    root.replaceChildren();
+    const app = document.createElement('main');
+    app.className = 'teacher-classroom';
+    app.innerHTML = [
+        `<header class="teacher-classroom-header"><div><p class="library-kicker">CLASSCORE · TEACHER RUNTIME</p><h1>课堂控制台</h1>`
+            + '<p class="library-subtitle">教师控制、学生资源与大屏 Stage 均由认证运行时提供。</p><p class="teacher-course-context" data-field="course">等待课程信息</p>'
+            + `</div><div class="teacher-session-tools"><span data-testid="teacher-status">等待加入课堂</span><a class="teacher-return-link" href="${toolsOrigin()}/backstage">返回课程准备台</a><button type="button" data-action="join">加入课堂</button></div></header>`,
+        '<section class="teacher-join-bar"><label>课堂定位 <input data-field="locator" required></label><label>教师凭证 <input data-field="credential" required autocomplete="off"></label>'
+            + '<div class="teacher-entry-links"><span data-field="join-url"></span><button type="button" data-action="copy-display" hidden>复制大屏地址</button><span data-field="student-entry"></span></div></section>',
+        '<div class="teacher-three-column"><aside class="teacher-column teacher-students"><div class="column-heading"><h2>在线学生</h2><button type="button" data-action="random">随机选择</button></div><p class="column-note">学生列表来自 Presence 与服务器投影，可选择 1–4 人。</p><div data-field="students" class="teacher-student-list"></div></aside>',
+        '<section class="teacher-column teacher-stage"><div class="column-heading"><h2>Stage 预览</h2><span data-field="lease">未取得控制权</span></div><div class="stage-preview" data-testid="teacher-stage"><strong data-field="stage-source">等待 Stage</strong><span data-field="stage-focus">尚未选择学生</span>',
+        '<span data-field="live-preview">等待学生实时画面</span><span data-field="stage-widget"></span><div data-field="artifact-content" class="artifact-content"></div><em data-field="stage-annotation"></em></div>',
+        '<div class="stage-actions"><button type="button" data-action="claim">取得控制权</button><button type="button" data-action="activity">学生视图</button><button type="button" data-action="activity-summary">当前活动</button>',
+        '<button type="button" data-action="presentation">Presentation</button><button type="button" data-action="presentation-play">播放</button><button type="button" data-action="presentation-pause">暂停</button></div>',
+        '<label class="annotation-field">教师标注 <input data-field="annotation" maxlength="160" placeholder="可选的 Stage 标注"><button type="button" data-action="annotate">发布</button></label><p data-field="control-error" class="teacher-control-error" role="alert" hidden></p></section>',
+        '<aside class="teacher-column teacher-resources"><div class="column-heading"><h2>提交资源</h2><span data-field="submission-count">0</span></div><div data-field="submissions" class="teacher-submission-list"><span>等待课堂数据</span></div>',
+        '<div class="teacher-analytics"><div class="column-heading"><h3>学习分析</h3><button type="button" data-action="analytics">分析已选学生</button></div><p data-field="analytics">选择学生后请求确定性分析。</p><button type="button" data-action="confirm-analytics" hidden>确认加入 Stage</button></div><div class="teacher-summary" data-field="summary">消息摘要：0</div></aside></div>',
+    ].join('');
+    root.append(app);
+    const status = app.querySelector<HTMLElement>('[data-testid="teacher-status"]')!;
+    const studentList = app.querySelector<HTMLElement>('[data-field="students"]')!;
+    const stageSource = app.querySelector<HTMLElement>('[data-field="stage-source"]')!;
+    const stageFocus = app.querySelector<HTMLElement>('[data-field="stage-focus"]')!;
+    const livePreview = app.querySelector<HTMLElement>('[data-field="live-preview"]')!;
+    const stageWidget = app.querySelector<HTMLElement>('[data-field="stage-widget"]')!;
+    const artifactContent = app.querySelector<HTMLElement>('[data-field="artifact-content"]')!;
+    const stageAnnotation = app.querySelector<HTMLElement>('[data-field="stage-annotation"]')!;
+    const leaseLabel = app.querySelector<HTMLElement>('[data-field="lease"]')!;
+    const joinUrl = app.querySelector<HTMLElement>('[data-field="join-url"]')!;
+    const copyDisplay = app.querySelector<HTMLButtonElement>('[data-action="copy-display"]')!;
+    const studentEntry = app.querySelector<HTMLElement>('[data-field="student-entry"]')!;
+    const courseContext = app.querySelector<HTMLElement>('[data-field="course"]')!;
+    const controlError = app.querySelector<HTMLElement>('[data-field="control-error"]')!;
+    const joinButton = app.querySelector<HTMLButtonElement>('[data-action="join"]')!;
+    const submissionCount = app.querySelector<HTMLElement>('[data-field="submission-count"]')!;
+    const submissions = app.querySelector<HTMLElement>('[data-field="submissions"]')!;
+    const summary = app.querySelector<HTMLElement>('[data-field="summary"]')!;
+    const analytics = app.querySelector<HTMLElement>('[data-field="analytics"]')!;
+    const confirmAnalytics = app.querySelector<HTMLButtonElement>('[data-action="confirm-analytics"]')!;
+    const locator = app.querySelector<HTMLInputElement>('[data-field="locator"]')!;
+    const credential = app.querySelector<HTMLInputElement>('[data-field="credential"]')!;
+    const annotation = app.querySelector<HTMLInputElement>('[data-field="annotation"]')!;
+    locator.value = options.defaultSessionLocator ?? new URLSearchParams(window.location.search).get('locator')?.trim() ?? '';
+    credential.value = options.defaultCredential ?? new URLSearchParams(window.location.search).get('code')?.trim() ?? '';
+    const client = new ClassroomClient({ clientBuild: 'teacher-web-dev', sessionStorageKey: 'classcore.teacher.classroom.join.v1' });
+    let students: TeacherStudent[] = [];
+    let selected = new Set<string>();
+    let presence = new Map<string, string>();
+    let stage: TeacherStage | null = null;
+    let latestLive: { participantId: string; seq: number; objectCount: number } | null = null;
+    let latestAnalytics: { resultId: string; recommendations: Array<{ recommendationId: string; label: string; status: string }>; classifications: Array<{ code: string }> } | null = null;
+    let presentationRevision = 0;
+    let leaseRevision = 0;
+    let leaseClaimed = false;
+    let leaseRenewTimer: ReturnType<typeof setInterval> | null = null;
+    let messageCount = 0;
+    let displayUrlValue = '';
+    const setControlError = (message: string): void => { controlError.textContent = message; controlError.hidden = !message; };
+    const syncControlState = (): void => {
+        const online = client.state.connection === 'online';
+        joinButton.disabled = online;
+        if (online && joinButton.textContent !== '已连接') joinButton.textContent = '已连接';
+        for (const action of app.querySelectorAll<HTMLButtonElement>('.stage-actions button, [data-action="annotate"], [data-action="analytics"]')) action.disabled = !online || !leaseClaimed;
+        app.querySelector<HTMLButtonElement>('[data-action="claim"]')!.disabled = !online || leaseClaimed;
+    };
+    const startLeaseRenewal = (): void => {
+        if (leaseRenewTimer) return;
+        leaseRenewTimer = setInterval(() => {
+            if (leaseClaimed && client.state.connection === 'online') client.sendControl({ type: 'teacher.lease.renew', expectedRevision: leaseRevision });
+        }, 10_000);
+    };
+    const renderStage = (): void => {
+        const selectedArtifact = stage?.payload?.widget?.selector === 'selected-artifact';
+        const selectedLive = stage?.payload?.widget?.selector === 'selected-live-view';
+        const currentActivity = stage?.payload?.widget?.selector === 'current-activity-summary';
+        const source = selectedArtifact ? '学生作品对比' : currentActivity ? '当前活动摘要' : stage?.payload?.source === 'presentation' ? 'Presentation 权威源' : '学生实时视图';
+        stageSource.textContent = source;
+        const names = (stage?.payload?.selectedParticipantIds ?? [...selected]).map(id => students.find(item => item.participantId === id)?.displayName ?? id);
+        if (selectedArtifact) stageFocus.textContent = `已选 ${stage?.payload?.widget?.artifactCount ?? 0} 份作品证据`;
+        else if (currentActivity) stageFocus.textContent = `${stage?.payload?.widget?.activityType ?? '活动'} · ${stage?.payload?.widget?.appletCount ?? 0} 个互动组件`;
+        else if (selectedLive) stageFocus.textContent = `已选 ${stage?.payload?.widget?.selectedCount ?? names.length} 个实时视图`;
+        else stageFocus.textContent = names.length ? `聚焦：${names.join('、')}` : '尚未选择学生';
+        livePreview.textContent = latestLive ? `实时缩略图 · ${latestLive.objectCount} 个对象 · seq ${latestLive.seq}` : '等待学生实时画面';
+        if (selectedArtifact) stageWidget.textContent = `selected-artifact · ${stage?.payload?.widget?.evidenceCount ?? 0} 条证据`;
+        else if (currentActivity) stageWidget.textContent = `current-activity-summary · ${stage?.payload?.widget?.participantMode ?? 'unknown'} · 提交 ${stage?.payload?.widget?.submissionPolicy ?? 'none'}`;
+        else if (selectedLive) stageWidget.textContent = `selected-live-view · ${stage?.payload?.widget?.activeCount ?? 0} 个活动视图 · ${stage?.payload?.widget?.objectCount ?? 0} 个对象`;
+        else stageWidget.textContent = '';
+        renderArtifactContent(artifactContent, stage?.payload?.artifactContents?.[0]);
+        stageAnnotation.textContent = stage?.payload?.annotation ? `标注：${stage.payload.annotation}` : '';
+        leaseLabel.textContent = leaseClaimed ? `控制权 revision ${leaseRevision} · 自动续租` : stage ? `Stage revision ${stage.revision}` : '未取得控制权';
+    };
+    const renderStudents = (): void => {
+        studentList.replaceChildren();
+        if (!students.length) { studentList.textContent = '等待学生加入课堂'; return; }
+        for (const student of students) {
+            const item = document.createElement('button'); item.type = 'button'; item.className = `teacher-student ${selected.has(student.participantId) ? 'is-selected' : ''}`;
+            item.dataset.participantId = student.participantId;
+            const online = presence.get(student.participantId) === 'online';
+            item.innerHTML = '<strong></strong><span></span>';
+            item.querySelector('strong')!.textContent = student.displayName;
+            item.querySelector('span')!.textContent = `${online ? '在线' : '等待中'} · ${student.seatNo ?? '无座位号'}`;
+            item.addEventListener('click', () => {
+                if (selected.has(student.participantId)) selected.delete(student.participantId);
+                else if (selected.size < 4) selected.add(student.participantId);
+                renderStudents(); renderStage();
+                if (client.state.connection === 'online') client.sendControl({ type: 'teacher.selection.set', participantIds: [...selected], expectedRevision: stage?.revision });
+            });
+            studentList.append(item);
+        }
+    };
+    const renderSubmissions = (items: Array<{ submissionId: string; submittedBy: string; status: string }>): void => {
+        submissionCount.textContent = String(items.length);
+        submissions.replaceChildren();
+        if (!items.length) { submissions.textContent = '暂无提交资源'; return; }
+        for (const item of items.slice(-8).reverse()) {
+            const row = document.createElement('div'); row.className = 'teacher-submission';
+            row.textContent = `${item.submittedBy} · ${item.status} · ${item.submissionId.slice(-8)}`;
+            submissions.append(row);
+        }
+    };
+    const join = async (): Promise<void> => {
+        status.textContent = '正在认证教师身份…';
+        try {
+            const result = await client.join({ joinRequestId: `join:teacher:${Date.now()}`, runtimeApiVersion: 1, sessionLocator: locator.value.trim(), requestedRole: 'teacher', credential: { type: 'teacher-issued', value: credential.value.trim() } });
+            await client.connect();
+            status.textContent = `已连接 · ${result.self?.displayName ?? '教师'}`;
+            setControlError(''); joinButton.textContent = '已连接'; joinButton.disabled = true; syncControlState();
+            client.sendControl({ type: 'teacher.students.refresh' });
+            client.sendControl({ type: 'teacher.lease.claim', expectedRevision: leaseRevision });
+        } catch (error) { joinButton.disabled = false; joinButton.textContent = '重新加入'; status.textContent = error instanceof Error ? error.message : '教师加入失败'; syncControlState(); }
+    };
+    client.onMessage(message => {
+        messageCount += 1; summary.textContent = `消息摘要：${messageCount} · ${String(message.type ?? 'unknown')}`;
+        if (message.type === 'classroom.course' && message.course && typeof message.course === 'object') {
+            const course = message.course as { title?: string; courseId?: string };
+            courseContext.textContent = course.title ? `当前课程：${course.title}${course.courseId ? ` · ${course.courseId}` : ''}` : '当前课堂课程';
+        }
+        if (message.type === 'classroom.presence' && Array.isArray(message.presence)) presence = new Map((message.presence as Array<{ participantId: string; status: string }>).map(item => [item.participantId, item.status]));
+        if (message.type === 'teacher.students' && Array.isArray(message.students)) students = message.students as TeacherStudent[];
+        if (message.type === 'classroom.display-link' && typeof message.url === 'string') { displayUrlValue = message.url; joinUrl.textContent = `大屏加入地址：${message.url}`; copyDisplay.hidden = false; }
+        if (message.type === 'classroom.join-links' && message.links && typeof message.links === 'object') {
+            const links = message.links as { studentCode?: string; observerCode?: string };
+            studentEntry.textContent = `学生课堂码：${links.studentCode ?? '由服务端提供'} · 观察端凭证：${links.observerCode ?? '由服务端提供'}`;
+        }
+        if (message.type === 'teacher.lease.state' && message.lease) {
+            leaseRevision = Number((message.lease as { revision: number }).revision);
+            const lease = message.lease as { holderParticipantId: string | null };
+            if (leaseClaimed && lease.holderParticipantId === client.state.grant?.participantId) client.sendControl({ type: 'teacher.lease.claim', expectedRevision: leaseRevision });
+            if (!leaseClaimed && (lease.holderParticipantId === null || lease.holderParticipantId === client.state.grant?.participantId)) {
+                window.setTimeout(() => {
+                    if (!leaseClaimed && client.state.connection === 'online') client.sendControl({ type: 'teacher.lease.claim', expectedRevision: leaseRevision });
+                }, 0);
+            }
+        }
+        if (message.type === 'teacher.lease.ack' && message.ok && message.lease) { leaseRevision = Number((message.lease as { revision: number }).revision); leaseClaimed = true; leaseLabel.textContent = `控制权 revision ${leaseRevision} · 自动续租`; setControlError(''); startLeaseRenewal(); syncControlState(); }
+        if (message.type === 'teacher.lease.ack' && message.ok === false) { leaseClaimed = false; setControlError(`控制权续租失败：${String(message.reason ?? '请重新取得控制权')}`); syncControlState(); }
+        if (message.type === 'error') {
+            const reason = String(message.reason ?? message.code ?? '课堂操作失败');
+            const copy: Record<string, string> = { 'controller-lease-required': '请先取得控制权后再操作。', 'controller-lease-expired': '控制权已过期，请重新取得控制权。', 'not-lease-holder': '当前教师没有控制权，请重新取得控制权。', 'stale-revision': '课堂状态已更新，请重新选择操作。' };
+            setControlError(copy[reason] ?? `课堂操作失败：${reason}`);
+            if (reason.includes('lease')) { leaseClaimed = false; syncControlState(); }
+        }
+        if (message.type === 'teacher.analytics.result' && message.ok && message.result) {
+            const result = message.result as { resultId: string; recommendations?: Array<{ recommendationId: string; label: string; status: string }>; classifications?: Array<{ code: string }> };
+            latestAnalytics = { resultId: result.resultId, recommendations: result.recommendations ?? [], classifications: result.classifications ?? [] };
+            const recommendation = latestAnalytics.recommendations.find(item => item.status === 'candidate');
+            analytics.textContent = `${latestAnalytics.classifications.map(item => item.code).join('、') || '暂无分类'}${recommendation ? ` · ${recommendation.label}` : ''}`;
+            confirmAnalytics.hidden = !recommendation;
+        }
+        if (message.type === 'teacher.analytics.confirmed' && message.ok) { confirmAnalytics.hidden = true; analytics.textContent = '分析建议已由教师确认并进入 Stage。'; }
+        if (message.type === 'presentation.sync' && message.state) presentationRevision = Number((message.state as { revision?: number }).revision ?? presentationRevision);
+        if (message.type === 'stage.state' && message.stage) stage = message.stage as TeacherStage;
+        if (message.type === 'live.state' && message.frame && typeof message.frame === 'object') {
+            const frame = message.frame as { scope?: { type?: string; id?: string }; seq?: number; payload?: { objects?: Record<string, unknown> } };
+            if (frame.scope?.type === 'participant' && typeof frame.scope.id === 'string') latestLive = { participantId: frame.scope.id, seq: Number(frame.seq ?? 0), objectCount: frame.payload?.objects && typeof frame.payload.objects === 'object' ? Object.keys(frame.payload.objects).length : 0 };
+        }
+        if (message.type === 'teacher.selection.ack' && message.ok && Array.isArray(message.selected)) selected = new Set((message.selected as TeacherStudent[]).map(item => item.participantId));
+        if (message.type === 'classroom.submissions' && Array.isArray(message.submissions)) renderSubmissions(message.submissions as Array<{ submissionId: string; submittedBy: string; status: string }>);
+        renderStudents(); renderStage();
+        syncControlState();
+    });
+    copyDisplay.addEventListener('click', async () => { if (!displayUrlValue) return; try { await navigator.clipboard.writeText(displayUrlValue); setControlError('大屏地址已复制。'); } catch { setControlError('浏览器未允许复制，请直接选中大屏地址。'); } });
+    joinButton.addEventListener('click', () => { void join(); });
+    app.querySelector<HTMLButtonElement>('[data-action="claim"]')!.addEventListener('click', () => client.sendControl({ type: 'teacher.lease.claim', expectedRevision: leaseRevision }));
+    app.querySelector<HTMLButtonElement>('[data-action="random"]')!.addEventListener('click', () => client.sendControl({ type: 'teacher.selection.random' }));
+    app.querySelector<HTMLButtonElement>('[data-action="activity"]')!.addEventListener('click', () => client.sendControl({ type: 'teacher.stage.source', source: 'student-live', expectedRevision: stage?.revision }));
+    app.querySelector<HTMLButtonElement>('[data-action="activity-summary"]')!.addEventListener('click', () => client.sendControl({ type: 'teacher.stage.source', source: 'activity', expectedRevision: stage?.revision }));
+    app.querySelector<HTMLButtonElement>('[data-action="presentation"]')!.addEventListener('click', () => client.sendControl({ type: 'teacher.stage.source', source: 'presentation', expectedRevision: stage?.revision }));
+    app.querySelector<HTMLButtonElement>('[data-action="presentation-play"]')!.addEventListener('click', () => client.sendControl({ type: 'presentation.control', action: 'play', expectedRevision: presentationRevision, controlId: `presentation-play-${Date.now()}` }));
+    app.querySelector<HTMLButtonElement>('[data-action="presentation-pause"]')!.addEventListener('click', () => client.sendControl({ type: 'presentation.control', action: 'pause', expectedRevision: presentationRevision, controlId: `presentation-pause-${Date.now()}` }));
+    app.querySelector<HTMLButtonElement>('[data-action="annotate"]')!.addEventListener('click', () => client.sendControl({ type: 'teacher.annotation', text: annotation.value, expectedRevision: stage?.revision }));
+    app.querySelector<HTMLButtonElement>('[data-action="analytics"]')!.addEventListener('click', () => {
+        const participantId = [...selected][0];
+        if (participantId) client.sendControl({ type: 'teacher.analytics.request', participantId });
+        else analytics.textContent = '请先选择一名学生。';
+    });
+    confirmAnalytics.addEventListener('click', () => {
+        const recommendation = latestAnalytics?.recommendations.find(item => item.status === 'candidate');
+        if (latestAnalytics && recommendation) client.sendControl({ type: 'teacher.analytics.confirm', resultId: latestAnalytics.resultId, recommendationId: recommendation.recommendationId, expectedRevision: stage?.revision });
+    });
+    renderStudents(); renderStage();
+    syncControlState();
+    if (locator.value.trim() && credential.value.trim()) void join();
+}
+
 function mountTeacherControl(root: HTMLElement, sessionId: string): void {
+    throw new Error('legacy-teacher-control-disabled-use-authenticated-classroom');
+    /*
     root.replaceChildren();
     const app = document.createElement('main'); app.className = 'teacher-control'; root.append(app);
     app.innerHTML = [
@@ -271,4 +547,5 @@ function mountTeacherControl(root: HTMLElement, sessionId: string): void {
         if (heartbeatTimer) clearInterval(heartbeatTimer);
         socket?.close();
     });
+    */
 }

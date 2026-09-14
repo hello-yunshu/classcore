@@ -44,9 +44,9 @@ npm run server:dev
 
 默认地址：
 
-- 课堂 Server：`http://127.0.0.1:8787`
-- 教师本机工具：`http://127.0.0.1:8788/backstage`
-- Authoring Studio：`http://127.0.0.1:8788/authoring`
+- 课堂 Server：`http://127.0.0.1:9602`
+- 教师本机工具：`http://127.0.0.1:9688/backstage`
+- Authoring Studio：`http://127.0.0.1:9688/authoring`
 
 参考 Server 和参考 Docker Compose 默认只监听 loopback。只有在明确进行局域网开发时，才通过 `.env` 配置 `HOST=0.0.0.0`；这不代表已具备正式认证课堂能力。
 

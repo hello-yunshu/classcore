@@ -11,8 +11,10 @@ const REQUIRED = ['authenticated-classroom-server','student-transformboard','pre
 function runReadiness(value) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'd7-ready-'));
   const file = path.join(dir, 'manifest.json');
+  const evidenceDirectory = path.join(dir, 'evidence');
+  fs.mkdirSync(evidenceDirectory);
   fs.writeFileSync(file, JSON.stringify(value));
-  const run = spawnSync(process.execPath, ['scripts/check-d7-product-readiness.mjs'], { encoding: 'utf8', env: { ...process.env, D7_READINESS_FILE: file } });
+  const run = spawnSync(process.execPath, ['scripts/check-d7-product-readiness.mjs'], { encoding: 'utf8', env: { ...process.env, D7_READINESS_FILE: file, D7_EVIDENCE_DIR: evidenceDirectory } });
   fs.rmSync(dir, { recursive: true, force: true });
   return run;
 }
@@ -49,14 +51,14 @@ test('D7 readiness rejects empty requirement list instead of vacuous success', (
 
 test('D7 readiness cannot be self-certified with ready=true and free-text notes', () => {
   const run=runReadiness({schemaVersion:2,track:'D7',requirements:REQUIRED.map((id)=>({id,ready:true,note:'trust me'}))});
-  assert.notEqual(run.status,0); assert.match(run.stderr,/missing fixed evidence file|live verifier failed/);
+  assert.notEqual(run.status,0); assert.match(run.stderr,/missing fixed evidence file|evidence structure\/checks are not verified|live verifier failed/);
 });
 
 test('reference and D7 Compose files have intentionally different classroom exposure', () => {
   const reference=fs.readFileSync('deploy/docker/docker-compose.example.yml','utf8');
   const d7=fs.readFileSync('deploy/docker/docker-compose.d7.yml','utf8');
-  assert.match(reference,/127\.0\.0\.1:8787:8787/); assert.match(reference,/127\.0\.0\.1:8788:8788/);
-  assert.match(d7,/"8787:8787"/); assert.match(d7,/127\.0\.0\.1:8788:8788/);
+  assert.match(reference,/127\.0\.0\.1:9602:9602/); assert.match(reference,/127\.0\.0\.1:9688:9688/);
+  assert.match(d7,/"9602:9602"/); assert.match(d7,/127\.0\.0\.1:9688:9688/);
   assert.match(d7,/CLASSROOM_RUNTIME_MODE:.*authenticated-classroom-server/);
   assert.match(d7,/CLASSROOM_AUTHENTICATION:.*true/);
   assert.match(d7,/CLASSROOM_PRODUCT_READY:.*true/);

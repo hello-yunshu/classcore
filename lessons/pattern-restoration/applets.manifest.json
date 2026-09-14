@@ -1,0 +1,114 @@
+[
+  {
+    "appletTypeId": "applet:transform-board",
+    "version": "0.1.0",
+    "hostApiVersion": 1,
+    "stateSchemaVersion": 1,
+    "capabilities": [
+      "transform.drag",
+      "transform.rotate",
+      "transform.rotation-center",
+      "transform.history",
+      "state.snapshot",
+      "live.mirroring"
+    ],
+    "displayName": "Transform Board",
+    "configSchemaVersion": 1,
+    "eventSchemaVersion": 1,
+    "emittedEventTypes": [
+      "object.selected",
+      "object.moved",
+      "object.rotated",
+      "object.rotation-center.changed",
+      "history.undo",
+      "history.redo",
+      "record.token.append",
+      "record.token.remove",
+      "attempt.reset",
+      "attempt.submit",
+      "attempt.completed"
+    ],
+    "handledCommandTypes": [
+      "transform.reset",
+      "transform.highlight",
+      "transform.set-mode",
+      "transform.translate",
+      "transform.rotate",
+      "transform.select-pivot",
+      "transform.undo"
+    ],
+    "requiredPlatformCapabilities": [
+      "pointer-events",
+      "indexeddb",
+      "websocket"
+    ],
+    "optionalPlatformCapabilities": [
+      "offscreen-canvas"
+    ],
+    "configSchemaRef": "schemas/transform-board/config.v1.schema.json",
+    "stateSchemaRef": "schemas/transform-board/state.v1.schema.json",
+    "eventSchemaRefs": {
+      "object.selected": "schemas/transform-board/events/object.selected.v1.schema.json",
+      "object.moved": "schemas/transform-board/events/object.moved.v1.schema.json",
+      "object.rotated": "schemas/transform-board/events/object.rotated.v1.schema.json",
+      "object.rotation-center.changed": "schemas/transform-board/events/object.rotation-center.changed.v1.schema.json",
+      "history.undo": "schemas/transform-board/events/history.undo.v1.schema.json",
+      "history.redo": "schemas/transform-board/events/history.redo.v1.schema.json",
+      "record.token.append": "schemas/transform-board/events/record.token.append.v1.schema.json",
+      "record.token.remove": "schemas/transform-board/events/record.token.remove.v1.schema.json",
+      "attempt.reset": "schemas/transform-board/events/attempt.reset.v1.schema.json",
+      "attempt.submit": "schemas/transform-board/events/attempt.submit.v1.schema.json",
+      "attempt.completed": "schemas/transform-board/events/attempt.completed.v1.schema.json"
+    },
+    "commandSchemaRefs": {
+      "transform.reset": "schemas/transform-board/commands/transform.reset.v1.schema.json",
+      "transform.highlight": "schemas/transform-board/commands/transform.highlight.v1.schema.json",
+      "transform.set-mode": "schemas/transform-board/commands/transform.set-mode.v1.schema.json",
+      "transform.translate": "schemas/transform-board/commands/transform.translate.v1.schema.json",
+      "transform.rotate": "schemas/transform-board/commands/transform.rotate.v1.schema.json",
+      "transform.select-pivot": "schemas/transform-board/commands/transform.select-pivot.v1.schema.json",
+      "transform.undo": "schemas/transform-board/commands/transform.undo.v1.schema.json"
+    },
+    "commandSchemaVersion": 1
+  },
+  {
+    "appletTypeId": "applet:structured-instruction-builder",
+    "version": "0.1.2",
+    "hostApiVersion": 1,
+    "stateSchemaVersion": 1,
+    "capabilities": [
+      "artifact.create",
+      "instruction.semantic-blocks"
+    ],
+    "displayName": "Structured Instruction Builder",
+    "configSchemaVersion": 1,
+    "eventSchemaVersion": 1,
+    "emittedEventTypes": [
+      "instruction.block.added",
+      "instruction.block.removed",
+      "instruction.updated",
+      "artifact.created"
+    ],
+    "handledCommandTypes": [
+      "instruction.reset",
+      "instruction.lock"
+    ],
+    "requiredPlatformCapabilities": [
+      "indexeddb",
+      "websocket"
+    ],
+    "configSchemaRef": "schemas/instruction-builder/config.v1.schema.json",
+    "stateSchemaRef": "schemas/instruction-builder/state.v1.schema.json",
+    "eventSchemaRefs": {
+      "instruction.block.added": "schemas/instruction-builder/events/instruction.block.added.v1.schema.json",
+      "instruction.block.removed": "schemas/instruction-builder/events/instruction.block.removed.v1.schema.json",
+      "instruction.updated": "schemas/instruction-builder/events/instruction.updated.v1.schema.json",
+      "artifact.created": "schemas/instruction-builder/events/artifact.created.v1.schema.json"
+    },
+    "commandSchemaRefs": {
+      "instruction.reset": "schemas/instruction-builder/commands/instruction.reset.v1.schema.json",
+      "instruction.lock": "schemas/instruction-builder/commands/instruction.lock.v1.schema.json"
+    },
+    "commandSchemaVersion": 1
+  }
+]

@@ -126,7 +126,7 @@ Reference Server 已补齐 metadata-only AssetStore、raw upload/quota preflight
 1. 将 Library/Project/Picker/版本历史从 local-only IndexedDB 接到认证账号 API，并保留 offline pending 状态；
 2. 将 Draft autosave、Recovery、Rehearsal 和 Published UI 接入教师可理解的“已保存/等待同步/版本历史”语义；
 3. 把 reference 的 pinned revision playback 接到正式 Teacher lease、Display player 和 public projection；
-4. 补 selected-artifact overlay、Playwright browser refresh/reconnect/offline 和 console evidence；Display bundle boundary 已有构建 Gate。
+4. selected-artifact 与 selected-live-view overlay 已接入 Teacher/Display/Observer 的初始 Stage projection；后续只补 Playwright refresh/reconnect/offline 与 console evidence，Display bundle boundary 已有构建 Gate。
 5. 最后做 Docker/LAN/XP21A 证据，未运行的 Gate 继续标记未验证。
 
 每个涉及 Presentation/Runtime/Storage/Realtime 的小阶段运行 `npm run check`；布局阶段额外进行三尺寸真实浏览器截图和键盘/IME验收。

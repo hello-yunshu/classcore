@@ -18,8 +18,8 @@ Foundation v0.1.2 继续保持稳定。R3.10 不增加新的 Core 层，主要�
 - Private Identity Policy 以单一 JSON 配置为源，并通过 TS Runtime / JS Lesson Validator / Python Validator 共用 mutation corpus 验证；
 - roster preflight、Student Claim normalization 与 Public pseudonym 存在性均有负向回归；
 - Foundation hash 自动防漂移；
-- 8787 生产课堂端口只承载 Student / Teacher / Display / Observer；
-- 8788 为教师本机工具端口，承载 Backstage + Authoring；
+- 9602 生产课堂端口只承载 Student / Teacher / Display / Observer；
+- 9688 为教师本机工具端口，承载 Backstage + Authoring；
 - Simulation 是 Engineering Surface，不由生产 Server 暴露；
 - SQLite/WAL、session-scoped id/sequence、restart recovery、Observer背压、WebSocket消息上限保持可执行 reference vertical slice；
 - `docker:gate` 提供跨架构 Docker 验证；`release:d7` 额外强制 Apple Silicon macOS 并验证真实 Compose 部署入口；

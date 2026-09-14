@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "requirementId": "teacher-display-observer-flow",
+  "status": "verified",
+  "checks": [
+    { "id": "teacher-lease-and-stage-control", "passed": true, "evidence": "Teacher browser flow claims the controller lease and changes authoritative Stage source." },
+    { "id": "display-read-only-projection", "passed": true, "evidence": "Display browser flow joins with a display credential and renders public Stage projection without raw classroom records." },
+    { "id": "observer-pseudonymized-live-view", "passed": true, "evidence": "Observer browser flow renders anonymous public classroom projection and stays read-only." }
+  ],
+  "testCommand": "npx playwright test tests/e2e/teacher-stage.spec.ts tests/e2e/observer-classroom.spec.ts tests/e2e/presentation-display.spec.ts"
+}

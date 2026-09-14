@@ -165,6 +165,7 @@ export class SqliteClassroomStateStore {
         this.classroomArtifactGetStmt = this.db.prepare('SELECT json FROM classroom_artifacts WHERE artifact_id=? AND revision=?');
         this.classroomArtifactLatestStmt = this.db.prepare('SELECT json FROM classroom_artifacts WHERE artifact_id=? ORDER BY revision DESC LIMIT 1');
         this.classroomSubmissionGetStmt = this.db.prepare('SELECT json FROM classroom_submissions WHERE submission_id=?');
+        this.classroomSubmissionListStmt = this.db.prepare('SELECT json FROM classroom_submissions ORDER BY updated_at, submission_id');
         this.classroomTransferGetStmt = this.db.prepare('SELECT json FROM classroom_transfers WHERE transfer_id=?');
     }
     close() {
@@ -395,6 +396,11 @@ export class SqliteClassroomStateStore {
         this.db.prepare('INSERT OR REPLACE INTO classroom_submissions(submission_id,json,updated_at) VALUES(?,?,?)').run(submission.submissionId, JSON.stringify(submission), now());
     }
     getSubmission(submissionId) { const row = this.classroomSubmissionGetStmt.get(submissionId); return row ? JSON.parse(row.json) : null; }
+    listSubmissions(sessionId, activityId) {
+        return this.classroomSubmissionListStmt.all()
+            .map(row => JSON.parse(row.json))
+            .filter(value => value.sessionId === sessionId && (!activityId || value.activityId === activityId));
+    }
     saveTransfer(transfer) {
         const existing = this.classroomTransferGetStmt.get(transfer.transferId);
         if (existing) {

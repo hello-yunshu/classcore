@@ -12,6 +12,14 @@ R3.10 是 **Release-Assurance Closure & Codex Mother Package**：Foundation v0.1
 
 2026-09-13 Playback-fidelity direction reset：Office authoring parity 降为非主线，PPTX import/preservation/preflight/render/playback 成为主线；RuntimeIndex 增加可信 aspect/hidden 元数据；Display 移除固定 16:9 样式；Playback Adapter 增加 silent/live explicit seek；Presentation Project 增加 immutable originalAssetId；Studio no-op rehearse/publish 跳过 web-ppt save round-trip。真实 PowerPoint fixture、reference screenshot、CompatibilityReport UI、Display Browser E2E、离线/LAN、认证课堂与 XP21A 仍为 `NOT_EVALUATED`，冻结判断保持 `PLAYBACK-FIDELITY / NOT-FROZEN`。
 
+2026-09-13 Lesson-boundary mainline closure：Student Classroom 已接入认证 Join/Activity/Event/Snapshot/Live/Submission/IndexedDB Outbox/reconnect；认证 Teacher Runtime 已接入 server-owned identity、Presence、Controller Lease 恢复、1–4 selection、random online selection、Submission resource projection、authoritative Stage source/annotation、server-issued Display join URL 与 published Presentation PlaybackState/control；Display 已通过 session-bound credential、公共 Stage 与无身份 `presentation.sync` projection smoke，且不接收 raw Presence/Submission/Live；Lesson Analytics Profile 已由认证 Teacher chain 读取服务器事件/证据，生成 EvidenceRef 与 recommendation，并在教师确认后进入 generic Stage comparison。证据：`npm run check` 178/178、Student E2E 1/1、Teacher/Display E2E 1/1、analytics protocol 3/3、Presentation protocol 4/4、reference Compose Docker gate PASS、authenticated D7 Docker gate PASS、`git diff --check` PASS。D7 product readiness 仍保持 fail-closed，Observer/XP21A/真实 LAN 等独立证据尚未完成。
+2026-09-14 Real deck + portable fonts：使用仓库内 `记录图案还原过程课件_工作台配色优化版.pptx` 作为 `CLASSROOM_PRESENTATION_PPTX`，可信冻结解析出 7 页、无解析阻断；Display/Authoring 构建随包携带 `LXGW WenKai GB Lite`（楷体近似）和 `Noto Serif`（Times New Roman 近似）及各自 OFL 许可证，不依赖宿主机安装。字体审计保留 2 个 `APPROXIMATED warning`，明确记录替代关系而未伪报 `SUPPORTED`；认证 Presentation protocol 4/4、Student E2E 1/1、Teacher/Display E2E 1/1、`npm run check` 180/180 通过。原始 PPTX 未修改；PowerPoint 参考截图、真实 Display 视觉对照、离线字体缓存与完整宿主迁移演练仍未评估。
+2026-09-14 Display playback repair：认证 Server 补齐当前 Session Pin 的只读 `presentation-runtime`/`asset` API，Display 播放器先用 Display credential Join，再发送 authenticated `client.hello`；旧 reference Server 无 Join API 时保留 legacy hello 回退。真实 7 页课件浏览器验证通过：状态为“已同步 · 权威播放位置”，SVG 图像节点 2 个，渲染尺寸 1200×675，LXGW/Noto Serif 两个随包字体请求成功，console/page error 为空；认证 Display 回归 1/1、`npm run check` 180/180、reference Docker gate 与 authenticated D7 Docker gate 均通过。原 404/重连阻塞已解决。
+2026-09-14 Observer public projection：Observer 已接入认证 token、匿名订阅和独立课堂观察页面；订阅后仅接收 public Presence、Stage 和 Presentation sync，不接收 raw Presence、Submission、Live 或学生真实身份。修复 `ClassroomClient` 自动重连后丢失 Observer 订阅的问题：新增 `onConnected` 生命周期通知，Observer 在首次连接与自动重连后都会重新订阅；公共 Stage 改为严格白名单投影。Observer 隐私边界与 Stage/Presentation 更新协议回归 9/9，真实浏览器 E2E 1/1，`npm run check` 181/181。课堂工作台配色已记录到 `docs/development/DESIGN-TOKENS.md`，并作为所有 Surface 的后续视觉基线；配色设计不改变用户提供的 PPTX 内容。
+2026-09-14 课程准备台与课堂控制台分层：`9688/backstage` 已从中性运维 Shell 升级为课程工作区，支持 Lesson Package 目录、创建草稿课程、资源文件导入、PPTX 自动绑定 Published Presentation、课程发布；`9602/teacher?mode=classroom` 收敛为课堂现场控制台，带 Session 参数时自动认证加入。认证 Server 新增课程目录、工作区资源、发布和独立 Session 启动 API；启动结果签发 Teacher/Student/Display/Observer 四端入口，并固定课程版本。课程工作区协议回归 1/1，真实浏览器已验证课程准备台→课堂控制台跳转、教师自动加入、四端同 Session 的 Student Join 与 Teacher→Display/Observer Stage 同步。当前工作区课程以已有 Lesson Package 为运行基座，未把课程专属逻辑写入 Core。
+2026-09-14 课程工作区最终复检：修复工作区摘要未合并基座 Lesson Package 活动/资源的问题；修复创建课程依赖浏览器不支持的 `prompt()`，改为可访问的页面内表单；修正源码可读性门禁与旧 Teacher/Backstage smoke 文案。`npm run check` 通过，186/186 tests、Formal/Lesson/Dist/HTTP/WS/Load/Smoke 全部通过；`npm run docker:gate` 通过，宿主 `linux/arm64`、容器用户 `node`、课堂/本机工具端口隔离和 SQLite 重启序号恢复通过。浏览器复检覆盖 Backstage 发布→Teacher 自动加入→Student 使用 A17 加入→Display/Observer 公共 Stage 同步；XP21A、真实课堂 LAN 和 authenticated D7 仍按 fail-closed 规则保留为未完成证据。
+2026-09-14 课堂流程修复与复验：修复 Backstage 页面内创建表单的 `[hidden]` 显示回归；课程准备台打开 Authoring Studio 时携带 `courseId`、课程标题和已绑定 `presentationId`，Studio 显示当前课程并提供返回准备台入口；Teacher Runtime 显示当前课程和服务端下发的学生/观察端入口信息，提供大屏地址复制和返回准备台；Controller Lease 延长为 45 秒并由教师端每 10 秒自动续租，刷新后按服务端最新 revision 自动恢复控制权，控制操作错误显示可恢复原因。浏览器复验确认续租超过原 20 秒窗口仍保持控制权，Teacher→Display/Observer 的 Activity、Presentation 播放同步和 Student 提交闭环通过；Backstage、Authoring、Teacher、Display、Observer、Student 六端 console warn/error 均为空。`npm run check:fast` 186/186 通过；XP21A、真实课堂 LAN、authenticated D7 仍未宣称完成。
+
 ## 接手后的第一步
 
 ```bash
@@ -21,7 +29,7 @@ npm run bootstrap
 
 若 `doctor` 显示 Node/npm/Python 不匹配，先切到 `.nvmrc` / `.node-version` 指定的 Node 26.8.2，并使用 Python 3.14.7。`bootstrap` 会使用 `package-lock.json` 执行 `npm ci`、创建 `.venv` 并安装 `requirements-dev.txt`，最后执行完整 `npm run check`。
 
-先运行 `npm run d7:product` 查看真实产品 blocker。当前母包该命令**应当失败**，因为 Authenticated Classroom Server、TransformBoard、Presentation 与真实课堂链仍未完成。只有这些 requirement 都有实证后，才在教师 Apple Silicon Mac 上运行 `npm run release:d7`。它会把 Docker build/run/restart/SQLite 恢复变成自动 Gate；不要只依据静态 Dockerfile 判断“已经可上课”。
+先运行 `npm run d7:product` 查看真实产品 blocker。当前母包该命令**仍应当失败**，因为 D7 manifest 还要求 Presentation 正式课堂链、Teacher/Display/Observer 全流程和 XP21A rehearsal 等独立证据。只有所有 requirement 都有实证后，才在教师 Apple Silicon Mac 上运行 `npm run release:d7`。它会把 Docker build/run/restart/SQLite 恢复变成自动 Gate；不要只依据静态 Dockerfile 判断“已经可上课”。
 
 ## 当前已经完成
 
@@ -68,32 +76,35 @@ npm run bootstrap
 - `presentation-runtime` D7 verifier 已从 placeholder 改为真实 fail-closed 核心链 verifier，并已补齐 presentation evidence；D7 overall 仍不能宣称完成；
 - 当前 Presentation 唯一主线为 web-ppt；Studio 接入结果、课堂接缝边界和验收 Gate 见 `docs/development/PRESENTATION-WEBPPT-NEXT-PHASE.md`；
 - D2 Alpha 有模型级回归与真实浏览器验收，Student 不加载 Presentation 编辑器，Foundation 与现有 Surface/Service Plane 边界保持不变；
+- 认证 Classroom vertical slice 已接入 Student 与 Teacher/Display seam；`packages/classroom-client` 保持学生 durable path 与 richer surface 控制消息分离，认证 demo server 不改变 reference server 的未认证边界；
+- 当前 Lesson Analytics Profile 留在 `lessons/pattern-restoration/analytics`，不向 `packages/intelligence` 添加课程术语；deterministic fixture、EvidenceRef、timeout fallback、confirm/dismiss 和 generic Stage comparison 已由 `tests/lesson-analytics.test.mjs` 覆盖；
 
 ## 当前明确未完成
 
-- TransformBoard 与真实课堂 Server 的 Join/Activity/Submission 链接入；
-- 认证账号服务器接入、真实身份 owner authorization、Studio Library 的完整版本历史 UI；reference API/Picker/Prepare/设计绑定的模型级路径已存在，但不是认证产品能力；
-- Presentation PlaybackState 与 Teacher lease 的正式课堂授权、Display player/reconnect 的真实浏览器闭环；reference transport 已有 pinned revision + SQLite sync 接缝，仍未宣称 D7；
-- Playwright Browser E2E 已在当前工作树本地真实服务通过 14/14；offline-after-prepare、真实认证课堂 Docker/LAN/XP21A 证据仍未完成；reference runtime snapshot/asset API 与 Prepare/Pin 接缝已存在，不能替代认证课堂能力；
-- `selected-artifact` 等 Widget selector 与真实课堂 Stage/Artifact public/teacher projection 的正式接线；通用 Widget Registry primitive 已完成，但尚未替代 reference transport。
-- 浏览器 mount 的长期 soak、Server restart/Display reconnect、真实 Docker/LAN/XP21A evidence；
-- 完整 Join / Presence / Outbox / Submission / Artifact Exchange 产品链；
-- Teacher / Observer / Display 的完整正式课堂 UI（Teacher 目前只有课件库入口，课堂控制仍是 reference transport）；
-- Lesson-specific Analytics Runtime 与《图案的还原》规则智能；
+- 认证课堂已绑定 published Presentation revision、可信 RuntimeIndex 与 PlaybackState/control；真实 7 页课件已完成 Display visual playback 浏览器验证，但 PowerPoint 参考截图、offline/restart recovery 与完整正式课件链仍未完成；
+- Observer 正式课堂 UI 与 public projection flow 已完成初版并有本机浏览器/协议证据；真实 LAN/offline 验证按用户决定记为 `SKIPPED (user-approved)`，不作为当前本机实现阶段阻塞；
+- Teacher/Display reconnect、Server restart 后的正式课堂长链与真实 LAN/offline evidence 尚未完成；当前 Student reconnect 和 Docker product identity 已分别验收；
+- `current-activity-summary`、`selected-artifact` 与 `selected-live-view` 已完成 Teacher/Display/Observer 初始 public projection 接线；`student-comparison` 已补受控 Artifact 内容摘要投影，完整 Artifact 交互渲染与其他 Widget selector 仍未替代 reference transport。
+- 浏览器 mount 的长期 soak、正式课堂 Server restart/Display reconnect、真实 Docker/LAN/XP21A evidence；其中真实 LAN/offline 属于用户已批准跳过的阶段外证据，不伪报为 PASS；
+- 完整 Join / Presence / Outbox / Submission / Artifact Exchange 产品链仍需跨所有正式 Surface 接线；当前 Student 与 Teacher/Display 最小链路已验收；
+- Teacher/Display 的任务 05 最小课堂 UI 与 Presentation play/pause 控制已完成，Observer 初版 UI、公共 Stage/Presentation 接线与客户端自动重连订阅已完成；当前本机实现阶段按本机证据收口，跨重启恢复仍属于后续正式课堂证据；
+- Lesson-specific Analytics Profile 已完成确定性分类与 recommendation gate，并已接入认证 Teacher 的 request → evidence → teacher-confirm → Stage comparison 链；跨正式 Observer/Presentation UI 的完整接线仍未完成；
 - authenticated D7 Docker/LAN classroom runtime；本轮通用 reference Docker gate 已在 Apple Silicon `linux/arm64` 通过，amd64 镜像构建/架构检查也通过，但这不等于 D7 authenticated gate。
 - 真实路由器 + XP21A LAN rehearsal（自动 host LAN-interface probe 不能替代）；
 - XP21A 小规模真机 smoke（若设备可得）。
+- 课程工作区当前支持“以现有 Lesson Package 为运行基座”的创建/资源/PPTX/发布/启动垂直切片；尚未提供任意新 Applet 的图形化编排器，也尚未实现跨不同 Lesson Package 的热加载。新课仍应先按 `lessons/<slug>` 正式校验，再接入课程目录。
 
-本轮主线验证状态：`npm run check` 通过，154/154 tests、50 Student + 40 Observer simulation、真实 WebSocket + SQLite load、arm64 reference Docker runtime gate 与 amd64 image build 通过；本地 Playwright 14/14 通过；认证 owner、正式课堂 LAN/offline 与 XP21A 仍为 `NOT_EVALUATED`。
+本轮主线验证状态：`npm run check` 通过，186/186 tests、50 Student + 40 Observer simulation、真实 WebSocket + SQLite load、reference Compose gate 与本机 authenticated runtime gate 通过；`npm run docker:gate` 已通过 Apple Silicon `linux/arm64` 容器门禁，但这不等于 authenticated D7 Docker/LAN gate。真实课件随包字体替代已通过协议与浏览器回归；课程工作区 1/1、Student E2E 1/1、Teacher/Display E2E 2/2、Observer/analytics protocol 9/9、Presentation protocol 4/4 通过。当前阶段以本机实现和本机可复验证据收口；真实 LAN/offline 记为 `SKIPPED (user-approved)`，不伪报 PASS；XP21A 与正式 D7 evidence 仍不宣称完成。
 
 ## 开发优先级
 
-1. Teacher Runtime / Display PresentationPlaybackState 同步与恢复；
-2. Server Published Presentation + AssetStore 与课堂资源 API；
-3. `selected-artifact` binding / projection；
-4. Analytics / Rule Intelligence / Advice；
-5. D6并发、断网重连、Server restart、Observer降级演练；
-6. D7冻结RC，不再加功能。
+1. 课程准备台继续补齐 Preflight/Diagnostics 与可运行版本检查，并保持课程工作区不污染 Core；
+2. Published Presentation/AssetStore 与认证 Stage/Display PlaybackState 绑定；
+3. 后续正式课堂证据：Server restart、Display/Observer 长链与 D7/XP21A；真实 LAN/offline 已按用户决定延期；
+4. 扩展其他 Widget selector，并补完整 Artifact 交互渲染；`current-activity-summary`、`student-comparison` 的受控 Artifact 内容摘要、Analytics recommendation → Teacher confirm → Stage comparison 的 `selected-artifact` 主链与 `selected-live-view` 初始投影已完成；
+5. D6 并发、断网重连、Server restart、Teacher/Display reconnect 演练；
+6. XP21A physical LAN rehearsal 与 D7 evidence closure；
+7. D7 冻结 RC，不再加无证据功能。
 
 ## 三个硬节点
 
@@ -124,7 +135,7 @@ npm run bootstrap
 如果用户只说“继续推进”而没有重新指定技术方向，不要重新从零审计 Foundation。按下面顺序继续：
 
 1. 运行 `npm run doctor`，再运行 `npm run bootstrap`；
-2. 继续完成 Published Presentation/AssetStore/Teacher-Display recovery vertical slice；
+2. 继续完成课程准备台 Preflight、课程版本与 Published Presentation/AssetStore/Teacher-Display recovery vertical slice；
 3. 每个小阶段至少运行 `npm run check:fast`，涉及 Runtime/Storage/Realtime/Presentation/Docker 时运行完整 `npm run check`；
 5. 只有真实实现证据表明现有 Foundation 无法表达需求时，才提出 Foundation 变更，不要因为某个页面实现不方便而改 Core。
 

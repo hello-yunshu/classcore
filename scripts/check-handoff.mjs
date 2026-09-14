@@ -26,6 +26,8 @@ const requiredFiles = [
   'scripts/docker-d7-gate.mjs',
   'scripts/check-d7-product-readiness.mjs',
   'scripts/check-workspace-boundaries.mjs',
+  'scripts/check-lesson-boundaries.mjs',
+  'config/lesson-boundaries.json',
   'docs/deployment/CLASSROOM-LAN-REHEARSAL.md',
   'CR11-RELEASE-ASSURANCE-CLOSURE-REPORT.md',
   'R3.10-COMPLETE-AUDIT.md',
@@ -43,8 +45,9 @@ for (const legacy of ['CR6-HARDENING-REPORT.md', 'CR7-HARDENING-REPORT.md', 'R3.
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 if (pkg.classroomRuntime?.roadmapRevision !== 'R3.10') errors.push('package roadmapRevision must be R3.10');
 if (pkg.classroomRuntime?.contractCorrectnessRevision !== 'CR11') errors.push('package contractCorrectnessRevision must be CR11');
-if (!pkg.scripts?.doctor || !pkg.scripts?.bootstrap || !pkg.scripts?.['foundation:check'] || !pkg.scripts?.['docker:gate'] || !pkg.scripts?.['release:check'] || !pkg.scripts?.['release:d7'] || !pkg.scripts?.['d7:product'] || !pkg.scripts?.['policy:check'] || !pkg.scripts?.['integrity:check'] || !pkg.scripts?.['workspace:check']) {
-  errors.push('doctor/bootstrap/foundation:check/docker:gate/release:check/release:d7/d7:product/policy:check/integrity:check/workspace:check scripts are required');
+const requiredScripts = ['doctor', 'bootstrap', 'foundation:check', 'docker:gate', 'release:check', 'release:d7', 'd7:product', 'policy:check', 'integrity:check', 'workspace:check', 'lesson-boundary:check'];
+if (requiredScripts.some((script) => !pkg.scripts?.[script])) {
+  errors.push('doctor/bootstrap/foundation:check/docker:gate/release:check/release:d7/d7:product/policy:check/integrity:check/workspace:check/lesson-boundary:check scripts are required');
 }
 if (!String(pkg.scripts?.test ?? '').includes('npm run build')) errors.push('npm test must build from a clean checkout before unit tests');
 if (!String(pkg.scripts?.['server:dev'] ?? '').includes('--env-file-if-exists=.env')) errors.push('server:dev must load optional .env without requiring it');
@@ -53,8 +56,8 @@ if (!String(pkg.scripts?.['server:dev'] ?? '').includes('npm run build')) errors
 const npmrc = fs.readFileSync(path.join(root, '.npmrc'), 'utf8');
 if (!/^engine-strict=true$/m.test(npmrc)) errors.push('.npmrc must enforce engine-strict=true');
 const envExample = fs.readFileSync(path.join(root, '.env.example'), 'utf8');
-if (!/^PORT=8787$/m.test(envExample) || !/^LOCAL_TOOLS_PORT=8788$/m.test(envExample)) {
-  errors.push('.env.example must document classroom 8787 and local tools 8788');
+if (!/^PORT=9602$/m.test(envExample) || !/^LOCAL_TOOLS_PORT=9688$/m.test(envExample)) {
+  errors.push('.env.example must document classroom 9602 and local tools 9688');
 }
 
 const agents = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
@@ -67,13 +70,13 @@ for (const token of ['R3.10', 'D2', 'D7', 'D21', 'linux/arm64', 'TransformBoard'
 }
 
 const compose = fs.readFileSync(path.join(root, 'deploy/docker/docker-compose.example.yml'), 'utf8');
-if (!/127\.0\.0\.1:8788:8788/.test(compose)) errors.push('Local tools Docker port must be host-only: 127.0.0.1:8788:8788');
-if (!/127\.0\.0\.1:8787:8787/.test(compose)) errors.push('reference classroom Docker port must be loopback-only: 127.0.0.1:8787:8787');
+if (!/127\.0\.0\.1:9688:9688/.test(compose)) errors.push('Local tools Docker port must be host-only: 127.0.0.1:9688:9688');
+if (!/127\.0\.0\.1:9602:9602/.test(compose)) errors.push('reference classroom Docker port must be loopback-only: 127.0.0.1:9602:9602');
 const d7Compose = fs.readFileSync(path.join(root, 'deploy/docker/docker-compose.d7.yml'), 'utf8');
 if (!/CLASSROOM_RUNTIME_MODE:.*authenticated-classroom-server/.test(d7Compose)) errors.push('D7 Compose must explicitly request authenticated classroom runtime');
 if (!/CLASSROOM_AUTHENTICATION:.*true/.test(d7Compose)) errors.push('D7 Compose must explicitly require authentication');
 if (!/CLASSROOM_PRODUCT_READY:.*true/.test(d7Compose)) errors.push('D7 Compose must explicitly require product readiness');
-if (!/\"8787:8787\"/.test(d7Compose)) errors.push('authenticated D7 Compose must publish classroom LAN port 8787');
+if (!/\"9602:9602\"/.test(d7Compose)) errors.push('authenticated D7 Compose must publish classroom LAN port 9602');
 const dockerfile = fs.readFileSync(path.join(root, 'deploy/docker/Dockerfile.server'), 'utf8');
 if (!/npm ci/.test(dockerfile)) errors.push('Dockerfile must use npm ci');
 if (/npm install/.test(dockerfile)) errors.push('Dockerfile must not use npm install');

@@ -1,0 +1,31 @@
+{
+  "lessonIds": [
+    "lesson:pattern-restoration"
+  ],
+  "lessonPathTokens": [
+    "pattern-restoration"
+  ],
+  "lessonDisplayNames": [
+    "图案的还原"
+  ],
+  "coreRoots": [
+    "packages/contracts",
+    "packages/runtime",
+    "packages/storage",
+    "packages/realtime",
+    "packages/identity",
+    "packages/intelligence",
+    "packages/projections",
+    "packages/platform",
+    "packages/presentation"
+  ],
+  "genericSurfaceRoots": [
+    "apps/student-web",
+    "apps/teacher-web",
+    "apps/display-web"
+  ],
+  "productionRoots": [
+    "packages",
+    "apps"
+  ]
+}

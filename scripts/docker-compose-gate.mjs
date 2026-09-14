@@ -12,8 +12,8 @@ if (!dockerAvailable()) { console.error('Reference compose gate FAILED: Docker u
 try {
   run([...compose, 'config', '--quiet']);
   run([...compose, 'up', '-d', '--build']);
-  await Promise.all([waitForHttpReady('http://127.0.0.1:8787/healthz', 120, 100), waitForHttpReady('http://127.0.0.1:8788/healthz', 120, 100)]);
-  const ready = await (await fetch('http://127.0.0.1:8787/readyz')).json();
+  await Promise.all([waitForHttpReady('http://127.0.0.1:9602/healthz', 120, 100), waitForHttpReady('http://127.0.0.1:9688/healthz', 120, 100)]);
+  const ready = await (await fetch('http://127.0.0.1:9602/readyz')).json();
   if (ready.runtimeMode !== 'reference-transport' || ready.authentication !== false || ready.productReady !== false) throw new Error(`unexpected reference runtime identity: ${JSON.stringify(ready)}`);
   console.log('Reference Docker Compose gate PASSED: both endpoints are loopback-only and runtime identifies as reference transport');
 } finally {

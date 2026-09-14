@@ -9,13 +9,29 @@ export const WEB_PPT_ENGINE = Object.freeze({
 });
 
 /** Conservative server-side preflight; browser supplied reports are never trusted. */
-export async function buildTrustedWebPptCompatibilityReport(bytes, { assetId, fingerprint, engineVersion = WEB_PPT_ENGINE.engineVersion } = {}) {
+export async function buildTrustedWebPptCompatibilityReport(bytes, { assetId, fingerprint, engineVersion = WEB_PPT_ENGINE.engineVersion, availableFonts = null, fontSubstitutions = {} } = {}) {
     const issues = [];
     try {
         const presentation = await parse(new Uint8Array(bytes), { lazy: false });
         issues.push({ severity: 'info', capability: 'parse', fidelity: 'SUPPORTED', detail: `已解析 ${presentation.slides.length} 页 PPTX` });
         issues.push({ severity: 'info', capability: 'static-render', fidelity: 'SUPPORTED', detail: '使用 web-ppt 静态渲染路径；PowerPoint 参考截图尚未提供' });
-        for (const font of collectFonts(presentation.slides)) issues.push({ severity: 'warning', capability: 'font', fidelity: 'NOT_EVALUATED', detail: `使用字体「${font.family}」，Display 宿主字体清单尚未提供` });
+        const knownFonts = Array.isArray(availableFonts) ? new Set(availableFonts.map(font => String(font).trim().toLowerCase()).filter(Boolean)) : null;
+        const substitutions = new Map(Object.entries(fontSubstitutions).map(([source, replacement]) => [source.trim().toLowerCase(), String(replacement).trim()]).filter(([source, replacement]) => source && replacement));
+        for (const font of collectFonts(presentation.slides)) {
+            const family = font.family.trim();
+            const known = knownFonts?.has(family.toLowerCase()) === true;
+            const replacement = substitutions.get(family.toLowerCase());
+            issues.push({
+                severity: known ? 'info' : 'warning',
+                capability: 'font',
+                fidelity: known ? 'SUPPORTED' : replacement ? 'APPROXIMATED' : 'NOT_EVALUATED',
+                detail: known
+                    ? `使用字体「${family}」；Display 字体清单已确认可用`
+                    : replacement
+                        ? `使用字体「${family}」；Display 随包字体「${replacement}」作为近似替代`
+                        : `使用字体「${family}」，Display 字体${knownFonts ? '清单未确认可用' : '清单尚未提供'}`,
+            });
+        }
         presentation.slides.forEach((slide, slideIndex) => {
             if (slide.transition && !new Set(['none', 'fade', 'cut', 'push', 'pull', 'cover', 'wipe', 'split', 'zoom']).has(slide.transition.type))
                 issues.push({ severity: 'warning', capability: 'transition', fidelity: 'APPROXIMATED', slideIndex, detail: `第 ${slideIndex + 1} 页切换 ${slide.transition.type} 仅作近似` });

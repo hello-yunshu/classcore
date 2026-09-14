@@ -52,8 +52,8 @@ export function createBlankStudioDocument(title = '未命名公开课'): StudioD
             steps: 1,
             elements: [
                 { id: 'element-title', kind: 'text', x: 72, y: 66, width: 760, height: 80, zIndex: 1, text: '标题', color: '#24324b' },
-                { id: 'element-subtitle', kind: 'text', x: 76, y: 156, width: 620, height: 42, zIndex: 2, text: '副标题', color: '#6c7483' },
-                { id: 'element-shape', kind: 'shape', shape: 'circle', x: 618, y: 268, width: 160, height: 160, zIndex: 3, color: '#e6a23c' },
+                { id: 'element-subtitle', kind: 'text', x: 76, y: 156, width: 620, height: 42, zIndex: 2, text: '副标题', color: '#697386' },
+                { id: 'element-shape', kind: 'shape', shape: 'circle', x: 618, y: 268, width: 160, height: 160, zIndex: 3, color: '#897e70' },
             ],
         }],
     };
@@ -361,6 +361,9 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  let published: PublishedPresentationRecord | null = null;
  let busy = false;
  let serverProject: ServerProjectMetadata | null = loadServerProjectMetadata();
+ const authoringParams = new URLSearchParams(window.location.search);
+ const courseIdContext = authoringParams.get('courseId')?.trim() ?? '';
+ const courseTitleContext = authoringParams.get('courseTitle')?.trim() ?? '';
  let serverSyncPending = false;
  let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
  let thumbnailRefreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -408,6 +411,14 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  const quickCommand = (id: string, label: string, icon: IconId, execute: () => void | Promise<void>, shortcut: string): HTMLButtonElement => createCommandButton({ id, label, icon, shortcut, execute }, 'icon-only');
  quickAccess.append(quickCommand('save', '保存', 'save', () => persist(), '⌘/Ctrl+S'), quickCommand('undo', '撤销', 'undo', () => { controller.undo(); renderAll(); }, '⌘/Ctrl+Z'), quickCommand('redo', '重做', 'redo', () => { controller.redo(); renderAll(); }, '⌘/Ctrl+Shift+Z'));
  documentBar.append(quickAccess, titleInput, saveState);
+ if (courseIdContext) {
+  const courseContext = document.createElement('a');
+  courseContext.className = 'studio-course-context';
+  courseContext.href = '/backstage';
+  courseContext.textContent = `课程：${courseTitleContext || courseIdContext} · 返回准备台`;
+  courseContext.title = `当前课程 ${courseIdContext}`;
+  documentBar.append(courseContext);
+ }
  header.append(brand, documentBar, headerActions);
  app.append(header);
  const toolbar = document.createElement('nav');
@@ -1174,7 +1185,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
    createDropdown(command('image-arrange', '排列', 'arrange', () => undefined), arrange),
   ]);
   if (ribbonTab === 'shape-format') group('形状格式', [
-   button('形状填充', wrapAction(() => { const id = selectedId(); if (id) controller.setFill(id, solid(rgb('#5375B8'))); renderAll(); }), 'tool-button', '形状填充', 'background'),
+   button('形状填充', wrapAction(() => { const id = selectedId(); if (id) controller.setFill(id, solid(rgb('#5575B8'))); renderAll(); }), 'tool-button', '形状填充', 'background'),
    button('形状轮廓', wrapAction(() => { const id = selectedId(); if (id) controller.setStroke(id, { color: rgb('#24324B'), width: 1.5, dash: null, cap: 'butt', join: 'miter', compound: 'sng' }); renderAll(); }), 'tool-button', '形状轮廓', 'shape-outline'),
    createDropdown(command('shape-arrange', '排列', 'arrange', () => undefined), arrange),
   ]);
@@ -1190,7 +1201,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
     commandSurface!.createCommandButton({ id: 'text-underline', label: '下划线', icon: 'underline', checked: textState?.u.value === true, disabled: textDisabled, execute: () => { controller.toggleUnderline(); renderAll(false); } }, 'compact'),
     commandSurface!.createCommandButton({ id: 'text-strike', label: '删除线', icon: 'strike', checked: textState?.strike.value === true, disabled: textDisabled, execute: () => { controller.setTextStyle(selectedRecord ? selectedRecord.id : '', { strike: textState?.strike.mixed || textState?.strike.value !== true }); renderAll(false); } }, 'compact'),
     createDropdown({ id: 'text-color', label: '文字颜色', icon: 'font', disabled: textDisabled, execute: () => undefined }, [
-     ...[['墨色', '#24324B'], ['蓝色', '#5375B8'], ['珊瑚', '#D66B52'], ['金色', '#C48722'], ['白色', '#FFFFFF']].map(([label, color]) => command(`text-color:${color}`, label, 'font', () => { controller.setTextColor(rgb(color)); renderAll(false); })),
+     ...[['墨色', '#24324B'], ['蓝色', '#5575B8'], ['珊瑚', '#C96B55'], ['灰金', '#897E70'], ['白色', '#FFFFFF']].map(([label, color]) => command(`text-color:${color}`, label, 'font', () => { controller.setTextColor(rgb(color)); renderAll(false); })),
      command('text-color-reset', '恢复来源颜色', 'font', () => { controller.setTextColor(null); renderAll(false); }),
     ]),
     commandSurface!.createCommandButton({ id: 'text-smaller', label: '减小字号', icon: 'zoom-out', disabled: textDisabled, execute: () => { controller.adjustFontSize(-2); renderAll(false); } }, 'compact'),
@@ -1388,7 +1399,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  intro.className = 'page-pane-intro';
  intro.textContent = '调整当前页面的背景、备课备注和显示状态。';
  inspectorBody.append(pageHeading, intro);
- const colors: Array<[string, string]> = [['纸张', '#F7F4EE'], ['蓝灰', '#E7ECF7'], ['珊瑚', '#F4E1DA'], ['白色', '#FFFFFF']];
+ const colors: Array<[string, string]> = [['纸张', '#F6F3EC'], ['淡蓝', '#E3EAF7'], ['珊瑚', '#FFF8F6'], ['白色', '#FFFFFF']];
  const swatches = document.createElement('div');
  swatches.className = 'swatch-row';
  colors.forEach(([label, color]) => swatches.append(button(label, wrapAction(() => { controller.setSlideBackground(slideId, solid(rgb(color)));
@@ -1403,7 +1414,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  backgroundHint.className = 'page-section-hint';
  backgroundHint.textContent = '快速套用主题色，或输入自定义颜色。';
  backgroundSection.append(backgroundLabel, backgroundHint, swatches);
- const customColor = input('自定义背景色', '#F7F4EE', value => { if (/^#[0-9a-f]{6}$/i.test(value)) { controller.setSlideBackground(slideId, solid(rgb(value))); renderAll(); } });
+ const customColor = input('自定义背景色', '#F6F3EC', value => { if (/^#[0-9a-f]{6}$/i.test(value)) { controller.setSlideBackground(slideId, solid(rgb(value))); renderAll(); } });
  customColor.className = 'background-hex';
  backgroundSection.append(labelBlock('自定义颜色', customColor));
  inspectorBody.append(backgroundSection);
@@ -1599,7 +1610,7 @@ async function mountPresentationStudioAsync(root: HTMLElement): Promise<void> {
  label.textContent = '填充与描边';
  const swatches = document.createElement('div');
  swatches.className = 'swatch-row';
- [['蓝', '#5375B8'], ['珊瑚', '#D66B52'], ['金', '#E6A23C'], ['墨', '#24324B'], ['无', '']].forEach(([name, color]) => swatches.append(button(name, wrapAction(() => { controller.setFill(id, color ? solid(rgb(color)) : { type: 'none' });
+ [['蓝', '#5575B8'], ['珊瑚', '#C96B55'], ['灰金', '#897E70'], ['墨', '#24324B'], ['无', '']].forEach(([name, color]) => swatches.append(button(name, wrapAction(() => { controller.setFill(id, color ? solid(rgb(color)) : { type: 'none' });
  renderAll();
  }), 'swatch-button')));
  const strokes = document.createElement('div');

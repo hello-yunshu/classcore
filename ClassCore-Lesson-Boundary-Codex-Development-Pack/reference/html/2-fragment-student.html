@@ -1,0 +1,1145 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>方格图案还原交互系统｜笑脸</title>
+<style>
+  :root {
+    --ink: #111827;
+    --muted: #5f6b7a;
+    --panel: #ffffff;
+    --page: #f4f7fb;
+    --line: #707986;
+    --accent: #2563eb;
+    --accent-soft: #eaf1ff;
+    --danger: #c43838;
+    --success: #157347;
+    --yellow: #ffd54a;
+  }
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background: var(--page);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  button, svg { -webkit-tap-highlight-color: transparent; }
+  .app {
+    width: min(1180px, calc(100% - 28px));
+    margin: 20px auto 32px;
+  }
+  .topbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 14px;
+  }
+  .title-wrap h1 {
+    margin: 0;
+    font-size: clamp(20px, 2.2vw, 30px);
+    line-height: 1.2;
+    font-weight: 760;
+    letter-spacing: .01em;
+  }
+  .title-wrap p {
+    margin: 8px 0 0;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 9px;
+    flex: 0 0 auto;
+  }
+  .btn {
+    border: 1px solid #cfd7e3;
+    border-radius: 10px;
+    min-height: 42px;
+    padding: 0 16px;
+    background: #fff;
+    color: #202936;
+    font-size: 15px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: background .14s ease, border-color .14s ease, transform .14s ease;
+  }
+  .btn:hover { background: #f7f9fc; border-color: #b8c3d2; }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: 3px solid rgba(37,99,235,.22); outline-offset: 2px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #1f55c8; }
+  .btn:disabled { opacity: .48; cursor: default; transform: none; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid #dce3ec;
+    border-radius: 16px;
+    box-shadow: 0 8px 28px rgba(34, 48, 70, .08);
+    padding: clamp(12px, 2vw, 22px);
+  }
+  .board-shell {
+    width: 100%;
+    display: grid;
+    place-items: center;
+    padding: 4px;
+    position: relative;
+  }
+  #puzzleSvg {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 2 / 1;
+    display: block;
+    overflow: visible;
+    background: #fff;
+    border-radius: 4px;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #puzzleSvg * { outline: none; }
+
+  .grid-line {
+    stroke: #69727d;
+    stroke-width: 1.15;
+    stroke-dasharray: 5 4;
+    opacity: .86;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+  }
+  .outer-border {
+    fill: none;
+    stroke: #101214;
+    stroke-width: 1.8;
+    vector-effect: non-scaling-stroke;
+    shape-rendering: geometricPrecision;
+    pointer-events: none;
+  }
+  .piece-outline {
+    stroke: #111214;
+    stroke-width: 2.0;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+    shape-rendering: geometricPrecision;
+  }
+  .movable-piece .piece-outline { cursor: grab; }
+  .movable-piece.is-rotating .piece-outline { cursor: grabbing; }
+  .movable-piece:hover .piece-outline { stroke-width: 2.35; }
+  .fixed-piece, .fixed-piece * { cursor: default; }
+  .internal-stroke {
+    fill: none;
+    stroke: #111214;
+    stroke-width: 2.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+  }
+  .eye { fill: #050505; pointer-events: none; }
+  .vertex-handle {
+    fill: #fff;
+    stroke: #28323f;
+    stroke-width: 1.15;
+    vector-effect: non-scaling-stroke;
+    cursor: pointer;
+  }
+  .vertex-handle:hover { fill: #eef4ff; stroke: var(--accent); }
+  .vertex-handle.selected {
+    fill: #ff7849;
+    stroke: #9d2d0a;
+    stroke-width: 1.7;
+  }
+  .vertex-halo {
+    fill: rgba(255,255,255,.001);
+    stroke: none;
+    cursor: pointer;
+  }
+
+
+  .submit-result {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) scale(.96);
+    min-width: 180px;
+    padding: 16px 28px;
+    border-radius: 14px;
+    border: 2px solid transparent;
+    background: rgba(255, 255, 255, .96);
+    box-shadow: 0 10px 32px rgba(17, 24, 39, .20);
+    text-align: center;
+    font-size: clamp(22px, 3vw, 34px);
+    line-height: 1.2;
+    font-weight: 800;
+    letter-spacing: .04em;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: 8;
+    transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
+  }
+  .submit-result.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  .submit-result.success {
+    color: #116239;
+    border-color: #71c997;
+    background: rgba(239, 252, 244, .97);
+  }
+  .submit-result.error {
+    color: #982f2f;
+    border-color: #e7a1a1;
+    background: rgba(255, 244, 244, .97);
+  }
+
+  .below {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: center;
+    margin-top: 14px;
+    min-height: 48px;
+  }
+  .mode-tip {
+    color: #4b5666;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .mode-tip strong { color: #1f3f76; }
+  .status {
+    min-width: 176px;
+    border-radius: 10px;
+    padding: 9px 12px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    visibility: hidden;
+  }
+  .status.show { visibility: visible; }
+  .status.info { color: #1e4f96; background: #edf4ff; }
+  .status.error { color: #8f2727; background: #fff0f0; }
+  .status.success { color: #116239; background: #eaf8f0; }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: max(24px, env(safe-area-inset-bottom));
+    transform: translate(-50%, 16px);
+    opacity: 0;
+    pointer-events: none;
+    background: rgba(26, 32, 42, .94);
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 999px;
+    font-size: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    transition: opacity .18s ease, transform .18s ease;
+    z-index: 20;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (max-width: 760px) {
+    .app { width: min(100% - 16px, 1180px); margin-top: 10px; }
+    .topbar { flex-direction: column; }
+    .toolbar { width: 100%; justify-content: flex-start; }
+    .btn { flex: 1 1 120px; }
+    .card { padding: 10px; border-radius: 12px; }
+    .below { align-items: flex-start; flex-direction: column; }
+    .status { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<main class="app">
+  <section class="topbar" aria-label="任务与操作区">
+    <div class="title-wrap">
+      <h1>方格图案还原</h1>
+      <p>拖动拼片时一次只能沿一个方向整格平移；点击拼片顶点的小圆点可进入旋转模式，再拖动拼片完成旋转。</p>
+    </div>
+    <div class="toolbar">
+      <button id="undoBtn" class="btn" type="button">返回上一步</button>
+      <button id="resetBtn" class="btn" type="button">重置</button>
+      <button id="submitBtn" class="btn primary" type="button">提交</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="board-shell">
+      <svg id="puzzleSvg" viewBox="0 0 16 8" role="application" aria-label="16列8行方格图案还原操作区" focusable="false">
+        <rect id="blankHit" x="0" y="0" width="16" height="8" fill="#ffffff" data-role="blank" />
+        <g id="gridLayer" aria-hidden="true"></g>
+        <g id="pieceLayer"></g>
+        <g id="borderLayer" aria-hidden="true"></g>
+        <g id="handleLayer"></g>
+      </svg>
+      <div id="submitResult" class="submit-result" role="status" aria-live="polite" aria-atomic="true"></div>
+    </div>
+    <div class="below">
+      <div id="modeTip" class="mode-tip">提示：<strong>白色小圆点</strong>是可选旋转中心；选中后再次点击可取消，点击方格空白处也可退出旋转模式。</div>
+    </div>
+  </section>
+</main>
+<div id="toast" class="toast" aria-live="polite"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  const NS = 'http://www.w3.org/2000/svg';
+  const EPS = 1e-7;
+  const JUDGEMENT_MODES = Object.freeze({
+    GEOMETRY_ONLY: 'geometry-only',
+    STRICT_CONTENT: 'strict-content'
+  });
+
+  const DEFAULT_CONFIG = Object.freeze({
+    version: '1.0.0',
+    gridCols: 16,
+    gridRows: 8,
+    judgementMode: JUDGEMENT_MODES.STRICT_CONTENT,
+    movableIds: ['piece-bottom-right', 'piece-bottom-left']
+  });
+
+  const $ = (sel) => document.querySelector(sel);
+  const svg = $('#puzzleSvg');
+  const blankHit = $('#blankHit');
+  const gridLayer = $('#gridLayer');
+  const pieceLayer = $('#pieceLayer');
+  const borderLayer = $('#borderLayer');
+  const handleLayer = $('#handleLayer');
+  const undoBtn = $('#undoBtn');
+  const resetBtn = $('#resetBtn');
+  const submitBtn = $('#submitBtn');
+  const statusEl = $('#submitResult');
+  const modeTip = $('#modeTip');
+  const toastEl = $('#toast');
+
+  const deepClone = (v) => JSON.parse(JSON.stringify(v));
+  const rad = (deg) => deg * Math.PI / 180;
+  const normalize360 = (deg) => ((deg % 360) + 360) % 360;
+  const normalizeSigned = (deg) => {
+    let d = ((deg + 180) % 360 + 360) % 360 - 180;
+    if (d === -180) d = 180;
+    return d;
+  };
+  const nearly = (a, b, tol = EPS) => Math.abs(a - b) <= tol;
+  const snapNearInteger = (n) => Math.abs(n - Math.round(n)) < 1e-8 ? Math.round(n) : n;
+  const isIntegerish = (n) => Math.abs(n - Math.round(n)) < 1e-7;
+
+  function svgEl(tag, attrs = {}) {
+    const el = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v === null || v === undefined) continue;
+      el.setAttribute(k, String(v));
+    }
+    return el;
+  }
+
+  function makeDefaultPieces() {
+    const sqrt2 = Math.SQRT2;
+    return [
+      {
+        id: 'piece-top-left',
+        name: '左上拼片',
+        type: 'quarter-circle',
+        vertices: [{x:0,y:0},{x:-2,y:0},{x:0,y:-2}],
+        gridX: 8, gridY: 4, rotation: 0,
+        rotationCenter: {x:8,y:4},
+        defaultRotationCenter: {x:0,y:0},
+        keyVertices: [{x:0,y:0},{x:-2,y:0},{x:0,y:-2}],
+        initialState: {gridX:8,gridY:4,rotation:0},
+        targetState: {gridX:8,gridY:4,rotation:0},
+        movable: false,
+        hasInternalPattern: true,
+        contentAnchors: [{x:-0.6375,y:-0.8125}],
+        color: '#FFD54A',
+        solved: true,
+        geometryProbePoints: [{x:0,y:0},{x:-2,y:0},{x:-sqrt2,y:-sqrt2},{x:0,y:-2}],
+        sector: {radius:2,startDeg:180,endDeg:270},
+        render: {
+          outlinePath: 'M 0 0 L -2 0 A 2 2 0 0 1 0 -2 Z',
+          circles: [{cx:-0.6375,cy:-0.8125,r:0.17,className:'eye'}],
+          paths: []
+        }
+      },
+      {
+        id: 'piece-top-right',
+        name: '右上拼片',
+        type: 'quarter-circle',
+        vertices: [{x:0,y:0},{x:0,y:-2},{x:2,y:0}],
+        gridX: 8, gridY: 4, rotation: 0,
+        rotationCenter: {x:8,y:4},
+        defaultRotationCenter: {x:0,y:0},
+        keyVertices: [{x:0,y:0},{x:0,y:-2},{x:2,y:0}],
+        initialState: {gridX:8,gridY:4,rotation:0},
+        targetState: {gridX:8,gridY:4,rotation:0},
+        movable: false,
+        hasInternalPattern: true,
+        contentAnchors: [{x:0.6625,y:-0.8125}],
+        color: '#FFD54A',
+        solved: true,
+        geometryProbePoints: [{x:0,y:0},{x:0,y:-2},{x:sqrt2,y:-sqrt2},{x:2,y:0}],
+        sector: {radius:2,startDeg:270,endDeg:360},
+        render: {
+          outlinePath: 'M 0 0 L 0 -2 A 2 2 0 0 1 2 0 Z',
+          circles: [{cx:0.6625,cy:-0.8125,r:0.17,className:'eye'}],
+          paths: []
+        }
+      },
+      {
+        id: 'piece-bottom-right',
+        name: '右下拼片',
+        type: 'quarter-circle',
+        vertices: [{x:0,y:0},{x:2,y:0},{x:0,y:2}],
+        gridX: 0, gridY: 0, rotation: 0,
+        rotationCenter: {x:0,y:0},
+        defaultRotationCenter: {x:0,y:0},
+        keyVertices: [{x:0,y:0},{x:2,y:0},{x:0,y:2}],
+        initialState: {gridX:0,gridY:0,rotation:0},
+        targetState: {gridX:8,gridY:4,rotation:0},
+        movable: true,
+        hasInternalPattern: true,
+        contentAnchors: [
+          {x:0,y:1.35},
+          {x:0.40,y:1.35},
+          {x:0.65,y:1.175},
+          {x:0.875,y:0.80}
+        ],
+        color: '#FFD54A',
+        solved: false,
+        geometryProbePoints: [{x:0,y:0},{x:2,y:0},{x:sqrt2,y:sqrt2},{x:0,y:2}],
+        sector: {radius:2,startDeg:0,endDeg:90},
+        render: {
+          outlinePath: 'M 0 0 L 2 0 A 2 2 0 0 1 0 2 Z',
+          circles: [],
+          paths: [{d:'M 0 1.35 C 0.40 1.35 0.65 1.175 0.875 0.80',className:'internal-stroke'}]
+        }
+      },
+      {
+        id: 'piece-bottom-left',
+        name: '左下拼片',
+        type: 'quarter-circle',
+        vertices: [{x:0,y:0},{x:2,y:0},{x:0,y:2}],
+        gridX: 14, gridY: 6, rotation: 0,
+        rotationCenter: {x:14,y:6},
+        defaultRotationCenter: {x:0,y:0},
+        keyVertices: [{x:0,y:0},{x:2,y:0},{x:0,y:2}],
+        initialState: {gridX:14,gridY:6,rotation:0},
+        targetState: {gridX:8,gridY:4,rotation:90},
+        movable: true,
+        hasInternalPattern: true,
+        contentAnchors: [
+          {x:0.80,y:0.875},
+          {x:1.175,y:0.65},
+          {x:1.35,y:0.40},
+          {x:1.35,y:0}
+        ],
+        color: '#FFD54A',
+        solved: false,
+        geometryProbePoints: [{x:0,y:0},{x:2,y:0},{x:sqrt2,y:sqrt2},{x:0,y:2}],
+        sector: {radius:2,startDeg:0,endDeg:90},
+        render: {
+          outlinePath: 'M 0 0 L 2 0 A 2 2 0 0 1 0 2 Z',
+          circles: [],
+          paths: [{d:'M 0.80 0.875 C 1.175 0.65 1.35 0.40 1.35 0',className:'internal-stroke'}]
+        }
+      }
+    ];
+  }
+
+  const game = {
+    version: DEFAULT_CONFIG.version,
+    grid: {cols: DEFAULT_CONFIG.gridCols, rows: DEFAULT_CONFIG.gridRows},
+    judgementMode: DEFAULT_CONFIG.judgementMode,
+    pieces: makeDefaultPieces(),
+    history: [],
+    selectedRotation: null,
+    interaction: null,
+    complete: false,
+    toastTimer: null
+  };
+
+  function pieceById(id) { return game.pieces.find(p => p.id === id) || null; }
+  function stateOf(piece) { return {gridX: piece.gridX, gridY: piece.gridY, rotation: piece.rotation}; }
+  function applyState(piece, state) {
+    piece.gridX = snapNearInteger(state.gridX);
+    piece.gridY = snapNearInteger(state.gridY);
+    piece.rotation = normalize360(state.rotation);
+    updateRotationCenter(piece);
+  }
+  function transformPoint(piece, pt, state = stateOf(piece)) {
+    const a = rad(state.rotation);
+    const c = Math.cos(a), s = Math.sin(a);
+    return {
+      x: state.gridX + pt.x * c - pt.y * s,
+      y: state.gridY + pt.x * s + pt.y * c
+    };
+  }
+  function displayState(piece) {
+    const i = game.interaction;
+    if (i && i.type === 'rotate' && i.pieceId === piece.id && i.previewState) return i.previewState;
+    return stateOf(piece);
+  }
+  function updateRotationCenter(piece) {
+    const local = game.selectedRotation && game.selectedRotation.pieceId === piece.id
+      ? piece.keyVertices[game.selectedRotation.vertexIndex]
+      : piece.defaultRotationCenter;
+    piece.rotationCenter = transformPoint(piece, local, stateOf(piece));
+  }
+  function pointerToGrid(evt) {
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return {x:0,y:0};
+    const p = new DOMPoint(evt.clientX, evt.clientY).matrixTransform(ctm.inverse());
+    return {x:p.x, y:p.y};
+  }
+
+  function exactBoundaryPoints(piece, state) {
+    if (piece.sector) {
+      const center = transformPoint(piece, {x:0,y:0}, state);
+      const start = piece.sector.startDeg + state.rotation;
+      const end = piece.sector.endDeg + state.rotation;
+      const r = piece.sector.radius;
+      const angles = [start, end];
+      const k0 = Math.floor(start / 90) - 2;
+      const k1 = Math.ceil(end / 90) + 2;
+      for (let k = k0; k <= k1; k++) {
+        const a = k * 90;
+        if (a > start + EPS && a < end - EPS) angles.push(a);
+      }
+      const points = [center];
+      for (const a of angles) {
+        points.push({x:center.x + r * Math.cos(rad(a)), y:center.y + r * Math.sin(rad(a))});
+      }
+      return points;
+    }
+    return (piece.vertices || []).map(pt => transformPoint(piece, pt, state));
+  }
+
+  function isWithinBounds(piece, state) {
+    const pts = exactBoundaryPoints(piece, state);
+    return pts.every(p => p.x >= -EPS && p.y >= -EPS && p.x <= game.grid.cols + EPS && p.y <= game.grid.rows + EPS);
+  }
+
+  function stateForRotationAroundPivot(piece, pivotLocal, pivotWorld, rotationDeg) {
+    const a = rad(rotationDeg);
+    const c = Math.cos(a), s = Math.sin(a);
+    const rx = pivotLocal.x * c - pivotLocal.y * s;
+    const ry = pivotLocal.x * s + pivotLocal.y * c;
+    return {
+      gridX: pivotWorld.x - rx,
+      gridY: pivotWorld.y - ry,
+      rotation: rotationDeg
+    };
+  }
+
+  function worldProbePoints(piece, state) {
+    const pts = piece.geometryProbePoints && piece.geometryProbePoints.length ? piece.geometryProbePoints : piece.vertices;
+    return pts.map(pt => transformPoint(piece, pt, state));
+  }
+
+  function pointSetsEqual(a, b, tol = 1e-5) {
+    if (a.length !== b.length) return false;
+    const used = new Array(b.length).fill(false);
+    for (const pa of a) {
+      let found = -1;
+      for (let i = 0; i < b.length; i++) {
+        if (used[i]) continue;
+        if (Math.hypot(pa.x - b[i].x, pa.y - b[i].y) <= tol) { found = i; break; }
+      }
+      if (found < 0) return false;
+      used[found] = true;
+    }
+    return true;
+  }
+
+  function geometryMatchesTarget(piece) {
+    return pointSetsEqual(worldProbePoints(piece, stateOf(piece)), worldProbePoints(piece, piece.targetState));
+  }
+
+  function contentMatchesTarget(piece) {
+    const anchors = piece.contentAnchors || [];
+    if (!anchors.length) return normalize360(piece.rotation) === normalize360(piece.targetState.rotation);
+    const current = anchors.map(pt => transformPoint(piece, pt, stateOf(piece)));
+    const target = anchors.map(pt => transformPoint(piece, pt, piece.targetState));
+    return current.every((p, i) => Math.hypot(p.x - target[i].x, p.y - target[i].y) <= 1e-5);
+  }
+
+  function pieceMatchesTarget(piece) {
+    const strict = piece.hasInternalPattern || game.judgementMode === JUDGEMENT_MODES.STRICT_CONTENT;
+    const ok = geometryMatchesTarget(piece) && (!strict || contentMatchesTarget(piece));
+    piece.solved = ok;
+    return ok;
+  }
+
+  function isComplete() {
+    const ok = game.pieces.every(pieceMatchesTarget);
+    game.complete = ok;
+    return ok;
+  }
+
+  function renderGrid() {
+    gridLayer.replaceChildren();
+    for (let x = 1; x < game.grid.cols; x++) {
+      gridLayer.appendChild(svgEl('line', {x1:x,y1:0,x2:x,y2:game.grid.rows,class:'grid-line'}));
+    }
+    for (let y = 1; y < game.grid.rows; y++) {
+      gridLayer.appendChild(svgEl('line', {x1:0,y1:y,x2:game.grid.cols,y2:y,class:'grid-line'}));
+    }
+    borderLayer.replaceChildren(svgEl('rect', {
+      x:0.0225, y:0.0225,
+      width:game.grid.cols - 0.045,
+      height:game.grid.rows - 0.045,
+      class:'outer-border'
+    }));
+    svg.setAttribute('viewBox', `0 0 ${game.grid.cols} ${game.grid.rows}`);
+    svg.style.aspectRatio = `${game.grid.cols} / ${game.grid.rows}`;
+    blankHit.setAttribute('width', game.grid.cols);
+    blankHit.setAttribute('height', game.grid.rows);
+  }
+
+  function renderPieces() {
+    pieceLayer.replaceChildren();
+    for (const piece of game.pieces) {
+      const state = displayState(piece);
+      const g = svgEl('g', {
+        'data-piece-id': piece.id,
+        'data-fixed-piece': piece.movable ? null : 'true',
+        class: piece.movable ? 'movable-piece' : 'fixed-piece',
+        transform: `translate(${state.gridX} ${state.gridY}) rotate(${state.rotation})`,
+        focusable: 'false'
+      });
+      if (game.interaction && game.interaction.pieceId === piece.id) g.classList.add('is-rotating');
+
+      const outline = svgEl('path', {
+        d: piece.render.outlinePath,
+        fill: piece.color || '#FFD54A',
+        class: 'piece-outline',
+        'data-role': piece.movable ? 'piece-hit' : 'fixed-hit',
+        'data-piece-id': piece.id,
+        focusable: 'false'
+      });
+      g.appendChild(outline);
+      for (const p of piece.render.paths || []) {
+        g.appendChild(svgEl('path', {d:p.d,class:p.className || 'internal-stroke',focusable:'false'}));
+      }
+      for (const c of piece.render.circles || []) {
+        g.appendChild(svgEl('circle', {cx:c.cx,cy:c.cy,r:c.r,class:c.className || '',focusable:'false'}));
+      }
+      pieceLayer.appendChild(g);
+    }
+  }
+
+  function renderHandles() {
+    handleLayer.replaceChildren();
+    for (const piece of game.pieces) {
+      if (!piece.movable) continue;
+      const state = displayState(piece);
+      piece.keyVertices.forEach((v, index) => {
+        const p = transformPoint(piece, v, state);
+        const selected = game.selectedRotation && game.selectedRotation.pieceId === piece.id && game.selectedRotation.vertexIndex === index;
+        const hit = svgEl('circle', {
+          cx:p.x, cy:p.y, r:0.19,
+          class:'vertex-halo',
+          'data-role':'vertex-handle',
+          'data-piece-id':piece.id,
+          'data-vertex-index':index,
+          focusable:'false'
+        });
+        const dot = svgEl('circle', {
+          cx:p.x, cy:p.y, r:0.095,
+          class:`vertex-handle${selected ? ' selected' : ''}`,
+          'data-role':'vertex-handle',
+          'data-piece-id':piece.id,
+          'data-vertex-index':index,
+          focusable:'false'
+        });
+        handleLayer.append(hit, dot);
+      });
+    }
+  }
+
+  function renderAll() {
+    renderPieces();
+    renderHandles();
+    undoBtn.disabled = game.history.length === 0;
+    if (game.selectedRotation) {
+      const p = pieceById(game.selectedRotation.pieceId);
+      modeTip.innerHTML = `旋转模式：已选择 <strong>${p ? p.name : '拼片'}的顶点</strong> 作为旋转中心。拖动该拼片进行旋转；再次点击该点或点击方格空白处可退出。`;
+    } else {
+      modeTip.innerHTML = '提示：<strong>白色小圆点</strong>是可选旋转中心；选中后再次点击可取消，点击方格空白处也可退出旋转模式。';
+    }
+  }
+
+  function clearSubmitStatus() {
+    statusEl.className = 'submit-result';
+    statusEl.textContent = '';
+  }
+  function showStatus(text, type) {
+    statusEl.textContent = text;
+    statusEl.className = `submit-result show ${type}`;
+  }
+  function toast(text) {
+    toastEl.textContent = text;
+    toastEl.classList.add('show');
+    clearTimeout(game.toastTimer);
+    game.toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1450);
+  }
+
+  function cancelRotationMode() {
+    game.selectedRotation = null;
+    if (game.interaction && game.interaction.type === 'rotate') game.interaction = null;
+    game.pieces.forEach(updateRotationCenter);
+    renderAll();
+  }
+
+  function selectVertex(pieceId, vertexIndex) {
+    const piece = pieceById(pieceId);
+    if (!piece || !piece.movable || !piece.keyVertices[vertexIndex]) return false;
+    if (game.selectedRotation && game.selectedRotation.pieceId === pieceId && game.selectedRotation.vertexIndex === vertexIndex) {
+      cancelRotationMode();
+      return true;
+    }
+    game.selectedRotation = {pieceId, vertexIndex};
+    game.pieces.forEach(updateRotationCenter);
+    clearSubmitStatus();
+    renderAll();
+    return true;
+  }
+
+  function pushHistory(entry) {
+    game.history.push({seq:game.history.length + 1, timestamp:Date.now(), ...deepClone(entry)});
+    clearSubmitStatus();
+  }
+
+  function sameState(a, b, tol = 1e-7) {
+    return nearly(a.gridX,b.gridX,tol) && nearly(a.gridY,b.gridY,tol) && nearly(normalize360(a.rotation),normalize360(b.rotation),tol);
+  }
+
+  function startMove(evt, piece) {
+    const startPoint = pointerToGrid(evt);
+    game.interaction = {
+      type:'move', pointerId:evt.pointerId, pieceId:piece.id,
+      startPoint, before:stateOf(piece), axis:null, lastLegal:stateOf(piece)
+    };
+    svg.setPointerCapture?.(evt.pointerId);
+    clearSubmitStatus();
+  }
+
+  function updateMove(evt) {
+    const i = game.interaction;
+    const piece = pieceById(i.pieceId);
+    if (!piece) return;
+    const p = pointerToGrid(evt);
+    const dx = p.x - i.startPoint.x;
+    const dy = p.y - i.startPoint.y;
+    if (!i.axis) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 0.12) return;
+      i.axis = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+    }
+    const step = Math.round(i.axis === 'x' ? dx : dy);
+    const candidate = {
+      gridX: i.before.gridX + (i.axis === 'x' ? step : 0),
+      gridY: i.before.gridY + (i.axis === 'y' ? step : 0),
+      rotation: i.before.rotation
+    };
+    if (!isWithinBounds(piece, candidate)) {
+      if (!sameState(stateOf(piece), i.lastLegal)) applyState(piece, i.lastLegal);
+      toast('请在方格纸内进行操作。');
+      renderAll();
+      return;
+    }
+    i.lastLegal = candidate;
+    applyState(piece, candidate);
+    renderAll();
+  }
+
+  function finishMove(evt) {
+    const i = game.interaction;
+    const piece = pieceById(i.pieceId);
+    if (!piece) { game.interaction = null; return; }
+    const after = stateOf(piece);
+    if (!sameState(i.before, after)) {
+      const dx = after.gridX - i.before.gridX;
+      const dy = after.gridY - i.before.gridY;
+      pushHistory({
+        pieceId:piece.id,
+        type:'move',
+        action:'translate',
+        before:i.before,
+        after,
+        direction: dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up',
+        distance:Math.abs(dx || dy),
+        rotationCenter:null
+      });
+    }
+    game.interaction = null;
+    try { svg.releasePointerCapture?.(evt.pointerId); } catch (_) {}
+    renderAll();
+  }
+
+  function startRotate(evt, piece) {
+    const sel = game.selectedRotation;
+    if (!sel || sel.pieceId !== piece.id) return;
+    const before = stateOf(piece);
+    const pivotLocal = piece.keyVertices[sel.vertexIndex];
+    const pivotWorld = transformPoint(piece, pivotLocal, before);
+    const p = pointerToGrid(evt);
+    const angle = Math.atan2(p.y - pivotWorld.y, p.x - pivotWorld.x) * 180 / Math.PI;
+    game.interaction = {
+      type:'rotate', pointerId:evt.pointerId, pieceId:piece.id,
+      vertexIndex:sel.vertexIndex,
+      before, pivotLocal:deepClone(pivotLocal), pivotWorld,
+      lastPointerAngle:angle, accumulated:0,
+      previewState:deepClone(before),
+      lastLegalState:deepClone(before)
+    };
+    svg.setPointerCapture?.(evt.pointerId);
+    clearSubmitStatus();
+    renderAll();
+  }
+
+  function updateRotate(evt) {
+    const i = game.interaction;
+    const piece = pieceById(i.pieceId);
+    if (!piece) return;
+    const p = pointerToGrid(evt);
+    const angle = Math.atan2(p.y - i.pivotWorld.y, p.x - i.pivotWorld.x) * 180 / Math.PI;
+    const delta = normalizeSigned(angle - i.lastPointerAngle);
+    i.lastPointerAngle = angle;
+    const candidateAccum = i.accumulated + delta;
+    const candidateRotation = i.before.rotation + candidateAccum;
+    const candidate = stateForRotationAroundPivot(piece, i.pivotLocal, i.pivotWorld, candidateRotation);
+    if (!isWithinBounds(piece, candidate)) {
+      toast('请在方格纸内进行操作。');
+      i.previewState = i.lastLegalState;
+      renderAll();
+      return;
+    }
+    i.accumulated = candidateAccum;
+    i.previewState = candidate;
+    i.lastLegalState = candidate;
+    renderAll();
+  }
+
+  function finishRotate(evt) {
+    const i = game.interaction;
+    const piece = pieceById(i.pieceId);
+    if (!piece) { game.interaction = null; return; }
+    const snappedUnbounded = Math.round((i.before.rotation + i.accumulated) / 90) * 90;
+    let candidate = stateForRotationAroundPivot(piece, i.pivotLocal, i.pivotWorld, snappedUnbounded);
+    candidate = {
+      gridX:snapNearInteger(candidate.gridX),
+      gridY:snapNearInteger(candidate.gridY),
+      rotation:normalize360(snappedUnbounded)
+    };
+
+    if (!isWithinBounds(piece, candidate) || !isIntegerish(candidate.gridX) || !isIntegerish(candidate.gridY)) {
+      applyState(piece, i.before);
+      toast('请在方格纸内进行操作。');
+    } else {
+      candidate.gridX = Math.round(candidate.gridX);
+      candidate.gridY = Math.round(candidate.gridY);
+      if (!sameState(i.before, candidate)) {
+        applyState(piece, candidate);
+        const signedAngle = snappedUnbounded - i.before.rotation;
+        pushHistory({
+          pieceId:piece.id,
+          type:'rotate',
+          action:'rotate',
+          before:i.before,
+          after:stateOf(piece),
+          rotationCenter:deepClone(i.pivotWorld),
+          pivotVertex:i.vertexIndex,
+          direction:signedAngle >= 0 ? 'clockwise' : 'counterclockwise',
+          angle:Math.abs(signedAngle)
+        });
+      } else {
+        applyState(piece, i.before);
+      }
+    }
+    game.interaction = null;
+    try { svg.releasePointerCapture?.(evt.pointerId); } catch (_) {}
+    renderAll();
+  }
+
+  function undo() {
+    if (!game.history.length) return false;
+    const last = game.history.pop();
+    const piece = pieceById(last.pieceId);
+    if (piece) applyState(piece, last.before);
+    game.selectedRotation = null;
+    game.interaction = null;
+    clearSubmitStatus();
+    game.complete = false;
+    renderAll();
+    return true;
+  }
+
+  function reset() {
+    for (const piece of game.pieces) {
+      applyState(piece, piece.initialState);
+      piece.solved = false;
+    }
+    game.history = [];
+    game.selectedRotation = null;
+    game.interaction = null;
+    game.complete = false;
+    clearSubmitStatus();
+    renderAll();
+  }
+
+  function submit() {
+    const ok = isComplete();
+    showStatus(ok ? '还原成功' : '还原失败', ok ? 'success' : 'error');
+    return ok;
+  }
+
+  function movePieceBy(id, dx, dy, options = {}) {
+    const piece = pieceById(id);
+    if (!piece || !piece.movable) return false;
+    if (!Number.isInteger(dx) || !Number.isInteger(dy) || (dx !== 0 && dy !== 0)) return false;
+    if (dx === 0 && dy === 0) return true;
+    const before = stateOf(piece);
+    const after = {gridX:before.gridX+dx,gridY:before.gridY+dy,rotation:before.rotation};
+    if (!isWithinBounds(piece, after)) return false;
+    applyState(piece, after);
+    if (options.record !== false) pushHistory({
+      pieceId:id,type:'move',action:'translate',before,after:stateOf(piece),
+      direction:dx>0?'right':dx<0?'left':dy>0?'down':'up',distance:Math.abs(dx||dy),rotationCenter:null
+    });
+    renderAll();
+    return true;
+  }
+
+  function rotatePiece(id, angle, vertexIndex = null, options = {}) {
+    const piece = pieceById(id);
+    if (!piece || !piece.movable || angle % 90 !== 0) return false;
+    const idx = vertexIndex == null ? Math.max(0, piece.keyVertices.findIndex(v => nearly(v.x,piece.defaultRotationCenter.x) && nearly(v.y,piece.defaultRotationCenter.y))) : vertexIndex;
+    if (!piece.keyVertices[idx]) return false;
+    const before = stateOf(piece);
+    const pivotLocal = piece.keyVertices[idx];
+    const pivotWorld = transformPoint(piece, pivotLocal, before);
+    let after = stateForRotationAroundPivot(piece,pivotLocal,pivotWorld,before.rotation+angle);
+    after = {gridX:snapNearInteger(after.gridX),gridY:snapNearInteger(after.gridY),rotation:normalize360(before.rotation+angle)};
+    if (!isIntegerish(after.gridX) || !isIntegerish(after.gridY) || !isWithinBounds(piece, after)) return false;
+    after.gridX=Math.round(after.gridX); after.gridY=Math.round(after.gridY);
+    applyState(piece, after);
+    if (options.record !== false && !sameState(before,after)) pushHistory({
+      pieceId:id,type:'rotate',action:'rotate',before,after:stateOf(piece),rotationCenter:pivotWorld,
+      pivotVertex:idx,direction:angle>=0?'clockwise':'counterclockwise',angle:Math.abs(angle)
+    });
+    renderAll();
+    return true;
+  }
+
+  function setPieceState(id, state, options = {}) {
+    const piece = pieceById(id);
+    if (!piece) return false;
+    const candidate = {
+      gridX:Number(state.gridX), gridY:Number(state.gridY), rotation:normalize360(Number(state.rotation ?? piece.rotation))
+    };
+    if (![candidate.gridX,candidate.gridY,candidate.rotation].every(Number.isFinite)) return false;
+    if (!isIntegerish(candidate.gridX) || !isIntegerish(candidate.gridY) || candidate.rotation % 90 !== 0 || !isWithinBounds(piece,candidate)) return false;
+    const before=stateOf(piece);
+    candidate.gridX=Math.round(candidate.gridX); candidate.gridY=Math.round(candidate.gridY);
+    applyState(piece,candidate);
+    if (options.record === true && !sameState(before,candidate)) pushHistory({pieceId:id,type:'set',action:'set-state',before,after:stateOf(piece),rotationCenter:null});
+    renderAll();
+    return true;
+  }
+
+  function setMovable(id, movable) {
+    const piece=pieceById(id); if(!piece) return false;
+    piece.movable=Boolean(movable);
+    if (!piece.movable && game.selectedRotation?.pieceId===id) game.selectedRotation=null;
+    renderAll(); return true;
+  }
+  function setJudgementMode(mode) {
+    if (!Object.values(JUDGEMENT_MODES).includes(mode)) return false;
+    game.judgementMode=mode; clearSubmitStatus(); return true;
+  }
+  function setPieceInternalPattern(id, hasInternalPattern, contentAnchors = null) {
+    const piece=pieceById(id); if(!piece) return false;
+    piece.hasInternalPattern=Boolean(hasInternalPattern);
+    if (Array.isArray(contentAnchors)) piece.contentAnchors=deepClone(contentAnchors);
+    clearSubmitStatus(); return true;
+  }
+
+  function exportState() {
+    isComplete();
+    return deepClone({
+      version:game.version,
+      grid:{cols:game.grid.cols,rows:game.grid.rows},
+      judgementMode:game.judgementMode,
+      complete:game.complete,
+      pieces:game.pieces.map(piece => ({
+        id:piece.id,
+        name:piece.name,
+        type:piece.type,
+        current:stateOf(piece),
+        initial:piece.initialState,
+        target:piece.targetState,
+        movable:piece.movable,
+        rotationCenter:piece.rotationCenter,
+        defaultRotationCenter:piece.defaultRotationCenter,
+        keyVertices:piece.keyVertices,
+        hasInternalPattern:piece.hasInternalPattern,
+        contentAnchors:piece.contentAnchors,
+        solved:piece.solved
+      })),
+      history:game.history
+    });
+  }
+
+  function newPuzzle(config = {}) {
+    game.version = config.version || DEFAULT_CONFIG.version;
+    game.grid = {
+      cols:Number.isInteger(config.gridCols) ? config.gridCols : DEFAULT_CONFIG.gridCols,
+      rows:Number.isInteger(config.gridRows) ? config.gridRows : DEFAULT_CONFIG.gridRows
+    };
+    game.judgementMode = Object.values(JUDGEMENT_MODES).includes(config.judgementMode) ? config.judgementMode : DEFAULT_CONFIG.judgementMode;
+    game.pieces = deepClone(Array.isArray(config.pieces) ? config.pieces : makeDefaultPieces());
+    if (Array.isArray(config.movableIds)) {
+      const set = new Set(config.movableIds);
+      game.pieces.forEach(p => { p.movable = set.has(p.id); });
+    } else if (Number.isInteger(config.movableCount)) {
+      game.pieces.forEach((p,idx) => { p.movable = idx < config.movableCount; });
+    }
+    game.history=[]; game.selectedRotation=null; game.interaction=null; game.complete=false;
+    game.pieces.forEach(p => { p.solved=false; updateRotationCenter(p); });
+    clearSubmitStatus();
+    renderGrid(); renderAll();
+    return exportState();
+  }
+
+  function onPointerDown(evt) {
+    if (evt.button !== undefined && evt.button !== 0) return;
+    const target = evt.target;
+    const role = target?.dataset?.role;
+    if (role === 'vertex-handle') {
+      evt.preventDefault(); evt.stopPropagation();
+      selectVertex(target.dataset.pieceId, Number(target.dataset.vertexIndex));
+      return;
+    }
+    if (role === 'fixed-hit' || target?.closest?.('[data-fixed-piece="true"]')) {
+      evt.preventDefault();
+      return;
+    }
+    if (role === 'piece-hit') {
+      evt.preventDefault();
+      const piece = pieceById(target.dataset.pieceId);
+      if (!piece || !piece.movable) return;
+      if (game.selectedRotation) {
+        if (game.selectedRotation.pieceId !== piece.id) return;
+        startRotate(evt,piece);
+      } else {
+        startMove(evt,piece);
+      }
+      return;
+    }
+    if (role === 'blank' || target === svg || target?.closest?.('#gridLayer')) {
+      if (game.selectedRotation) cancelRotationMode();
+    }
+  }
+
+  svg.addEventListener('pointerdown', onPointerDown);
+  svg.addEventListener('pointermove', (evt) => {
+    if (!game.interaction || evt.pointerId !== game.interaction.pointerId) return;
+    evt.preventDefault();
+    if (game.interaction.type === 'move') updateMove(evt); else updateRotate(evt);
+  });
+  svg.addEventListener('pointerup', (evt) => {
+    if (!game.interaction || evt.pointerId !== game.interaction.pointerId) return;
+    evt.preventDefault();
+    if (game.interaction.type === 'move') finishMove(evt); else finishRotate(evt);
+  });
+  svg.addEventListener('pointercancel', (evt) => {
+    if (!game.interaction || evt.pointerId !== game.interaction.pointerId) return;
+    const i=game.interaction, piece=pieceById(i.pieceId);
+    if (piece) applyState(piece,i.before);
+    game.interaction=null;
+    renderAll();
+  });
+
+  undoBtn.addEventListener('click', undo);
+  resetBtn.addEventListener('click', reset);
+  submitBtn.addEventListener('click', submit);
+
+  function runSelfAudit() {
+    const results = [];
+    const check=(name,pass)=>results.push({name,pass:Boolean(pass)});
+    const snapshot=deepClone({pieces:game.pieces,history:game.history,mode:game.judgementMode,selected:game.selectedRotation});
+    try {
+      check('固定图形不可操作', game.pieces.filter(p=>!p.movable).every(p=>!p.movable));
+      check('初始逻辑坐标为整数', game.pieces.every(p=>Number.isInteger(p.gridX)&&Number.isInteger(p.gridY)));
+      check('目标逻辑坐标为整数', game.pieces.every(p=>Number.isInteger(p.targetState.gridX)&&Number.isInteger(p.targetState.gridY)));
+      check('旋转目标为90度倍数', game.pieces.every(p=>p.targetState.rotation%90===0));
+      check('初始图形全部在方格内', game.pieces.every(p=>isWithinBounds(p,stateOf(p))));
+      const br=pieceById('piece-bottom-right');
+      const bl=pieceById('piece-bottom-left');
+      check('右下拼片目标几何可达', isWithinBounds(br,br.targetState));
+      check('左下拼片目标几何可达', isWithinBounds(bl,bl.targetState));
+      const oldBR=stateOf(br), oldBL=stateOf(bl);
+      applyState(br,br.targetState); applyState(bl,bl.targetState);
+      check('完成判定可正确识别目标', isComplete());
+      applyState(br,oldBR); applyState(bl,oldBL);
+      check('初始状态不会误判成功', !isComplete());
+      const beforeHistory=game.history.length;
+      check('无位移不会制造API历史', movePieceBy(br.id,0,0) && game.history.length===beforeHistory);
+      check('斜向API平移被拒绝', movePieceBy(br.id,1,1)===false);
+      check('非90度API旋转被拒绝', rotatePiece(br.id,45,0)===false);
+    } catch (err) {
+      results.push({name:'自检执行',pass:false,error:String(err)});
+    } finally {
+      game.pieces=deepClone(snapshot.pieces);
+      game.history=deepClone(snapshot.history);
+      game.judgementMode=snapshot.mode;
+      game.selectedRotation=snapshot.selected;
+      game.interaction=null;
+      game.complete=false;
+      game.pieces.forEach(updateRotationCenter);
+      renderAll();
+    }
+    const failed=results.filter(r=>!r.pass);
+    console.groupCollapsed(`[PuzzleGame] 自检 ${failed.length ? '发现问题' : '通过'}：${results.length-failed.length}/${results.length}`);
+    console.table(results);
+    console.groupEnd();
+    return {pass:failed.length===0,results};
+  }
+
+  window.PuzzleGame = Object.freeze({
+    JUDGEMENT_MODES,
+    newPuzzle,
+    reset,
+    submit,
+    undo,
+    exportState,
+    getPiece:(id)=>deepClone(pieceById(id)),
+    setMovable,
+    setPieceState,
+    selectVertex,
+    cancelRotationMode,
+    rotatePiece,
+    movePieceBy,
+    setJudgementMode,
+    setPieceInternalPattern,
+    isComplete,
+    runSelfAudit
+  });
+
+  renderGrid();
+  game.pieces.forEach(updateRotationCenter);
+  renderAll();
+  runSelfAudit();
+})();
+</script>
+</body>
+</html>

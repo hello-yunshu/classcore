@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "requirementId": "xp21a-lan-rehearsal",
+  "status": "blocked",
+  "checks": [
+    { "id": "xp21a-device-lan-observation", "passed": false, "evidence": "No XP21A device or physical classroom router is available in this environment." },
+    { "id": "student-durable-event-under-lan-rehearsal", "passed": false, "evidence": "Requires the physical LAN rehearsal." },
+    { "id": "teacher-display-observer-recovery-observation", "passed": false, "evidence": "Requires recorded physical reconnect observations." }
+  ],
+  "observations": [],
+  "blocker": "physical XP21A, classroom router and recorded LAN reconnect evidence are required"
+}

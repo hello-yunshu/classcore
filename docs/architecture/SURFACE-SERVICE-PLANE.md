@@ -67,8 +67,8 @@ Service Plane 不是“第八个端”，由 Server/Runtime 内部能力组成�
 
 ## 当前部署映射
 
-- 课堂 LAN `:8787`：Student / Teacher Runtime / Display / Observer；
-- 教师本机工具 `127.0.0.1:8788`：Backstage / Authoring Studio；
+- 课堂 LAN `:9602`：Student / Teacher Runtime / Display / Observer；
+- 教师本机工具 `127.0.0.1:9688`：Backstage / Authoring Studio；
 - Simulation / Rehearsal：工程入口，不由生产 Server 暴露 HTTP；
 - Service Plane：Server 内部，不是浏览器 Surface。
 

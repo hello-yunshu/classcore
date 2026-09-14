@@ -1,0 +1,16 @@
+{
+  "profileSchemaVersion": 1,
+  "profileId": "analytics-profile:pattern-restoration",
+  "lessonId": "lesson:pattern-restoration",
+  "classifications": [
+    { "code": "transform-order", "label": "操作顺序", "evidence": ["object.moved", "object.rotated"] },
+    { "code": "rotation-center", "label": "旋转中心", "evidence": ["object.rotation-center.changed"] }
+  ],
+  "metrics": [
+    { "metricId": "completion-state", "source": "submission", "aggregation": "latest" }
+  ],
+  "recommendationPolicy": {
+    "mode": "teacher-confirm",
+    "rules": []
+  }
+}

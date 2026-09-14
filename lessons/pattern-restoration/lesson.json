@@ -1,0 +1,27 @@
+{
+  "lessonSchemaVersion": 1,
+  "lessonId": "lesson:pattern-restoration",
+  "version": "0.1.2",
+  "title": "图案的还原",
+  "activities": [
+    "activity:observe",
+    "activity:restore-independent",
+    "activity:restore-supported",
+    "activity:instruction-exchange",
+    "activity:discussion"
+  ],
+  "assets": [
+    {
+      "assetId": "asset:target",
+      "path": "assets/target.svg",
+      "mimeType": "image/svg+xml",
+      "size": 266,
+      "sha256": "f774ea3ac7e9e44439d26f1fccc35d82ef41a9a856c30aa855fff483220f8830",
+      "preload": true
+    }
+  ],
+  "metadata": {
+    "subject": "小学数学",
+    "grade": 5
+  }
+}

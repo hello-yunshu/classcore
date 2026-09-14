@@ -1,0 +1,47 @@
+:root {
+  color-scheme: light;
+  --ink: #24324b;
+  --ink-soft: #697386;
+  --muted: #7d8490;
+  --line: #d9d6cc;
+  --line-strong: #d2d0ca;
+  --paper: #f6f3ec;
+  --panel: #fbfaf7;
+  --canvas: #e7e3d9;
+  --focus: #5575b8;
+  --focus-wash: #e3eaf7;
+  --signal: #c96b55;
+  --gold: #897e70;
+  --success: #6b776c;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; margin: 0; background: var(--paper); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; }
+.observer-app { width: min(1180px, calc(100% - 48px)); min-height: 100vh; margin: 0 auto; padding: 44px 0 30px; }
+.observer-header { display: flex; justify-content: space-between; gap: 24px; align-items: end; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+.observer-kicker { color: var(--signal); font-size: 11px; font-weight: 800; letter-spacing: .18em; }
+.observer-header h1 { margin: 10px 0 0; font: 500 clamp(38px, 6vw, 68px)/.96 Georgia, "Songti SC", serif; letter-spacing: -.045em; }
+.observer-header p { margin: 16px 0 0; color: var(--ink-soft); font-size: 14px; }
+.observer-status { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.observer-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(240px, .8fr); gap: 16px; padding-top: 24px; }
+.observer-card { min-width: 0; padding: 22px; border: 1px solid var(--line); background: rgba(251,250,247,.84); box-shadow: 0 16px 35px rgba(110,102,86,.08); }
+.observer-stage-card { grid-row: span 2; }
+.observer-card-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; color: var(--ink); font-size: 15px; font-weight: 750; }
+.observer-badge { border-radius: 999px; padding: 5px 9px; color: var(--focus); background: var(--focus-wash); font-size: 11px; font-weight: 750; }
+.observer-stage { display: grid; min-height: 350px; place-items: center; align-content: center; gap: 12px; margin-top: 18px; padding: 28px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--canvas); text-align: center; }
+.observer-stage strong { font: 500 clamp(30px, 5vw, 58px) Georgia, "Songti SC", serif; }
+.observer-stage span, .observer-playback span { color: var(--ink-soft); font-size: 13px; }
+.observer-artifact-content { display: grid; gap: 4px; margin: 12px 0 0; padding: 10px 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-soft); font-size: 12px; line-height: 1.45; }
+.observer-artifact-content strong { color: var(--ink); }
+.observer-annotation { min-height: 20px; margin: 14px 0 0; color: var(--signal); font-size: 13px; }
+.observer-playback { display: grid; gap: 8px; margin-top: 26px; }
+.observer-playback strong { overflow: hidden; font: 500 24px Georgia, "Songti SC", serif; text-overflow: ellipsis; white-space: nowrap; }
+.observer-presence-card { grid-column: 2; }
+.observer-presence-list { display: grid; gap: 8px; margin-top: 18px; }
+.observer-presence-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); color: var(--muted); background: var(--panel); font-size: 12px; }
+.observer-subject { color: var(--ink); font-weight: 700; }
+.observer-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); }
+.observer-presence-row.is-online .observer-dot { background: var(--success); box-shadow: 0 0 0 4px #e0e8e1; }
+.observer-presence-row.is-online .observer-presence-status { color: var(--success); }
+.observer-empty { color: var(--muted); font-size: 12px; }
+.observer-footer { padding-top: 22px; color: var(--muted); font-size: 12px; text-align: center; }
+@media (max-width: 720px) { .observer-app { width: min(100% - 28px, 560px); padding-top: 28px; } .observer-header { display: block; } .observer-status { display: block; margin-top: 22px; } .observer-layout { grid-template-columns: 1fr; } .observer-stage-card { grid-row: auto; } .observer-presence-card { grid-column: auto; } .observer-stage { min-height: 260px; } }

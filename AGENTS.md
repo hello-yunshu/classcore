@@ -35,6 +35,16 @@ npm run bootstrap
 不要使用 Node 22 / TypeScript 5 兼容模式；旧线已退出正式支持。
 仓库启用 `.npmrc` 的 `engine-strict=true`；不要通过关闭 engine strict 来绕过正式工具链。基础文本格式遵循 `.editorconfig`。
 
+## Lesson/Core dependency boundary
+
+ClassCore follows a one-way lesson dependency model: `Core <- Shared Capabilities <- Lesson Packages`.
+
+- Core roots (`packages/contracts`, `runtime`, `storage`, `realtime`, `identity`, `intelligence`, `projections`, `platform`, `presentation`) must remain lesson-agnostic and must not import `lessons/`, a lesson package source path, or a registered lesson namespace.
+- Generic `apps/student-web`, `apps/teacher-web`, and `apps/display-web` may consume runtime contracts and registries, but must not import concrete Lesson, analytics, or puzzle implementation.
+- Classroom production code must use the authoritative roster and server transport; fixed student arrays, fake QR markers, fixed AI demo metrics, hard-coded recommendation student IDs, and `BroadcastChannel` submission shortcuts are prohibited.
+- The executable gate is `npm run lesson-boundary:check`, and it is part of both `npm run check` and `npm run check:fast`. The explicit registry is `config/lesson-boundaries.json`.
+- Lesson-specific data and behavior belong in `lessons/<slug>` or a registered reusable Applet/Lesson configuration. Do not use broad keyword bans that reject generic math vocabulary, docs, fixtures, or examples.
+
 ## 4. 每次改动至少执行
 
 小改：
@@ -88,7 +98,7 @@ npm run lesson:validate -- lessons/lesson-slug
 
 应用逻辑不锁死 CPU。此次公开课的 P0 必须目标是 Apple Silicon MacBook Pro + Docker 原生 `linux/arm64`；同时保留 `linux/amd64`。
 
-课堂服务通过 LAN 端口 8787；Backstage 与 Authoring Studio 共用教师本机工具端口 8788；Docker 中监听容器 8788，但 Compose 必须绑定宿主 `127.0.0.1:8788`，避免它们进入课堂 LAN 运行面。Simulation 不由生产 Server 暴露。
+课堂服务通过 LAN 端口 9602；Backstage 与 Authoring Studio 共用教师本机工具端口 9688；Docker 中监听容器 9688，但 Compose 必须绑定宿主 `127.0.0.1:9688`，避免它们进入课堂 LAN 运行面。Simulation 不由生产 Server 暴露。
 
 ## 8. 当前下一步
 

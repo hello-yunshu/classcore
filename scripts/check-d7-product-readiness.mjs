@@ -38,8 +38,9 @@ const blockers = value.requirements.filter((item) => item.ready !== true);
 if (blockers.length) fail(blockers.map((item) => `blocker ${item.id}: ${item.note}`));
 
 const verificationErrors = [];
+const evidenceDirectory = process.env.D7_EVIDENCE_DIR || path.join('evidence', 'd7');
 for (const id of REQUIRED_D7_REQUIREMENTS) {
-  const evidencePath = path.join('evidence', 'd7', `${id}.json`);
+  const evidencePath = path.join(evidenceDirectory, `${id}.json`);
   const verifierPath = path.join('scripts', 'd7-verifiers', `${id}.mjs`);
   if (!fs.existsSync(evidencePath)) { verificationErrors.push(`${id}: missing fixed evidence file ${evidencePath}`); continue; }
   if (!fs.existsSync(verifierPath)) { verificationErrors.push(`${id}: missing live verifier ${verifierPath}`); continue; }

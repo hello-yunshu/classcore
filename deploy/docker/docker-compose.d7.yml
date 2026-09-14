@@ -4,14 +4,15 @@ services:
       context: ../..
       dockerfile: deploy/docker/Dockerfile.server
     image: classroom-runtime:d7
+    command: ["node", "apps/server/runtime/authenticated-server.mjs"]
     ports:
-      - "8787:8787"
-      - "127.0.0.1:8788:8788"
+      - "9602:9602"
+      - "127.0.0.1:9688:9688"
     environment:
       HOST: 0.0.0.0
-      PORT: 8787
+      PORT: 9602
       LOCAL_TOOLS_HOST: 0.0.0.0
-      LOCAL_TOOLS_PORT: 8788
+      LOCAL_TOOLS_PORT: 9688
       CLASSROOM_DATA_DIR: /data
       CLASSROOM_RUNTIME_MODE: authenticated-classroom-server
       CLASSROOM_AUTHENTICATION: "true"

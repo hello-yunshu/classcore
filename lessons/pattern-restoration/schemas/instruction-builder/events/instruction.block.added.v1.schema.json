@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["blockId","semanticType","value"],"properties":{"blockId":{"type":"string","minLength":1},"semanticType":{"type":"string","minLength":1},"value":{}},"additionalProperties":false}

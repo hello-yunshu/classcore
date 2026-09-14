@@ -26,9 +26,9 @@ ARG TARGETARCH
 WORKDIR /app
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
-    PORT=8787 \
+    PORT=9602 \
     LOCAL_TOOLS_HOST=0.0.0.0 \
-    LOCAL_TOOLS_PORT=8788 \
+    LOCAL_TOOLS_PORT=9688 \
     CLASSROOM_DATA_DIR=/data \
     CLASSROOM_RUNTIME_MODE=reference-transport \
     CLASSROOM_AUTHENTICATION=false \
@@ -38,14 +38,20 @@ LABEL org.classroom.runtime.targetplatform=$TARGETPLATFORM \
       org.classroom.runtime.mode=reference-transport \
       org.classroom.runtime.authentication=false
 COPY --chown=node:node dist/public ./dist/public
+COPY --chown=node:node dist/apps/server ./dist/apps/server
+COPY --chown=node:node dist/packages/runtime ./dist/packages/runtime
+COPY --chown=node:node dist/packages/storage ./dist/packages/storage
+COPY --chown=node:node dist/packages/runtime ./node_modules/@classroom/runtime
+COPY --chown=node:node dist/packages/storage ./node_modules/@classroom/storage
 COPY --chown=node:node dist/packages/presentation ./dist/packages/presentation
 COPY --chown=node:node dist/packages/contracts ./node_modules/@classroom/contracts
 COPY --from=dependencies --chown=node:node /app/node_modules/@web-ppt ./node_modules/@web-ppt
 COPY --from=dependencies --chown=node:node /app/node_modules/fflate ./node_modules/fflate
 COPY --chown=node:node apps/server/runtime ./apps/server/runtime
+COPY --chown=node:node lessons ./lessons
 RUN mkdir -p /data && chown node:node /data
 USER node
-EXPOSE 8787 8788
+EXPOSE 9602 9688
 VOLUME ["/data"]
-HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 CMD node -e "fetch('http://127.0.0.1:8787/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 CMD node -e "fetch('http://127.0.0.1:9602/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 CMD ["node","apps/server/runtime/server.mjs"]

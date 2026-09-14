@@ -20,5 +20,9 @@ for (const [file] of checks) {
 }
 assert.equal(fs.existsSync(new URL('assets/apps/presentation-studio/bundle.js', publicRoot)), true, 'presentation studio bundle missing');
 assert.equal(fs.existsSync(new URL('assets/presentation-webppt-blank.pptx', publicRoot)), true, 'web-ppt blank template missing');
+assert.equal(fs.existsSync(new URL('assets/fonts/LXGWWenKaiGBLite-Regular.ttf', publicRoot)), true, 'bundled presentation font missing');
+assert.equal(fs.existsSync(new URL('assets/fonts/LXGWWenKaiGBLite-OFL.txt', publicRoot)), true, 'bundled presentation font license missing');
+assert.equal(fs.existsSync(new URL('assets/fonts/NotoSerif-Variable.ttf', publicRoot)), true, 'bundled serif fallback font missing');
+assert.equal(fs.existsSync(new URL('assets/fonts/NotoSerif-OFL.txt', publicRoot)), true, 'bundled serif fallback font license missing');
 assert.equal(fs.existsSync(new URL('assets/apps/server/src/entry.js', publicRoot)), false, 'server entry must not be public');
 console.log('Public asset isolation check PASSED');

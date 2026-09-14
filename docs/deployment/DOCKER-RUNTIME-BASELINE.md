@@ -12,20 +12,20 @@
 课堂 LAN 服务：
 
 ```text
-container 0.0.0.0:8787
-host      0.0.0.0:8787
+container 0.0.0.0:9602
+host      0.0.0.0:9602
 ```
 
-8787 只承载 **Student / Teacher Runtime / Display / Observer**。课堂设备不应通过此端口加载 Backstage、Authoring Studio 或 Simulation。
+9602 只承载 **Student / Teacher Runtime / Display / Observer**。课堂设备不应通过此端口加载 Backstage、Authoring Studio 或 Simulation。
 
 教师本机工具端口：
 
 ```text
-container 0.0.0.0:8788
-host      127.0.0.1:8788
+container 0.0.0.0:9688
+host      127.0.0.1:9688
 ```
 
-8788 提供 **Backstage `/backstage` + Authoring Studio `/authoring`**。因此教师 Mac 可以访问它们，但 LAN 中学生设备无法直接连接 8788。这个边界由 Docker host port binding 实现，不依赖容器内 `remoteAddress` 判断。
+9688 提供 **Backstage `/backstage` + Authoring Studio `/authoring`**。因此教师 Mac 可以访问它们，但 LAN 中学生设备无法直接连接 9688。这个边界由 Docker host port binding 实现，不依赖容器内 `remoteAddress` 判断。
 
 **Simulation / Rehearsal 是工程 Surface，不由生产 Server 暴露 HTTP 路由。** 它通过测试脚本、工程入口和后续专用开发工具运行。
 

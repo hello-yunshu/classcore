@@ -37,7 +37,7 @@ async function makeTemplate() {
     const pptx = new PptxGenJS();
     pptx.layout = 'LAYOUT_WIDE';
     const slide = pptx.addSlide();
-    slide.background = { color: 'F7F4EE' };
+    slide.background = { color: 'F6F3EC' };
     slide.addText('ClassCore Presentation Gate', { x: 1, y: 1, w: 7, h: 0.5, fontSize: 24, color: '24324B' });
     await pptx.writeFile({ fileName: filename });
     const bytes = new Uint8Array(fs.readFileSync(filename));

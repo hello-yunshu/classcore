@@ -106,11 +106,10 @@ export function isLoopbackAddress(address: string | null | undefined): boolean {
 /**
  * 仅用于“应用直接运行在宿主机”的非容器部署判断：localhost-only 必须基于 TCP peer address，
  * 不能读取 HTTP Host header。当前 Docker 基线不应依赖此 helper 穿透 NAT 推断宿主身份；
- * Docker 部署通过宿主端口绑定 `127.0.0.1:8788:8788` 限定 Backstage / Authoring 仅教师 Mac 本机可达。
+ * Docker 部署通过宿主端口绑定 `127.0.0.1:9688:9688` 限定 Backstage / Authoring 仅教师 Mac 本机可达。
  */
 export function canOpenBackstage(policy: BackstageAccessPolicy, request: BackstageRequestContext): boolean {
     if (policy.mode === 'localhost-only')
         return isLoopbackAddress(request.remoteAddress);
     return request.authenticated === true;
 }
-

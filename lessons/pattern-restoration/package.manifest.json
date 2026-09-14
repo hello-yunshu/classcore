@@ -1,0 +1,14 @@
+{
+  "packageSchemaVersion": 1,
+  "runtimeApiVersion": 1,
+  "packageId": "lesson-package:pattern-restoration",
+  "lessonRef": "lesson.json",
+  "activitiesRef": "activities.json",
+  "appletManifestsRef": "applets.manifest.json",
+  "configsRef": "configs.json",
+  "optionalRefs": {
+    "featurePolicy": "feature-policy.json",
+    "presentationAsset": "presentation/presentation.json",
+    "analyticsProfile": "analytics/profile.json"
+  }
+}

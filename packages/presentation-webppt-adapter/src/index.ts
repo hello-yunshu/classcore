@@ -35,6 +35,8 @@ export type BlankTemplateLoader = () => Promise<Uint8Array>;
 export interface WebPptCompatibilityOptions {
     /** Optional host font inventory; omission is intentionally NOT_EVALUATED. */
     availableFonts?: readonly string[];
+    /** Source-family to bundled approximate-family substitutions. */
+    fontSubstitutions?: Readonly<Record<string, string>>;
 }
 
 export const WEB_PPT_DESCRIPTOR: PresentationEngineDescriptor = Object.freeze({
@@ -333,17 +335,26 @@ export async function buildWebPptCompatibilityReport(asset: WebPptPresentationAs
 
         const fonts = collectFonts(presentation.slides);
         const available = options.availableFonts?.map(font => font.trim().toLowerCase());
+        const substitutions = new Map<string, string>();
+        for (const [source, replacement] of Object.entries(options.fontSubstitutions ?? {})) {
+            const normalizedSource = source.trim().toLowerCase();
+            const normalizedReplacement = replacement.trim();
+            if (normalizedSource && normalizedReplacement) substitutions.set(normalizedSource, normalizedReplacement);
+        }
         for (const font of fonts as FontUsage[]) {
             const known = available?.includes(font.family.trim().toLowerCase());
+            const replacement = substitutions.get(font.family.trim().toLowerCase());
             add({
-                severity: known === false || available == null ? 'warning' : 'info',
+                severity: known === true ? 'info' : 'warning',
                 capability: 'font',
-                fidelity: known === true ? 'SUPPORTED' : 'NOT_EVALUATED',
-                detail: known === false
-                    ? `使用字体「${font.family}」，当前 Display 字体清单未确认可用`
-                    : available == null
-                        ? `使用字体「${font.family}」，当前 Display 环境尚未提供字体清单`
-                        : `使用字体「${font.family}」；宿主字体清单已确认`,
+                fidelity: known === true ? 'SUPPORTED' : replacement ? 'APPROXIMATED' : 'NOT_EVALUATED',
+                detail: known === true
+                    ? `使用字体「${font.family}」；Display 字体清单已确认可用`
+                    : replacement
+                        ? `使用字体「${font.family}」；Display 随包字体「${replacement}」作为近似替代`
+                        : available == null
+                            ? `使用字体「${font.family}」，当前 Display 环境尚未提供字体清单`
+                            : `使用字体「${font.family}」，当前 Display 字体清单未确认可用`,
             });
         }
         const embedded = new Set((presentation.embeddedFonts ?? []).map((font: { family: string }) => font.family.trim().toLowerCase()));

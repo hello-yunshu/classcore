@@ -1,0 +1,1552 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>公开课课堂控制台</title>
+<style>
+  :root{
+    --bg:#f3f6fa;
+    --panel:#ffffff;
+    --panel-soft:#f8fafc;
+    --text:#18283d;
+    --muted:#718096;
+    --line:#dbe4ee;
+    --primary:#3568d4;
+    --primary-soft:#eef4ff;
+    --success:#1f9d68;
+    --warning:#e69a22;
+    --danger:#d84a4a;
+    --stage:#101826;
+    --shadow:0 8px 24px rgba(31,48,76,.07);
+    --radius:18px;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family: Inter, "PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    height:100vh;
+    overflow:hidden;
+  }
+
+  button,input,select{font:inherit}
+  button{cursor:pointer}
+
+  .app{
+    display:grid;
+    grid-template-columns: 270px minmax(0,1fr) 292px;
+    grid-template-rows: 72px minmax(0,1fr);
+    gap:14px;
+    padding:14px;
+    height:100vh;
+  }
+
+  .topbar{
+    grid-column:1/-1;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:16px;
+    box-shadow:var(--shadow);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 18px 0 22px;
+  }
+
+  .brand{display:flex;align-items:center;gap:13px}
+  .logo{
+    width:42px;height:42px;border-radius:13px;
+    background:linear-gradient(145deg,#2f6fec,#6f8ff6);
+    display:grid;place-items:center;color:white;font-weight:800;font-size:20px;
+    box-shadow:0 8px 18px rgba(47,111,236,.25);
+  }
+  .brand h1{margin:0;font-size:19px;line-height:1.1}
+  .brand p{margin:5px 0 0;color:var(--muted);font-size:12px}
+
+  .top-status{display:flex;align-items:center;gap:10px}
+  .status-pill{
+    height:38px;padding:0 13px;border:1px solid var(--line);background:var(--panel-soft);
+    border-radius:12px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:650;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 0 4px rgba(31,157,104,.12)}
+  .dot.warn{background:var(--warning);box-shadow:0 0 0 4px rgba(230,154,34,.12)}
+  .icon-btn{
+    width:38px;height:38px;border-radius:11px;border:1px solid var(--line);background:white;
+    display:grid;place-items:center;color:var(--muted);font-size:18px;
+  }
+
+  .sidebar,.rightbar{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    min-height:0;
+    overflow:hidden;
+  }
+
+  .sidebar{display:flex;flex-direction:column}
+  .side-scroll{padding:18px;overflow:auto}
+  .section{padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid var(--line)}
+  .section:last-child{border-bottom:0;margin-bottom:0}
+  .section-title{
+    display:flex;justify-content:space-between;align-items:center;
+    font-size:13px;font-weight:800;margin-bottom:11px;
+  }
+  .section-title small{font-size:11px;color:var(--muted);font-weight:650}
+
+  .source-list{display:grid;gap:9px}
+  .entry-source{
+    width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;
+  }
+  .entry-source:hover{border-color:#9fb4d9;background:#f7faff}
+  .entry-arrow{
+    width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
+    background:#eef4ff;color:var(--primary);font-size:23px;font-weight:600;
+  }
+
+  .entry-view,.qr-view{
+    width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+    padding:clamp(28px,5vw,70px);
+    background:
+      radial-gradient(circle at 18% 18%,rgba(53,104,212,.10),transparent 28%),
+      linear-gradient(145deg,#f8fbff,#edf3fb 68%,#f7faff);
+  }
+  .entry-inner{width:min(900px,92%)}
+  .entry-eyebrow{
+    color:var(--primary);font-size:13px;font-weight:850;letter-spacing:.08em;margin-bottom:10px;
+  }
+  .entry-title{
+    margin:0;color:#18304f;font-size:clamp(30px,3.4vw,48px);
+    line-height:1.12;font-weight:900;letter-spacing:-.035em;
+  }
+  .entry-choice-grid{
+    display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:30px;
+  }
+  .entry-choice{
+    min-height:205px;border:1px solid #d6e1ef;background:rgba(255,255,255,.94);
+    border-radius:18px;padding:26px;text-align:left;cursor:pointer;color:#20334c;
+    box-shadow:0 12px 30px rgba(42,67,103,.08);transition:.18s ease;
+  }
+  .entry-choice:hover{
+    transform:translateY(-3px);border-color:#9cb8e8;
+    box-shadow:0 16px 34px rgba(42,67,103,.12);
+  }
+  .entry-app-icon{
+    width:58px;height:58px;border-radius:16px;display:grid;place-items:center;
+    background:linear-gradient(145deg,#3568d4,#6d90e8);color:#fff;
+    font-size:25px;font-weight:900;margin-bottom:20px;
+    box-shadow:0 8px 18px rgba(53,104,212,.22);
+  }
+  .entry-choice.teacher .entry-app-icon{background:linear-gradient(145deg,#274778,#5d7fc4)}
+  .entry-choice b{display:block;font-size:20px;margin-bottom:7px}
+  .entry-choice span{font-size:13px;color:#718096;line-height:1.55}
+
+  .qr-inner{
+    width:min(850px,92%);display:grid;grid-template-columns:290px minmax(0,1fr);
+    gap:42px;align-items:center;background:rgba(255,255,255,.96);
+    border:1px solid #d9e3ef;border-radius:22px;padding:36px;
+    box-shadow:0 16px 40px rgba(37,59,91,.10);
+  }
+  .qr-card{
+    aspect-ratio:1/1;background:#fff;border:1px solid #d5dee9;border-radius:18px;
+    display:grid;place-items:center;padding:30px;box-shadow:0 8px 22px rgba(39,56,83,.08);
+  }
+  .fake-qr{
+    width:100%;aspect-ratio:1/1;background-color:#fff;
+    background-image:
+      linear-gradient(90deg,#17263c 10px,transparent 10px),
+      linear-gradient(#17263c 10px,transparent 10px),
+      linear-gradient(90deg,transparent 20px,#17263c 20px,#17263c 30px,transparent 30px),
+      linear-gradient(transparent 20px,#17263c 20px,#17263c 30px,transparent 30px);
+    background-size:40px 40px,40px 40px,60px 60px,60px 60px;
+    border:12px solid #fff;outline:8px solid #17263c;outline-offset:-18px;
+  }
+  .qr-copy h2{margin:0 0 12px;font-size:34px;color:#18304f}
+  .qr-copy p{margin:0 0 18px;color:#718096;line-height:1.7;font-size:14px}
+  .pwa-badge{
+    display:inline-flex;align-items:center;height:36px;padding:0 12px;border-radius:10px;
+    background:#eef4ff;color:#3568d4;font-size:12px;font-weight:850;
+  }
+  .qr-back{
+    margin-top:22px;height:38px;padding:0 14px;border-radius:10px;
+    border:1px solid #d8e1ec;background:#fff;color:#40516a;font-weight:800;
+  }
+
+  .student-ai-btn{
+    position:absolute;z-index:7;top:10px;right:10px;height:32px;padding:0 11px;
+    border:1px solid rgba(255,255,255,.24);border-radius:9px;
+    background:rgba(53,104,212,.94);color:#fff;font-size:11px;font-weight:850;
+    box-shadow:0 5px 14px rgba(28,55,112,.22);backdrop-filter:blur(8px);
+  }
+  .student-ai-result{
+    position:absolute;z-index:8;left:14px;right:14px;bottom:14px;
+    background:rgba(255,255,255,.97);border:1px solid #cfdbea;border-radius:12px;
+    padding:13px 14px;color:#334155;font-size:12px;line-height:1.65;
+    box-shadow:0 10px 28px rgba(25,42,68,.18);
+  }
+  .student-ai-result b{color:#1f4fa6;margin-right:5px}
+  .hidden-tools-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+  .hidden-tools-row b{display:block;font-size:11px;color:#314258}
+  .hidden-tools-row span:not(.slider){display:block;margin-top:2px;font-size:9px;color:var(--muted)}
+  .student-hidden-tools{
+    position:absolute;z-index:12;top:10px;right:118px;display:flex;gap:7px
+  }
+  .student-tool-btn{
+    min-height:32px;padding:0 12px;border:1px solid #cfd7e3;border-radius:9px;
+    background:#fff;color:#202936;font-size:11px;font-weight:700;cursor:pointer;
+    box-shadow:0 3px 10px rgba(26,42,66,.10);
+    transition:background .14s ease,border-color .14s ease,color .14s ease
+  }
+  .student-tool-btn:hover{background:#f7f9fc;border-color:#b8c3d2}
+  .student-tool-btn.active{
+    background:#eef4ff;border-color:#78a2ef;color:#174ea6;
+    box-shadow:inset 0 0 0 1px rgba(37,99,235,.08),0 3px 10px rgba(26,42,66,.08)
+  }
+
+  .restoration-demo{position:absolute;inset:0}
+  .demo-piece{
+    position:absolute;width:20%;aspect-ratio:1/1;background:#ffd54a;
+    border:2px solid #111214;border-radius:3px;box-shadow:none;cursor:default
+  }
+  .demo-piece.teacher-selectable{cursor:pointer}
+  .demo-piece.teacher-selectable:hover{
+    filter:brightness(.99);box-shadow:0 0 0 2px rgba(37,99,235,.14)
+  }
+  .demo-piece.p1{left:12%;top:18%;clip-path:polygon(0 0,100% 0,100% 66%,66% 66%,66% 100%,0 100%)}
+  .demo-piece.p2{right:12%;top:18%;clip-path:polygon(0 0,100% 0,100% 100%,34% 100%,34% 66%,0 66%)}
+  .demo-piece.p3{left:12%;bottom:14%;clip-path:polygon(0 0,66% 0,66% 34%,100% 34%,100% 100%,0 100%)}
+  .demo-piece.p4{right:12%;bottom:14%;clip-path:polygon(34% 0,100% 0,100% 100%,0 100%,0 34%,34% 34%)}
+
+  .fixed-piece{
+    position:absolute;left:42%;top:39%;width:16%;aspect-ratio:1/1;border-radius:50%;
+    background:#ffd54a;border:2px solid #111214;box-shadow:none;cursor:default
+  }
+  .fixed-piece:before,.fixed-piece:after{
+    content:"";position:absolute;top:32%;width:9%;aspect-ratio:1/1;border-radius:50%;background:#050505
+  }
+  .fixed-piece:before{left:29%}
+  .fixed-piece:after{right:29%}
+  .fixed-smile{
+    position:absolute;left:31%;right:31%;bottom:24%;height:18%;
+    border-bottom:2px solid #111214;border-radius:0 0 50% 50%
+  }
+
+  .piece-number-label,.vertex-letter-label{
+    position:absolute;z-index:10;pointer-events:none;user-select:none;-webkit-user-select:none;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI Symbol","PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:1;text-align:center;transform:translate(-50%,-50%);
+    text-shadow:-1px -1px 0 rgba(255,255,255,.98),1px -1px 0 rgba(255,255,255,.98),
+      -1px 1px 0 rgba(255,255,255,.98),1px 1px 0 rgba(255,255,255,.98),
+      0 0 3px rgba(255,255,255,.98)
+  }
+  .piece-number-label{color:#111827;font-size:clamp(15px,1.5vw,23px);font-weight:800}
+  .vertex-letter-label{color:#183e75;font-size:clamp(12px,1.15vw,18px);font-weight:850}
+  .piece-number-label.n1{left:9%;top:13%}
+  .piece-number-label.n2{left:91%;top:13%}
+  .piece-number-label.n3{left:9%;top:87%}
+  .piece-number-label.n4{left:91%;top:87%}
+
+  .vertex-handle{
+    position:absolute;z-index:8;width:12px;height:12px;border-radius:50%;
+    background:#fff;border:1.5px solid #28323f;transform:translate(-50%,-50%);
+    box-shadow:0 0 0 5px rgba(255,255,255,.001);pointer-events:none
+  }
+  .vertex-handle.v1{left:0;top:0}
+  .vertex-handle.v2{left:100%;top:0}
+  .vertex-handle.v3{left:100%;top:100%}
+  .vertex-letter-label.v1{left:-9%;top:-10%}
+  .vertex-letter-label.v2{left:109%;top:-10%}
+  .vertex-letter-label.v3{left:109%;top:110%}
+
+  .teacher-prompt-overlay{
+    position:absolute;z-index:30;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:max-content;max-width:min(80%,720px);padding:18px 28px;border-radius:16px;
+    border:2px solid #5b7fbd;background:rgba(255,255,255,.98);color:#183e75;
+    box-shadow:0 18px 48px rgba(26,54,93,.24),0 3px 12px rgba(26,54,93,.12);
+    font-size:clamp(18px,2vw,26px);line-height:1.35;font-weight:850;
+    letter-spacing:.02em;text-align:center;pointer-events:none
+  }
+
+  .ai-resource-question{
+    margin-top:10px;
+    padding-top:9px;
+    border-top:1px solid #dfe7f1;
+    font-weight:800;
+    color:#263b57;
+  }
+  .ai-resource-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    margin-top:9px;
+  }
+  .ai-resource-btn{
+    height:32px;
+    padding:0 13px;
+    border-radius:8px;
+    border:1px solid #d6e0ec;
+    background:#fff;
+    color:#516176;
+    font-size:11px;
+    font-weight:800;
+    cursor:pointer;
+  }
+  .ai-resource-btn.primary{
+    background:var(--primary);
+    border-color:var(--primary);
+    color:#fff;
+  }
+  .source{
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:10px;
+    display:grid;
+    grid-template-columns:42px minmax(0,1fr) 42px;
+    align-items:center;
+    gap:10px;
+    background:white;
+    transition:.18s ease;
+  }
+  .source:hover{border-color:#b9c7dc}
+  .source.active{border-color:#87aaf7;background:var(--primary-soft)}
+  .source-icon{
+    width:42px;height:42px;border-radius:12px;background:#eef3f9;
+    display:grid;place-items:center;font-size:20px;
+  }
+  .source.active .source-icon{background:white;color:var(--primary)}
+  .source-text b{display:block;font-size:14px;margin-bottom:3px}
+  .source-text span{font-size:11px;color:var(--muted)}
+  .switch{position:relative;width:38px;height:22px}
+  .switch input{opacity:0;width:0;height:0}
+  .slider{position:absolute;inset:0;background:#cbd5e1;border-radius:99px;transition:.18s}
+  .slider:before{
+    content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:white;border-radius:50%;
+    box-shadow:0 1px 4px rgba(0,0,0,.18);transition:.18s
+  }
+  .switch input:checked + .slider{background:var(--primary)}
+  .switch input:checked + .slider:before{transform:translateX(16px)}
+
+  .layout-summary{
+    margin-top:10px;padding:10px 11px;border-radius:12px;background:#f6f8fb;border:1px dashed #cfd8e5;
+    display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--muted);
+  }
+  .layout-summary strong{color:var(--text);font-size:13px}
+
+  .ppt-controls{display:grid;grid-template-columns:1fr 72px 1fr;gap:8px}
+  .control-btn{
+    border:1px solid var(--line);
+    background:#fff;
+    border-radius:10px;
+    height:40px;
+    font-weight:750;
+    color:#2f3d52;
+    transition:.16s ease;
+    box-shadow:0 1px 2px rgba(20,32,51,.03);
+  }
+  .control-btn:hover{border-color:#9db0ca;background:#f5f8fc;transform:translateY(-1px)}
+  .page-box{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    white-space:nowrap;
+    border-radius:10px;
+    background:#f3f6fa;
+    border:1px solid var(--line);
+    font-size:13px;
+    font-weight:800;
+    line-height:1;
+  }
+  .page-slash{color:#8a98aa;font-weight:700}
+
+  .action-btn{
+    height:40px;
+    border:0;
+    border-radius:10px;
+    background:var(--primary);
+    color:white;
+    font-weight:780;
+    box-shadow:0 4px 10px rgba(52,103,214,.18);
+    transition:.16s ease;
+  }
+  .action-btn:hover{transform:translateY(-1px);filter:brightness(1.02)}
+  .action-btn.secondary{background:#eef3fa;color:#334155;box-shadow:none;border:1px solid var(--line)}
+  .action-btn.success{background:var(--success)}
+  .action-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+  .ai-analysis-card{
+    border:1px solid var(--line);
+    background:linear-gradient(180deg,#fbfdff,#f5f8fc);
+    border-radius:12px;
+    padding:11px;
+  }
+  .ai-stat-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+  }
+  .ai-stat{
+    background:white;
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px 8px;
+    text-align:center;
+  }
+  .ai-stat-value{
+    display:block;
+    font-size:20px;
+    font-weight:900;
+    line-height:1;
+    color:var(--text);
+  }
+  .ai-stat-label{
+    display:block;
+    margin-top:5px;
+    font-size:10px;
+    color:var(--muted);
+    white-space:nowrap;
+  }
+  .ai-progress{margin-top:10px}
+  .ai-progress-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:6px;
+    font-size:10px;
+    color:var(--muted);
+  }
+  .ai-progress-head strong{
+    color:var(--primary);
+    font-size:11px;
+  }
+  .ai-progress-track{
+    height:6px;
+    border-radius:99px;
+    background:#e4ebf4;
+    overflow:hidden;
+  }
+  .ai-progress-bar{
+    height:100%;
+    border-radius:99px;
+    background:var(--primary);
+  }
+  .ai-result-btn{
+    width:100%;
+    margin-top:11px;
+    box-shadow:none;
+  }
+  .small-note{font-size:11px;color:var(--muted);line-height:1.55;margin-top:8px}
+
+  .center{
+    min-width:0;min-height:0;
+    display:grid;grid-template-rows:minmax(0,1fr) 82px;gap:12px;
+  }
+
+  .stage-shell{
+    background:#0d1522;
+    border:1px solid #1f2c3e;
+    border-radius:20px;
+    padding:10px;
+    box-shadow:0 16px 40px rgba(21,35,56,.18);
+    min-height:0;
+    position:relative;
+    overflow:hidden;
+  }
+  .stage{
+    width:100%;height:100%;
+    display:grid;gap:8px;
+    min-height:0;
+  }
+  .stage.one{
+    grid-template-columns:1fr;
+    grid-template-rows:1fr;
+  }
+
+  /* 两路 16:9 内容不再左右硬切：上下排列能把每一路放大约 1.78 倍 */
+  .stage.two{
+    grid-template-columns:1fr;
+    grid-template-rows:1fr 1fr;
+  }
+
+  /* 三路时学生操作固定为主画面，PPT 与电脑屏幕作为下方辅助画面 */
+  .stage.three{
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:minmax(0,2fr) minmax(0,1fr);
+  }
+  .stage.three .pane-students{
+    grid-column:1 / -1;
+    grid-row:1;
+  }
+  .stage.three .pane-ppt,
+  .stage.three .pane-screen{
+    grid-row:2;
+  }
+
+  .pane-content-16x9{
+    width:100%;
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#0b1220;
+    overflow:hidden;
+  }
+
+  .pane{
+    background:#fff;border-radius:12px;overflow:hidden;position:relative;min-width:0;min-height:0;
+    border:1px solid rgba(255,255,255,.12)
+  }
+  .pane-label{
+    position:absolute;z-index:5;top:10px;left:10px;
+    background:rgba(10,18,29,.78);backdrop-filter:blur(8px);color:white;
+    border:1px solid rgba(255,255,255,.14);border-radius:9px;
+    padding:7px 10px;font-size:12px;font-weight:850;display:flex;gap:7px;align-items:center;
+  }
+  .pane-label .mini-dot{width:6px;height:6px;border-radius:50%;background:#6ee7b7}
+
+  .empty-stage{
+    height:100%;display:grid;place-items:center;color:#9fb0c9;text-align:center;padding:30px;
+  }
+  .empty-stage .big{font-size:44px;margin-bottom:12px}
+  .empty-stage b{color:#e2e8f0;display:block;font-size:17px;margin-bottom:6px}
+
+  .ppt-page{
+    width:min(100%, calc(100vh * 16 / 9));
+    aspect-ratio:16/9;
+    max-height:100%;
+    margin:auto;
+    padding:7% 8%;
+    background:linear-gradient(145deg,#f7fbff,#eaf1ff 68%,#f9fbff);
+    display:flex;flex-direction:column;justify-content:center;position:relative;
+    box-shadow:0 0 0 1px rgba(20,32,51,.05);
+  }
+  .ppt-frame{
+    width:100%;height:100%;
+    background:#111827;
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;
+  }
+  .ppt-page:after{
+    content:"";position:absolute;width:260px;height:260px;border-radius:50%;
+    right:-90px;bottom:-130px;background:linear-gradient(145deg,rgba(47,111,236,.22),rgba(111,143,246,.02));
+  }
+  .ppt-kicker{color:var(--primary);font-weight:850;font-size:clamp(12px,1.2vw,18px);margin-bottom:12px}
+  .ppt-title{font-size:clamp(28px,3.2vw,58px);font-weight:900;line-height:1.12;letter-spacing:-.03em;max-width:86%}
+  .ppt-sub{margin-top:18px;color:#56667d;font-size:clamp(12px,1.25vw,20px);max-width:80%;line-height:1.65}
+  .ppt-page-num{position:absolute;right:20px;top:18px;color:#7a8ba4;font-size:12px;font-weight:700}
+
+  .desktop-view{
+    height:100%;
+    background:linear-gradient(160deg,#1d2d4d,#3e65a6 55%,#8fb4ee);
+    padding:5%;
+    display:flex;align-items:flex-end;
+  }
+  .desktop-window{
+    width:76%;height:72%;background:rgba(255,255,255,.94);border-radius:14px;
+    box-shadow:0 24px 50px rgba(7,15,30,.26);overflow:hidden;border:1px solid rgba(255,255,255,.55)
+  }
+  .window-top{height:32px;background:#edf1f6;border-bottom:1px solid #dfe5ed;display:flex;align-items:center;padding:0 10px;gap:6px}
+  .w-dot{width:8px;height:8px;border-radius:50%;background:#bec8d4}
+  .window-body{height:calc(100% - 32px);display:grid;place-items:center;color:#64748b;text-align:center;padding:20px}
+  .window-body .screen-icon{font-size:42px;margin-bottom:10px}
+
+  .student-frame{
+    width:100%;
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#0b1220;
+    overflow:hidden;
+  }
+  .student-pane{
+    width:100%;
+    aspect-ratio:16/9;
+    max-height:100%;
+    background:#111827;
+    padding:6px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .student-grid{
+    width:100%;
+    height:100%;
+    display:grid;
+    gap:6px;
+    align-items:center;
+    justify-items:center;
+  }
+
+  /* 1人：完整16:9最大化 */
+  .student-grid.c1{
+    grid-template-columns:1fr;
+    grid-template-rows:1fr;
+  }
+
+  /* 2人：上下排列。对16:9投影而言，比左右并排明显更大 */
+  .student-grid.c2{
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:1fr;
+  }
+
+  /* 3人：按2×2槽位布局，第三人居中占下方，避免任何画面变形 */
+  .student-grid.c3{
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:1fr 1fr;
+  }
+  .student-grid.c3 .student-screen:last-child{
+    grid-column:1 / -1;
+    width:50%;
+  }
+
+  /* 4人：2×2，四个16:9画面恰好充分利用16:9总区域 */
+  .student-grid.c4{
+    grid-template-columns:1fr 1fr;
+    grid-template-rows:1fr 1fr;
+  }
+
+  .student-screen{
+    width:100%;
+    max-width:100%;
+    aspect-ratio:16/9;
+    max-height:100%;
+    min-width:0;
+    min-height:0;
+    border-radius:9px;
+    overflow:hidden;
+    background:white;
+    position:relative;
+    border:1px solid #d7dfe9;
+    box-shadow:0 2px 10px rgba(0,0,0,.12);
+  }
+  .student-head{
+    position:absolute;top:6px;left:6px;right:6px;z-index:3;
+    display:flex;justify-content:space-between;align-items:center;
+    font-size:clamp(10px,1.05vw,14px);font-weight:850;color:#334155;
+  }
+  .student-head span{background:rgba(255,255,255,.88);padding:5px 7px;border-radius:7px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+  .gridpaper{
+    position:absolute;inset:0;
+    background-color:#fbfcfe;
+    background-image:
+      linear-gradient(#dce4ee 1px, transparent 1px),
+      linear-gradient(90deg,#dce4ee 1px, transparent 1px);
+    background-size:24px 24px;
+  }
+  .shape{
+    position:absolute;width:31%;aspect-ratio:1/1;left:34%;top:34%;
+    background:linear-gradient(145deg,#ffd84f,#f3b31d);
+    clip-path:polygon(0 0,100% 0,100% 72%,70% 72%,70% 100%,0 100%);
+    border-radius:2px;
+    box-shadow:0 5px 12px rgba(230,154,34,.18)
+  }
+  .student-screen:nth-child(2) .shape{transform:rotate(90deg);left:43%;top:28%}
+  .student-screen:nth-child(3) .shape{transform:rotate(180deg);left:26%;top:42%}
+  .student-screen:nth-child(4) .shape{transform:rotate(270deg);left:47%;top:44%}
+  .student-foot{
+    position:absolute;left:7px;bottom:7px;background:rgba(15,23,42,.82);color:white;
+    padding:4px 7px;border-radius:6px;font-size:9px
+  }
+
+  .stage-toolbar{
+    background:var(--panel);border:1px solid var(--line);border-radius:17px;box-shadow:var(--shadow);
+    display:flex;align-items:center;justify-content:space-between;padding:0 14px;
+  }
+  .stage-info{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+  .stage-info strong{color:var(--text)}
+  .toolbar-actions{display:flex;gap:8px}
+  .mini-btn{
+    height:36px;
+    border-radius:9px;
+    border:1px solid var(--line);
+    background:white;
+    padding:0 13px;
+    font-size:12px;
+    font-weight:760;
+    color:#40506a;
+  }
+  .mini-btn.primary{background:var(--primary);color:white;border-color:var(--primary)}
+  .mini-btn.danger{color:var(--danger);background:#fff7f7}
+
+  .rightbar{display:grid;grid-template-rows:auto auto minmax(0,1fr)}
+  .right-head{padding:17px 17px 12px;border-bottom:1px solid var(--line)}
+  .tabs{display:grid;grid-template-columns:1fr 1fr;background:#f0f4f8;padding:4px;border-radius:11px;gap:4px}
+  .tab{
+    height:34px;border:0;border-radius:8px;background:transparent;font-size:12px;font-weight:800;color:var(--muted)
+  }
+  .tab.active{background:var(--primary);color:white;box-shadow:0 3px 9px rgba(52,103,214,.18)}
+
+  .right-content{overflow:visible;padding:13px 14px}
+  .student-tools{display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:9px}
+  .student-tools-top{display:grid;grid-template-columns:1fr 84px;gap:8px}
+  .bulk-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .bulk-btn{
+    height:34px;border-radius:9px;border:1px solid var(--line);background:white;
+    font-size:11px;font-weight:800;color:#40506a;
+  }
+  .bulk-btn.primary{background:var(--primary-soft);border-color:#b8cdfa;color:var(--primary)}
+  .student-number-grid{
+    display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;
+  }
+  .student-number{
+    min-width:0;height:39px;border:1px solid var(--line);border-radius:9px;background:white;
+    display:flex;align-items:center;justify-content:center;position:relative;
+    font-size:12px;font-weight:850;color:#3a4960;padding:0;
+  }
+  .student-number:hover{border-color:#9fb1ca;background:#f8fafc}
+  .student-number.selected{background:var(--primary);border-color:var(--primary);color:white}
+  .student-number.offline{opacity:.42;background:#f1f4f7;cursor:not-allowed}
+  .student-number .online-dot{
+    position:absolute;right:5px;top:5px;width:5px;height:5px;border-radius:50%;background:var(--success)
+  }
+  .student-number.offline .online-dot{background:#94a3b8}
+  .search{
+    border:1px solid var(--line);height:38px;border-radius:9px;padding:0 11px;outline:none;width:100%;background:white;
+  }
+  .count-select{
+    border:1px solid var(--line);height:38px;border-radius:10px;padding:0 9px;background:white;font-weight:700;outline:none;
+  }
+
+  .students{display:grid;gap:6px}
+  .student-row{
+    min-height:46px;border:1px solid var(--line);border-radius:11px;padding:7px 9px;
+    display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:8px;align-items:center;background:white;
+  }
+  .student-row.selected{border-color:#8eb0f7;background:#f2f6ff}
+  .avatar{width:30px;height:30px;border-radius:9px;background:#eef2f7;display:grid;place-items:center;font-size:11px;font-weight:900;color:#54657c}
+  .student-name{font-size:12px;font-weight:800}
+  .student-meta{font-size:10px;color:var(--muted);margin-top:3px}
+  .pick{
+    width:26px;height:26px;border-radius:8px;border:1px solid var(--line);background:white;color:#8290a3;
+    display:grid;place-items:center;font-size:12px;font-weight:900
+  }
+  .student-row.selected .pick{background:var(--primary);border-color:var(--primary);color:white}
+
+
+  .direct-pick-card{
+    background:#f7f9fc;
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:12px;
+  }
+  .direct-pick-head{
+    display:flex;align-items:flex-start;justify-content:space-between;
+    margin-bottom:10px;
+  }
+  .direct-pick-head b{display:block;font-size:13px}
+  .direct-pick-head span{display:block;margin-top:3px;font-size:10px;color:var(--muted)}
+  .direct-pick-row{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 72px;
+    gap:7px;
+  }
+  .direct-pick-row .action-btn{height:38px}
+  .selected-preview{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:6px;
+    margin-top:9px;
+  }
+  .selected-chip{
+    height:34px;border-radius:9px;background:var(--primary-soft);
+    border:1px solid #bfd0f8;color:var(--primary);
+    display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:850;
+  }
+  .selected-empty{
+    grid-column:1/-1;
+    padding:10px 8px;
+    border:1px dashed #d4dce7;
+    border-radius:9px;
+    color:var(--muted);
+    font-size:10px;
+    text-align:center;
+    background:white;
+  }
+
+  .random-panel{display:none}
+  .random-panel.active{display:block}
+  .designated-panel.hidden{display:none}
+  .random-card{
+    background:#f7f9fc;border:1px dashed #cbd5e1;border-radius:14px;padding:16px;text-align:center
+  }
+  .random-card .dice{font-size:36px;margin-bottom:10px}
+  .random-card b{display:block;font-size:14px}
+  .random-card p{font-size:11px;color:var(--muted);line-height:1.5;margin:6px 0 13px}
+  .random-result{margin-top:12px;display:grid;gap:6px;text-align:left}
+
+  .message-panel{
+    border-top:1px solid var(--line);
+    padding:12px 14px 14px;
+    background:#fafbfd;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+  }
+  .message-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .message-head b{font-size:12px}
+  .badge{background:#edf2ff;color:var(--primary);border-radius:99px;padding:3px 7px;font-size:10px;font-weight:900}
+  .messages{
+    display:grid;
+    gap:8px;
+    overflow:auto;
+    min-height:0;
+    flex:1;
+    align-content:start;
+    padding-right:2px;
+  }
+  .message{
+    background:white;
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px 11px;
+    font-size:12px;
+    line-height:1.5;
+  }
+  .message strong{display:block;font-size:12px;margin-bottom:3px}
+  .message time{color:#8a98aa;font-size:10px;float:right}
+
+  .toast{
+    position:fixed;left:50%;bottom:24px;transform:translate(-50%,18px);
+    background:#162033;color:white;padding:11px 16px;border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.22);
+    opacity:0;pointer-events:none;transition:.25s;font-size:13px;font-weight:750;z-index:50
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+
+  .presentation-mode .sidebar,
+  .presentation-mode .rightbar,
+  .presentation-mode .topbar,
+  .presentation-mode .stage-toolbar{display:none}
+  .presentation-mode .app{display:block;padding:0;background:#0d1522}
+  .presentation-mode .center{height:100vh;display:block}
+  .presentation-mode .stage-shell{height:100vh;border-radius:0;border:0;padding:0}
+  .presentation-mode .stage{gap:0}
+  .presentation-mode .pane{border-radius:0}
+  .exit-present{
+    display:none;position:fixed;right:16px;top:16px;z-index:80;
+    height:42px;padding:0 14px;border-radius:12px;border:1px solid rgba(255,255,255,.2);
+    background:rgba(10,18,29,.72);color:white;font-weight:800;backdrop-filter:blur(10px)
+  }
+  .presentation-mode .exit-present{display:block}
+
+  @media (max-width:1200px){
+    .app{grid-template-columns:248px minmax(0,1fr) 268px}
+    .top-status .status-pill:nth-child(2){display:none}
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">课</div>
+      <div>
+        <h1>公开课课堂控制台</h1>
+        <p>教师控制台</p>
+      </div>
+    </div>
+    <div class="top-status">
+      <div class="status-pill"><span class="dot"></span><span>课堂服务正常</span></div>
+      <div class="status-pill"><span>📶</span><span><b id="onlineTop">46</b> / 50 台平板在线</span></div>
+      <div class="status-pill"><span>📩</span><span><b id="messageTop">3</b> 条新消息</span></div>
+      <button class="icon-btn" title="设置">⚙</button>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="side-scroll">
+      <section class="section">
+        <div class="section-title">
+          <span>显示控制</span>
+          <small>2 路 + 入口</small>
+        </div>
+        <div class="source-list">
+          <label class="source active" data-source-card="ppt">
+            <div class="source-icon">▣</div>
+            <div class="source-text"><b>PPT</b><span>课堂演示文稿</span></div>
+            <label class="switch"><input class="source-toggle" data-source="ppt" type="checkbox" checked><span class="slider"></span></label>
+          </label>
+
+          <label class="source" data-source-card="students">
+            <div class="source-icon">◫</div>
+            <div class="source-text"><b>学生操作</b><span>右侧指定或随机，最多 4 人</span></div>
+            <label class="switch"><input class="source-toggle" data-source="students" type="checkbox"><span class="slider"></span></label>
+          </label>
+
+          <button class="source entry-source" id="entryBtn" type="button">
+            <div class="source-icon">⌁</div>
+            <div class="source-text"><b>入口</b><span>学生 / 听课老师</span></div>
+            <div class="entry-arrow">›</div>
+          </button>
+
+        </div>
+
+        <div class="layout-summary">
+          <span>当前投影布局</span>
+          <strong id="layoutLabel">1 路 · 全屏</strong>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title"><span>PPT 控制</span><small id="pptState">正在显示</small></div>
+        <div class="ppt-controls">
+          <button class="control-btn" id="prevBtn">上一页</button>
+          <div class="page-box"><span id="pageNum">1</span><span class="page-slash">/</span><span>12</span></div>
+          <button class="control-btn" id="nextBtn">下一页</button>
+        </div>
+
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <span>AI 分析学生操作数据</span>
+          <small id="aiStatus">实时</small>
+        </div>
+
+        <div class="ai-analysis-card">
+          <div class="ai-stat-row">
+            <div class="ai-stat">
+              <span class="ai-stat-value" id="aiDataCount">28</span>
+              <span class="ai-stat-label">已接收操作数据</span>
+            </div>
+            <div class="ai-stat">
+              <span class="ai-stat-value" id="aiAnalyzedCount">24</span>
+              <span class="ai-stat-label">已完成分析</span>
+            </div>
+          </div>
+
+          <div class="ai-progress">
+            <div class="ai-progress-head">
+              <span>分析进度</span>
+              <strong id="aiProgressText">86%</strong>
+            </div>
+            <div class="ai-progress-track">
+              <div class="ai-progress-bar" id="aiProgressBar" style="width:86%"></div>
+            </div>
+          </div>
+
+          <button class="action-btn ai-result-btn" id="viewAiResultBtn">查看分析结果</button>
+        </div>
+      </section>
+    </div>
+  </aside>
+
+  <main class="center">
+    <section class="stage-shell">
+      <div class="stage one" id="stage"></div>
+    </section>
+
+    <div class="stage-toolbar">
+      <div class="stage-info">
+        <span>●</span>
+        <span>当前预览：<strong id="stageInfo">PPT</strong></span>
+        <span>·</span>
+
+      </div>
+      <div class="toolbar-actions">
+        <button class="mini-btn" id="clearBtn">仅显示 PPT</button>
+        <button class="mini-btn primary" id="presentBtn2">全屏投影</button>
+      </div>
+    </div>
+  </main>
+
+  <aside class="rightbar">
+    <div class="right-head">
+      <div class="section-title" style="margin-bottom:10px">
+        <span>学生平板</span>
+        <small><span class="dot" style="display:inline-block;margin-right:6px"></span><span id="onlineRight">46</span> 在线</small>
+      </div>
+      <div class="tabs">
+        <button class="tab active" data-tab="designated">指定学生</button>
+        <button class="tab" data-tab="random">随机学生</button>
+      </div>
+    </div>
+
+    <div class="right-content">
+      <div class="designated-panel" id="designatedPanel">
+        <div class="direct-pick-card">
+          <div class="direct-pick-head">
+            <div>
+              <b>指定学生</b>
+              <span>输入 1～4 个学生编号</span>
+            </div>
+          </div>
+          <div class="direct-pick-row">
+            <input class="search" id="studentSearch" placeholder="例如：16，9，8，5" />
+            <button class="action-btn" id="selectSpecifiedBtn">显示</button>
+          </div>
+          <div class="selected-preview" id="selectedPreview"></div>
+          <button class="bulk-btn" id="clearAllSelected" style="width:100%;margin-top:8px">全部取消</button>
+
+          <div class="hidden-tools-row">
+            <div>
+              <b>隐藏功能</b>
+              <span>编号 / 标字母</span>
+            </div>
+            <label class="switch">
+              <input id="hiddenToolsToggle" type="checkbox">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="random-panel" id="randomPanel">
+        <div class="random-card">
+          <div class="dice">🎲</div>
+          <b>随机查看学生平板</b>
+          <p>按设定人数随机抽取在线学生，最多 4 名；可重新抽取。</p>
+          <select class="count-select" id="randomCount" style="width:100%;margin-bottom:8px">
+            <option value="1">随机 1 人</option>
+            <option value="2" selected>随机 2 人</option>
+            <option value="3">随机 3 人</option>
+            <option value="4">随机 4 人</option>
+          </select>
+          <button class="action-btn" id="randomBtn" style="width:100%">开始随机</button>
+          <div class="random-result" id="randomResult"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="message-panel">
+      <div class="message-head">
+        <b>学生发来的信息</b>
+        <span class="badge" id="msgBadge">3 条新消息</span>
+      </div>
+      <div class="messages" id="messages">
+        <div class="message"><time>14:31</time><strong>18号</strong>已提交“还原路径记录”</div>
+        <div class="message"><time>14:30</time><strong>7号</strong>请求教师查看当前操作</div>
+        <div class="message"><time>14:29</time><strong>32号</strong>已完成第一次尝试</div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<button class="exit-present" id="exitPresent">退出投影模式　Esc</button>
+<div class="toast" id="toast"></div>
+
+<script>
+const students = Array.from({length:50}, (_,i)=>{
+  const num = i + 1;
+  const offlineSet = new Set([9,22,39,47]);
+  return {
+    id: String(num),
+    online: !offlineSet.has(num),
+    seat: num
+  };
+});
+
+const activeSources = new Set(["ppt"]);
+let selectedStudents = [students[6], students[17]];
+let currentPage = 1;
+let unread = 3;
+let entryMode = null;
+let studentAiOpen = false;
+let selectionMode = "designated";
+let hiddenStudentTools = false;
+let numberingEnabled = false;
+let letterModeEnabled = false;
+let letteredPieceIds = [];
+let nextLetterIndex = 0;
+let pieceVertexLetters = {};
+
+const stage = document.getElementById("stage");
+const layoutLabel = document.getElementById("layoutLabel");
+const stageInfo = document.getElementById("stageInfo");
+const searchInput = document.getElementById("studentSearch");
+const toast = document.getElementById("toast");
+
+function showToast(text){
+  toast.textContent = text;
+  toast.classList.add("show");
+  clearTimeout(showToast.t);
+  showToast.t = setTimeout(()=>toast.classList.remove("show"),1800);
+}
+
+function sourceName(s){
+  return ({ppt:"PPT",students:"学生操作"})[s];
+}
+
+function renderStage(){
+  if(entryMode){
+    stage.className = "stage one";
+    stage.innerHTML = renderEntryMode();
+    layoutLabel.textContent = entryMode === "menu" ? "入口" : "扫码入口";
+    stageInfo.textContent = entryMode === "student" ? "学生端入口" : entryMode === "teacher" ? "听课教师端入口" : "入口";
+    return;
+  }
+
+  const priority = {students:0, ppt:1};
+  const items = [...activeSources].sort((a,b)=>priority[a]-priority[b]);
+  const n = items.length;
+  stage.className = "stage " + (n===1 ? "one" : n===2 ? "two" : "one");
+
+  if(n===0){
+    stage.innerHTML = `
+      <div class="empty-stage">
+        <div>
+          <div class="big">▧</div>
+          <b>暂未选择投影内容</b>
+          <span>请在左侧选择 PPT 或学生操作</span>
+        </div>
+      </div>`;
+    layoutLabel.textContent = "0 路 · 暂停显示";
+    stageInfo.textContent = "未选择内容";
+  }else{
+    stage.innerHTML = items.map(renderPane).join("");
+    if(n===1){
+      layoutLabel.textContent = "1 路 · 16:9 全屏";
+    }else if(n===2){
+      layoutLabel.textContent = "2 路 · 上下分屏";
+    }
+    stageInfo.textContent = items.map(sourceName).join(" + ");
+  }
+
+  document.querySelectorAll(".source").forEach(card=>{
+    const key=card.dataset.sourceCard;
+    card.classList.toggle("active",activeSources.has(key));
+  });
+  document.getElementById("pptState").textContent = activeSources.has("ppt") ? "正在显示" : "未显示";
+}
+
+
+function renderEntryMode(){
+  if(entryMode === "menu"){
+    return `<div class="pane">
+      <div class="entry-view">
+        <div class="entry-inner">
+          <div class="entry-eyebrow">课堂入口</div>
+          <h2 class="entry-title">选择进入端</h2>
+          <div class="entry-choice-grid">
+            <button class="entry-choice" type="button" onclick="openEntryQR('student')">
+              <div class="entry-app-icon">学</div>
+              <b>学生</b>
+
+            </button>
+            <button class="entry-choice teacher" type="button" onclick="openEntryQR('teacher')">
+              <div class="entry-app-icon">听</div>
+              <b>听课老师</b>
+
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  const isStudent = entryMode === "student";
+  return `<div class="pane">
+    <div class="qr-view">
+      <div class="qr-inner">
+        <div class="qr-card"><div class="fake-qr" aria-label="二维码设计占位"></div></div>
+        <div class="qr-copy">
+          <div class="entry-eyebrow">${isStudent ? "学生端" : "听课教师端"}</div>
+          <h2>${isStudent ? "扫码进入学生端" : "扫码进入听课教师端"}</h2>
+
+
+          <button class="qr-back" type="button" onclick="backToEntryMenu()">返回</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function openEntryQR(type){
+  entryMode = type;
+  renderStage();
+}
+function backToEntryMenu(){
+  entryMode = "menu";
+  renderStage();
+}
+function toggleStudentAI(event){
+  if(event) event.stopPropagation();
+  studentAiOpen = !studentAiOpen;
+  renderStage();
+}
+
+function toggleNumbering(event){
+  if(event) event.stopPropagation();
+  numberingEnabled = !numberingEnabled;
+  renderStage();
+}
+
+function toggleLetterMode(event){
+  if(event) event.stopPropagation();
+  letterModeEnabled = !letterModeEnabled;
+  renderStage();
+}
+
+function vertexLetter(index){
+  let i = index, out = "";
+  do{
+    out = String.fromCharCode(65 + (i % 26)) + out;
+    i = Math.floor(i / 26) - 1;
+  }while(i >= 0);
+  return out;
+}
+
+function initialVertexOrder(pieceId){
+  // 设计稿中的三个关键顶点按初始页面位置：上方从左到右，再向下
+  return [0,1,2];
+}
+
+function labelPieceVertices(pieceId,event){
+  if(event){
+    event.stopPropagation();
+    event.preventDefault();
+  }
+  if(!hiddenStudentTools || !letterModeEnabled) return;
+
+  if(!pieceVertexLetters[pieceId]){
+    const mapping = {};
+    initialVertexOrder(pieceId).forEach(vertexIndex=>{
+      mapping[vertexIndex] = vertexLetter(nextLetterIndex++);
+    });
+    pieceVertexLetters[pieceId] = mapping;
+    if(!letteredPieceIds.includes(pieceId)) letteredPieceIds.push(pieceId);
+  }
+
+  // 与参考教师端一致：选择一个图形后退出选择模式，已有字母继续保留
+  letterModeEnabled = false;
+  renderStage();
+}
+
+function clearTeacherAnnotations(){
+  numberingEnabled = false;
+  letterModeEnabled = false;
+  letteredPieceIds = [];
+  nextLetterIndex = 0;
+  pieceVertexLetters = {};
+}
+
+function renderDemoPiece(cls,pieceId){
+  const mapping = pieceVertexLetters[pieceId] || {};
+  const selectable = hiddenStudentTools && letterModeEnabled;
+
+  const handles = [0,1,2].map(vertexIndex=>{
+    const label = mapping[vertexIndex] || "";
+    return `
+      <span class="vertex-handle v${vertexIndex+1}"></span>
+      ${label ? `<span class="vertex-letter-label v${vertexIndex+1}">${label}</span>` : ``}
+    `;
+  }).join("");
+
+  return `<div class="demo-piece ${cls} ${selectable?"teacher-selectable":""}"
+    ${selectable ? `onclick="labelPieceVertices('${pieceId}',event)"` : ``}>
+    ${handles}
+  </div>`;
+}
+
+function useRecommendedResource(event){
+  if(event) event.stopPropagation();
+  studentAiOpen = false;
+  renderStage();
+  showToast("已使用推荐资源");
+}
+
+function dismissRecommendedResource(event){
+  if(event) event.stopPropagation();
+  studentAiOpen = false;
+  renderStage();
+  showToast("已暂不使用推荐资源");
+}
+
+function renderPane(type){
+  if(type==="ppt"){
+    return `<div class="pane pane-ppt">
+      <div class="pane-label"><span class="mini-dot"></span>PPT · 16:9</div>
+      <div class="ppt-frame">
+      <div class="ppt-page">
+        <div class="ppt-page-num">第 ${currentPage} / 12 页</div>
+        <div class="ppt-kicker">记录图案还原过程</div>
+        <div class="ppt-title">${pptTitles[currentPage-1]}</div>
+        <div class="ppt-sub">${pptSubs[currentPage-1]}</div>
+      </div>
+      </div>
+    </div>`;
+  }
+  const count = Math.max(1, Math.min(4, selectedStudents.length || 1));
+  const list = selectedStudents.length ? selectedStudents.slice(0,4) : [{id:"--",online:true}];
+  return `<div class="pane pane-students">
+    <div class="pane-label"><span class="mini-dot"></span>学生操作 · 16:9 · ${selectedStudents.length} 人</div>
+    ${hiddenStudentTools && selectionMode==="designated" ? `
+      <div class="student-hidden-tools">
+        <button class="student-tool-btn ${numberingEnabled?"active":""}" type="button" onclick="toggleNumbering(event)">编号</button>
+        <button class="student-tool-btn ${(letterModeEnabled || letteredPieceIds.length)?"active":""}" type="button" onclick="toggleLetterMode(event)">标字母</button>
+      </div>` : ``}
+    <button class="student-ai-btn" type="button" onclick="toggleStudentAI(event)">AI 数据分析</button>
+    ${studentAiOpen ? `<div class="student-ai-result">
+      <div><b>AI分析：</b>当前展示的学生操作路径存在差异：部分学生先确定旋转再平移，部分学生先尝试位置匹配后再修正方向。建议教师优先选择8号和32号差异较大的两种路径进行比较，引导学生关注运动方式、方向、距离（或角度）是否记录完整。</div>
+      <div class="ai-resource-question">是否使用推荐资源？</div>
+      <div class="ai-resource-actions">
+        <button class="ai-resource-btn primary" type="button" onclick="useRecommendedResource(event)">使用</button>
+        <button class="ai-resource-btn" type="button" onclick="dismissRecommendedResource(event)">暂不使用</button>
+      </div>
+    </div>` : ``}
+    <div class="student-frame">
+    <div class="student-pane">
+      <div class="student-grid c${count}">
+        ${list.map((s,i)=>`
+        <div class="student-screen">
+          <div class="gridpaper"></div>
+          <div class="restoration-demo">
+            ${numberingEnabled && hiddenStudentTools ? `
+              <div class="piece-number-label n1">①</div>
+              <div class="piece-number-label n2">②</div>
+              <div class="piece-number-label n3">③</div>
+              <div class="piece-number-label n4">④</div>` : ``}
+
+            ${renderDemoPiece("p1","p1")}
+            ${renderDemoPiece("p2","p2")}
+            ${renderDemoPiece("p3","p3")}
+            ${renderDemoPiece("p4","p4")}
+
+            <div class="fixed-piece"><div class="fixed-smile"></div></div>
+          </div>
+
+          ${letterModeEnabled && hiddenStudentTools ? `<div class="teacher-prompt-overlay">请点击需要标注字母的图形</div>` : ``}
+
+          <div class="student-head"><span>${s.id}号</span><span>${s.online===false?"离线":"实时"}</span></div>
+          <div class="student-foot">操作画面 · ${i+1}</div>
+        </div>`).join("")}
+      </div>
+    </div>
+    </div>
+  </div>`;
+}
+
+const pptTitles = [
+  "怎样准确、完整地记录图案的运动过程？",
+  "观察：图案发生了怎样的变化？",
+  "独立尝试：先还原，再记录",
+  "交流：不同记录方法有什么异同？",
+  "聚焦：怎样描述平移更准确？",
+  "聚焦：旋转需要记录哪些信息？",
+  "比较：哪一种记录更容易还原？",
+  "再次操作：根据记录完成还原",
+  "学生资源：不同路径的比较",
+  "优化：让别人只看记录就能完成",
+  "回顾：今天我们解决了什么问题？",
+  "迁移：你还能设计怎样的图案运动？"
+];
+const pptSubs = Array(12).fill("课堂演示内容占位。正式接入后，这里显示真实 PPT 页面；教师只需使用“上一页 / 下一页”控制。");
+
+function parseStudentFilter(filter=""){
+  const raw = filter.trim();
+  if(!raw) return [];
+  const tokens = raw
+    .split(/[\s,，、;；]+/)
+    .map(x=>x.trim())
+    .filter(Boolean);
+
+  const ids = [];
+  for(const t of tokens){
+    if(/^\d+$/.test(t)){
+      const n = Number(t);
+      if(n>=1 && n<=50) ids.push(String(n));
+    }
+  }
+  return [...new Set(ids)].slice(0,4);
+}
+
+function renderSelectedPreview(){
+  const box = document.getElementById("selectedPreview");
+  if(!box) return;
+  if(!selectedStudents.length){
+    box.innerHTML = `<div class="selected-empty">当前未指定学生</div>`;
+    return;
+  }
+  box.innerHTML = selectedStudents.map(s=>`<div class="selected-chip">${s.id}号</div>`).join("");
+}
+
+function syncStudents(){
+  renderSelectedPreview();
+    if(activeSources.has("students")) renderStage();
+}
+
+document.getElementById("entryBtn").addEventListener("click",()=>{
+  entryMode = "menu";
+  renderStage();
+});
+
+document.querySelectorAll(".source-toggle").forEach(cb=>{
+  cb.addEventListener("change",e=>{
+    entryMode = null;
+    const s=e.target.dataset.source;
+    if(e.target.checked) activeSources.add(s); else activeSources.delete(s);
+    renderStage();
+  });
+});
+
+document.getElementById("prevBtn").addEventListener("click",()=>{
+  entryMode = null;
+  currentPage = Math.max(1,currentPage-1);
+  document.getElementById("pageNum").textContent=currentPage;
+  renderStage();
+});
+document.getElementById("nextBtn").addEventListener("click",()=>{
+  entryMode = null;
+  currentPage = Math.min(12,currentPage+1);
+  document.getElementById("pageNum").textContent=currentPage;
+  renderStage();
+});
+
+
+
+
+document.getElementById("selectSpecifiedBtn").addEventListener("click",()=>{
+  selectionMode = "designated";
+  const ids = parseStudentFilter(searchInput.value);
+  if(!ids.length){
+    showToast("请输入 1～4 个有效编号");
+    return;
+  }
+  const picked = ids
+    .map(id=>students.find(s=>s.id===id))
+    .filter(Boolean);
+
+  const offline = picked.filter(s=>!s.online);
+  selectedStudents = picked.filter(s=>s.online);
+
+  if(!selectedStudents.length){
+    showToast("指定学生当前均不在线");
+    renderSelectedPreview();
+    renderStage();
+    return;
+  }
+
+  if(!activeSources.has("students")){
+    activeSources.add("students");
+    const toggle = document.querySelector('.source-toggle[data-source="students"]');
+    if(toggle) toggle.checked = true;
+  }
+
+  renderSelectedPreview();
+  renderStage();
+
+  if(offline.length){
+    showToast(`已显示 ${selectedStudents.length} 人；${offline.map(s=>s.id+"号").join("、")}离线`);
+  }else{
+    showToast(`已显示 ${selectedStudents.length} 名学生`);
+  }
+});
+
+searchInput.addEventListener("keydown",e=>{
+  if(e.key==="Enter") document.getElementById("selectSpecifiedBtn").click();
+});
+
+document.getElementById("clearAllSelected").addEventListener("click",()=>{
+  selectedStudents = [];
+  hiddenStudentTools = false;
+  clearTeacherAnnotations();
+  const hiddenToggle = document.getElementById("hiddenToolsToggle");
+  if(hiddenToggle) hiddenToggle.checked = false;
+  renderSelectedPreview();
+  renderStage();
+  showToast("已取消全部学生");
+});
+
+document.getElementById("hiddenToolsToggle").addEventListener("change",e=>{
+  selectionMode = "designated";
+  hiddenStudentTools = e.target.checked;
+  if(!hiddenStudentTools){
+    clearTeacherAnnotations();
+  }
+  renderStage();
+});
+
+document.querySelectorAll(".tab").forEach(tab=>{
+  tab.addEventListener("click",()=>{
+    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+    tab.classList.add("active");
+    const random = tab.dataset.tab==="random";
+    document.getElementById("randomPanel").classList.toggle("active",random);
+    document.getElementById("designatedPanel").classList.toggle("hidden",random);
+  });
+});
+
+function randomPick(count){
+  selectionMode = "random";
+  hiddenStudentTools = false;
+  clearTeacherAnnotations();
+  const hiddenToggle = document.getElementById("hiddenToolsToggle");
+  if(hiddenToggle) hiddenToggle.checked = false;
+  const online = students.filter(s=>s.online);
+  const shuffled = [...online].sort(()=>Math.random()-.5);
+  selectedStudents = shuffled.slice(0,Math.min(4,count));
+  syncStudents();
+  renderSelectedPreview();
+  document.getElementById("randomResult").innerHTML = selectedStudents.map(s=>
+    `<div class="student-row selected" style="grid-template-columns:30px 1fr">
+      <div class="avatar">${s.id}</div>
+      <div><div class="student-name">${s.id}号学生</div><div class="student-meta">${s.id}号 · 已加入查看</div></div>
+    </div>`).join("");
+  if(!activeSources.has("students")){
+    activeSources.add("students");
+    document.querySelector('.source-toggle[data-source="students"]').checked=true;
+  }
+  renderStage();
+  showToast(`已随机抽取 ${selectedStudents.length} 名在线学生`);
+}
+
+document.getElementById("randomBtn").addEventListener("click",()=>randomPick(Number(document.getElementById("randomCount").value)));
+
+document.getElementById("clearBtn").addEventListener("click",()=>{
+  activeSources.clear();activeSources.add("ppt");
+  document.querySelectorAll(".source-toggle").forEach(cb=>cb.checked=cb.dataset.source==="ppt");
+  renderStage();showToast("已切换为仅显示 PPT");
+});
+
+function togglePresentation(on=true){
+  document.body.classList.toggle("presentation-mode",on);
+}
+document.getElementById("presentBtn2").addEventListener("click",()=>togglePresentation(true));
+
+document.getElementById("viewAiResultBtn").addEventListener("click",()=>{
+  showToast("AI 分析结果面板将在后续接入真实学生操作数据");
+});
+document.getElementById("exitPresent").addEventListener("click",()=>togglePresentation(false));
+document.addEventListener("keydown",e=>{
+  const tag = (e.target && e.target.tagName || "").toLowerCase();
+  const isTyping = tag === "input" || tag === "textarea" || tag === "select" || (e.target && e.target.isContentEditable);
+
+  if(e.key === "Escape"){
+    togglePresentation(false);
+    return;
+  }
+
+  if(isTyping) return;
+
+  const nextKeys = ["ArrowRight", "PageDown", " ", "Enter"];
+  const prevKeys = ["ArrowLeft", "PageUp"];
+
+  if(nextKeys.includes(e.key)){
+    e.preventDefault();
+    entryMode = null;
+    currentPage = Math.min(12, currentPage + 1);
+    document.getElementById("pageNum").textContent = currentPage;
+    renderStage();
+    return;
+  }
+
+  if(prevKeys.includes(e.key)){
+    e.preventDefault();
+    entryMode = null;
+    currentPage = Math.max(1, currentPage - 1);
+    document.getElementById("pageNum").textContent = currentPage;
+    renderStage();
+  }
+});
+
+
+
+renderSelectedPreview();
+renderStage();
+</script>
+</body>
+</html>

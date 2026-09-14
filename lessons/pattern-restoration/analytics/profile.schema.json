@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://classcore.local/lesson/pattern-restoration/analytics-profile.schema.json",
+  "type": "object",
+  "required": ["profileSchemaVersion", "profileId", "lessonId", "classifications", "metrics", "recommendationPolicy"],
+  "properties": {
+    "profileSchemaVersion": { "const": 1 },
+    "profileId": { "type": "string", "minLength": 1 },
+    "lessonId": { "const": "lesson:pattern-restoration" },
+    "classifications": { "type": "array", "items": { "type": "object" } },
+    "metrics": { "type": "array", "items": { "type": "object" } },
+    "recommendationPolicy": {
+      "type": "object",
+      "required": ["mode", "rules"],
+      "properties": {
+        "mode": { "enum": ["off", "teacher-confirm"] },
+        "rules": { "type": "array", "items": { "type": "object" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

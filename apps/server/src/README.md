@@ -14,3 +14,5 @@ D7 最小职责：
 - localhost Backstage route。
 
 浏览器 Surface 不直接 import Server-only identity/projection/storage/runtime 包，只通过 API / Realtime 接收投影后的 DTO。
+
+`classroom-runtime.ts` 是认证课堂 Server 的可复用业务接缝：负责 credential Join、server-owned current Activity/Snapshot、AuthenticatedConnectionContext、durable Applet Event 与 Submission。当前 `apps/server/runtime/server.mjs` 仍是 reference transport，未加载此接缝，也不会因环境变量切换而伪装成认证产品。

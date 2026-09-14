@@ -1,0 +1,84 @@
+[
+  {
+    "activitySchemaVersion": 1,
+    "activityId": "activity:observe",
+    "type": "observe",
+    "participantMode": "whole-class",
+    "applets": [],
+    "adviceMode": "off",
+    "submissionPolicy": "none",
+    "stagePolicy": {
+      "contentType": "presentation:deck",
+      "deckId": "deck:pattern-restoration-public-lesson",
+      "sceneId": "scene:intro"
+    }
+  },
+  {
+    "activitySchemaVersion": 1,
+    "activityId": "activity:restore-independent",
+    "type": "individual-work",
+    "participantMode": "individual",
+    "applets": [
+      {
+        "appletInstanceId": "applet-instance:restore-independent-board",
+        "appletTypeId": "applet:transform-board",
+        "configRef": "config:restore-board",
+        "requiredCapabilities": ["transform.drag", "transform.rotate", "state.snapshot", "live.mirroring"]
+      }
+    ],
+    "adviceMode": "off",
+    "submissionPolicy": "required"
+  },
+  {
+    "activitySchemaVersion": 1,
+    "activityId": "activity:restore-supported",
+    "type": "individual-work",
+    "participantMode": "individual",
+    "applets": [
+      {
+        "appletInstanceId": "applet-instance:restore-supported-board",
+        "appletTypeId": "applet:transform-board",
+        "configRef": "config:restore-board",
+        "requiredCapabilities": ["transform.drag", "transform.rotate", "state.snapshot", "live.mirroring"]
+      }
+    ],
+    "adviceMode": "auto",
+    "submissionPolicy": "required"
+  },
+  {
+    "activitySchemaVersion": 1,
+    "activityId": "activity:instruction-exchange",
+    "type": "peer-instruction",
+    "participantMode": "pair",
+    "applets": [
+      {
+        "appletInstanceId": "applet-instance:instruction-builder",
+        "appletTypeId": "applet:structured-instruction-builder",
+        "configRef": "config:instruction-builder",
+        "requiredCapabilities": ["artifact.create", "instruction.semantic-blocks"]
+      },
+      {
+        "appletInstanceId": "applet-instance:peer-execution-board",
+        "appletTypeId": "applet:transform-board",
+        "configRef": "config:peer-board",
+        "requiredCapabilities": ["transform.drag", "transform.rotate", "state.snapshot", "live.mirroring"]
+      }
+    ],
+    "adviceMode": "teacher-confirm",
+    "submissionPolicy": "required"
+  },
+  {
+    "activitySchemaVersion": 1,
+    "activityId": "activity:discussion",
+    "type": "whole-class-discussion",
+    "participantMode": "whole-class",
+    "applets": [],
+    "adviceMode": "off",
+    "submissionPolicy": "none",
+    "stagePolicy": {
+      "contentType": "presentation:deck",
+      "deckId": "deck:pattern-restoration-public-lesson",
+      "sceneId": "scene:discussion"
+    }
+  }
+]

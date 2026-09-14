@@ -29,8 +29,9 @@ export interface AuthorizationDecision {
 }
 /**
  * Authoritative facts are resolved by the server, never supplied by a browser/app client.
- * Production implementations should back these calls with session/membership/workgroup/
- * projection/lease stores (or a coherent cached read model of those stores).
+ * The authenticated reference server backs these calls with its session,
+ * membership, projection, and lease stores. Production adapters may provide
+ * the same facts through a coherent cached read model.
  */
 export interface AuthorizationAuthority {
     getFeaturePolicy(sessionId: string): SessionFeaturePolicy | null;
@@ -345,6 +346,11 @@ export class InMemoryClassroomAuthority {
     getSession(sessionId: string): ClassroomSession | null {
         const session = this.#sessions.get(sessionId);
         return session ? structuredClone(session) : null;
+    }
+
+    getMembership(membershipId: string): SessionMembership | null {
+        const membership = this.#memberships.get(membershipId);
+        return membership ? structuredClone(membership) : null;
     }
 
     isActivityInSession(sessionId: string, activityId: string): boolean {
